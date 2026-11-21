@@ -31,7 +31,8 @@ class CharacterSettings(
         values[key.lowercase()]?.trim()?.let { it.equals("true", true) } ?: default
 
     /** Evaluate an expression setting, such as the lift limit `{STR} * 15`, with the given variables. */
-    fun evaluate(key: String, vars: Map<String, Double>): Double = Expr.eval(string(key), vars)
+    fun evaluate(key: String, vars: Map<String, Double>, default: String = ""): Double =
+        Expr.eval(string(key).ifBlank { default }, vars)
 
     /** The settings the calculation engines read. */
     fun toRuleSettings(): RuleSettings {

@@ -45,3 +45,15 @@ dependencies {
     implementation(libs.androidx.documentfile)
     debugImplementation(libs.compose.tooling)
 }
+
+// Chummer's game data ships unmodified inside the APK; the app unpacks it on first run.
+val chummerSrc = providers.gradleProperty("chummer.src")
+val copyChummerData = tasks.register<Copy>("copyChummerData") {
+    from(File(chummerSrc.get(), "Chummer/data")) {
+        include("*.xml")
+        exclude("*.bak")
+    }
+    into(layout.buildDirectory.dir("generated/chummerAssets/chummer-data"))
+}
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/chummerAssets"))
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(copyChummerData) }

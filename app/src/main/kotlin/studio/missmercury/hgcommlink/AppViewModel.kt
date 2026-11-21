@@ -9,16 +9,26 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import chummer.core.CharacterFile
+import chummer.core.engine.Sheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import studio.missmercury.hgcommlink.storage.StoredFile
 
 /** The character opened in the detail screen. */
-data class OpenCharacter(val file: StoredFile, val character: CharacterFile)
+data class OpenCharacter(
+    val file: StoredFile,
+    val character: CharacterFile,
+    /** Null while the sheet is being calculated or if that failed (see [sheetError]). */
+    val sheet: Sheet? = null,
+    /** False when the character's own settings profile is not on this device and a stand-in was used. */
+    val exactSettings: Boolean = true,
+    val sheetError: String? = null,
+)
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = CharacterRepository(app)
+    private val gameData = GameDataStore(app)
 
     var entries by mutableStateOf<List<CharacterEntry>>(emptyList()); private set
     var loading by mutableStateOf(true); private set
@@ -93,7 +103,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun openFile(file: StoredFile) {
         viewModelScope.launch {
             try {
-                open = OpenCharacter(file, io { repo.load(file.id) })
+                val character = io { repo.load(file.id) }
+                open = OpenCharacter(file, character)
+                // The sheet takes a moment the first time (the game data has to be unpacked and read).
+                open = try {
+                    val (sheet, exact) = io { gameData.sheet(character) }
+                    OpenCharacter(file, character, sheet, exact)
+                } catch (e: Throwable) {
+                    OpenCharacter(file, character, sheetError = e.message ?: e.javaClass.simpleName)
+                }
             } catch (e: Exception) {
                 message = "Could not open ${file.name}: ${e.message}"
             }

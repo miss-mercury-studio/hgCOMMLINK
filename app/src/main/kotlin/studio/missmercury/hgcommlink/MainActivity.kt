@@ -141,7 +141,13 @@ private fun App(vm: AppViewModel) {
             } else {
                 var confirm by remember { mutableStateOf(false) }
                 TopAppBar(
-                    title = { Text(open.character.summary().name.ifBlank { open.file.name }) },
+                    title = {
+                        val summary = open.character.summary()
+                        Column {
+                            Text(summary.alias.ifBlank { summary.name.ifBlank { open.file.name } })
+                            if (summary.alias.isNotBlank() && summary.name.isNotBlank()) Text(summary.name, style = MaterialTheme.typography.bodySmall)
+                        }
+                    },
                     navigationIcon = {
                         IconButton(onClick = vm::close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                     },
@@ -170,7 +176,7 @@ private fun App(vm: AppViewModel) {
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            if (open != null) CharacterDetail(open) else CharacterList(vm)
+            if (open != null) SheetScreen(open) else CharacterList(vm)
         }
     }
 }
@@ -205,32 +211,5 @@ private fun CharacterList(vm: AppViewModel) {
                 }
             }
         }
-    }
-}
-
-private val ATTRIBUTE_ORDER = listOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL", "EDG", "MAG", "RES")
-
-/** Read-only for now; the full sheet comes with the calculation engine (M2 and M3). */
-@Composable
-private fun CharacterDetail(open: OpenCharacter) {
-    val s = open.character.summary()
-    val attrs = open.character.attributes().associateBy { it.name }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(listOf(s.metatype, if (s.isCareer) "Career" else "Creation", s.buildMethod, s.edition).filter { it.isNotBlank() }.joinToString(" - "))
-        Text("Karma ${s.karma}   ¥${s.nuyen}")
-        Text("Saved with Chummer ${s.appVersion}", style = MaterialTheme.typography.bodySmall)
-        Text("Attributes", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
-        for (name in ATTRIBUTE_ORDER) {
-            val a = attrs[name] ?: continue
-            if (a.storedTotal == 0 && name in setOf("MAG", "RES")) continue
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(name)
-                Text(a.storedTotal.toString(), fontWeight = FontWeight.Bold)
-            }
-        }
-        Text(
-            "Full character sheet and editing are coming in later milestones. Your file is stored unchanged.",
-            style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 16.dp),
-        )
     }
 }

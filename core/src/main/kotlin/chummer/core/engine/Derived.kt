@@ -46,8 +46,8 @@ class DerivedStats(
     val stunCMThresholdOffset: Int get() = improvement("CMThresholdOffset") + improvement("StunCMThresholdOffset")
 
     /** Lift and carry limits come from expressions in the settings, for example `{STR} * 15`. */
-    val liftWeight: Int get() = standardRound(settings.evaluate("liftlimitexpression", mapOf("STR" to attr("STR").toDouble())))
-    val carryWeight: Int get() = standardRound(settings.evaluate("carrylimitexpression", mapOf("STR" to attr("STR").toDouble())))
+    val liftWeight: Int get() = standardRound(settings.evaluate("liftlimitexpression", mapOf("STR" to attr("STR").toDouble()), "{STR} * 15"))
+    val carryWeight: Int get() = standardRound(settings.evaluate("carrylimitexpression", mapOf("STR" to attr("STR").toDouble()), "{STR} * 10"))
 
     val composure: Int get() = attr("CHA") + attr("WIL") + improvement("Composure")
     val judgeIntentions: Int get() = attr("INT") + attr("CHA") + improvement("JudgeIntentions")

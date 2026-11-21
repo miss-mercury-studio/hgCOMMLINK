@@ -128,7 +128,10 @@ Open golden misses, with what is known:
 - Condition monitors and lift/carry limits can only be checked against Viper; the older fixtures do not store them. A fuller golden source would be Chummer's own XML export of a few characters.
 
 ### M3: Read-only character sheet (M)
-- [ ] Mobile layout design (before building)
+- [x] First slice on the phone: `Sheet` (core) calculates everything shown; `SheetScreen` (app) has Overview (attributes, essence, initiative, limits, condition, armor and soak, dice pools, lift/carry), Skills (rated first, then unrated, then knowledge) and Qualities tabs. Game data ships unmodified in the APK (Gradle copies `Chummer/data/*.xml`, unpacked on first run). Seen working on the S24 Ultra with Viper.
+- [ ] Settings profiles on the device: Viper's own profile and custom data are not on the phone, so the sheet uses a built-in profile and shows a warning. Needs a way to import settings files and custom data folders (and the amended-data cache from the risks).
+- [ ] Mobile layout design: first pass is functional, not designed. Needs a look at density, which numbers lead, and what to tap for detail (for example how a pool is made up).
+- [ ] Remaining sections: gear and weapons (with ranges, damage and the armor sets), cyberware and bioware, spells and powers, contacts, lifestyle, vehicles, notes, the expense log, mugshot.
 - [ ] Complete character display matching Chummer's numbers
 
 ### M4: Creation, Karma build (XL)
@@ -188,3 +191,4 @@ Open golden misses, with what is known:
 - 2026-11-21: Received Chummer's print XML for Viper. All 78 skills match; added `DerivedStats` and it matches on all 32 derived values. Discovered the export reflects a different state than the saved file (Kamikaze on, no armor encumbrance, CHA +3); the Improvements tab shows the CHA change is a custom improvement named "Spell" (+3), and only Kamikaze is on.
 - 2026-11-21: Armor engine added and checked both ways: the Social set against the export (6 values) and the Runner set's encumbrance against the saved file. Learned that armor-mod improvements are never switched off when armor is unequipped (Chummer keys them by the armor id, not the mod id), which the engine reproduces by only reading each improvement's stored enabled flag.
 - 2026-11-21: Resistance pools added to `DerivedStats` and checked against the export: 63 of 63 derived values now match. Matrix initiative is deferred until gear (commlinks) is read.
+- 2026-11-21: M3 started. Added `Sheet` and the three-tab sheet screen; bundled Chummer's data into the APK. First device run crashed on an empty lift/carry expression (built-in settings profiles do not define one; Chummer's code defaults are now used) and a JVM test now covers the built-in-settings path.
