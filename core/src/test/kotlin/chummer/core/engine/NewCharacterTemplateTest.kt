@@ -220,4 +220,44 @@ class NewCharacterTemplateTest {
         repeat(max) { assertTrue(editor.changeSkill("Pistols", 1)) }
         assertTrue(!editor.changeSkill("Pistols", 1))
     }
+
+    /**
+     * Writes two files made by this code to `core/build/samples/`, for opening in desktop Chummer by hand:
+     * a new Ork with purchases and a quality, and a copy of Viper with Toughness added. Not a check of Chummer;
+     * the assertions only guard the numbers the user is told to expect.
+     */
+    @Test
+    fun writeSamplesToTryInDesktopChummer() {
+        val settings = settingsForTemplates()
+        val resolved = chummer.core.data.CustomDataLocator(listOf(File(src, "Chummer/customdata"))).resolve(settings.customData)
+        val data = DataPack.load(File(src, "Chummer/data"), resolved.dirs)
+        val out = File("build/samples").apply { mkdirs() }
+
+        val ork = data.byId.entries.first { it.value.file == "metatypes.xml" && it.value.element.tagName == "metatype" && it.value.element.child("name")?.textContent?.trim() == "Ork" }
+        val c = NewCharacter.createKarma(
+            data, settings,
+            NewCharacterRequest(name = "App Made Ork", alias = "Sample", metatypeId = ork.key, settingsHash = 1889893532, customDataNames = resolved.dirs.map { it.name }),
+        )
+        val editor = CharacterEditor(c, data, translations::get, settings)
+        repeat(2) { assertTrue(editor.changeAttribute("AGI", 1)) }
+        assertTrue(editor.changeAttribute("BOD", 1))
+        repeat(2) { assertTrue(editor.changeSkill("Pistols", 1)) }
+        assertTrue(editor.changeSkill("Perception", 1))
+        val toughness = data.byId.entries.first { it.value.file == "qualities.xml" && it.value.element.child("name")?.textContent?.trim() == "Toughness" }
+        editor.addQuality(toughness.key)
+        File(out, "AppMade_Ork.chum5").outputStream().use { CharacterIo.write(c, it) }
+        val ledger = KarmaLedger.of(c, settings)
+        println("AppMade_Ork: $ledger remaining=${ledger.remaining}")
+        assertEquals(800 - 50 - 25 - 25 - 6 - 2 - 9, ledger.remaining)
+
+        // Viper with Toughness added (the settings and data Viper was saved with).
+        val viperSettings = CharacterSettings.find(load("Viper_career.chum5").root.text("settings").orEmpty(), File(src, "Chummer/data/settings.xml"), listOf(File(ref, "Viper_career/settings")))
+        val viperDirs = chummer.core.data.CustomDataLocator(listOf(File(src, "Chummer/customdata"), File(ref, "Viper_career/customdata"))).resolve(viperSettings.customData).dirs
+        val viperData = DataPack.load(File(src, "Chummer/data"), viperDirs)
+        val v = load("Viper_career.chum5")
+        val vt = viperData.byId.entries.first { it.value.file == "qualities.xml" && it.value.element.child("name")?.textContent?.trim() == "Toughness" }
+        CharacterEditor(v, viperData, translations::get, viperSettings).addQuality(vt.key)
+        File(out, "AppEdited_Viper_Toughness.chum5").outputStream().use { CharacterIo.write(v, it) }
+        println("Wrote samples to ${out.absolutePath}")
+    }
 }
