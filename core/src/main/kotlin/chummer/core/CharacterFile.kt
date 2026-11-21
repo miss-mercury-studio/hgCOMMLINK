@@ -1,0 +1,76 @@
+package chummer.core
+
+import org.w3c.dom.Document
+import org.w3c.dom.Element
+import java.io.File
+
+/** A loaded `.chum5` file. The DOM is kept so unknown content can be written back unchanged. */
+class CharacterFile(val doc: Document) {
+    val root: Element get() = doc.documentElement
+
+    val name get() = root.text("name").orEmpty()
+    val appVersion get() = root.text("appversion").orEmpty()
+    val buildMethod get() = root.text("buildmethod").orEmpty()
+
+    /** Attributes as stored: name -> (min, base, karma, stored total). */
+    data class AttributeRow(val name: String, val min: Int, val base: Int, val karma: Int, val storedTotal: Int)
+
+    fun attributes(): List<AttributeRow> =
+        root.child("attributes")?.children("attribute").orEmpty().map {
+            AttributeRow(it.text("name").orEmpty(), it.int("metatypemin"), it.int("base"), it.int("karma"), it.int("totalvalue"))
+        }
+
+    /** One applied improvement as stored by Chummer. */
+    data class ImprovementRow(
+        val type: String, val source: String, val name: String,
+        val value: Int, val aug: Int, val rating: Int, val enabled: Boolean,
+    )
+
+    fun improvements(): List<ImprovementRow> =
+        root.child("improvements")?.children("improvement").orEmpty().map {
+            ImprovementRow(
+                it.text("improvementttype").orEmpty(), it.text("improvementsource").orEmpty(),
+                it.text("improvedname").orEmpty(), it.int("val"), it.int("aug"), it.int("rating"),
+                it.text("enabled")?.trim().let { v -> v == "1" || v.equals("True", true) },
+            )
+        }
+
+    /** An installed augmentation (cyberware or bioware), with its children. */
+    data class Augmentation(
+        val name: String, val sourceId: String, val grade: String, val rating: Int,
+        val essFormula: String, val addToParent: Boolean, val children: List<Augmentation>,
+    )
+
+    private fun parseAug(e: Element): Augmentation = Augmentation(
+        e.text("name").orEmpty(), e.text("sourceid").orEmpty(), e.text("grade").orEmpty(), e.int("rating"),
+        e.text("ess").orEmpty(), e.text("addtoparentess")?.trim().equals("True", true),
+        e.child("children")?.children("cyberware").orEmpty().map(::parseAug),
+    )
+
+    fun augmentations(): List<Augmentation> =
+        root.child("cyberwares")?.children("cyberware").orEmpty().map(::parseAug)
+
+    /** Sum of expense amounts by type ("Karma" or "Nuyen"), as recorded in the career log. */
+    fun expenseTotal(type: String): Double =
+        root.child("expenses")?.children("expense").orEmpty()
+            .filter { it.text("type") == type }
+            .sumOf { it.text("amount")?.trim()?.toDoubleOrNull() ?: 0.0 }
+
+    /** Every non-empty `<sourceid>` in the file, with its parent's tag for reporting. */
+    fun sourceIds(): List<Pair<String, String>> {
+        val out = ArrayList<Pair<String, String>>()
+        val nodes = doc.getElementsByTagName("sourceid")
+        for (i in 0 until nodes.length) {
+            val n = nodes.item(i) as Element
+            val v = n.textContent.trim()
+            if (v.isNotEmpty() && v != "00000000-0000-0000-0000-000000000000") {
+                out.add((n.parentNode as Element).tagName to v)
+            }
+        }
+        return out
+    }
+
+    companion object {
+        fun load(file: File) = CharacterFile(parseXml(file))
+    }
+}

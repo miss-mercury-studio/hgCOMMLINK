@@ -1,0 +1,11 @@
+local.properties
+.gradle/
+build/
+.idea/
+*.apk
+*.jks
+*.keystore
+.claude/settings.local.json
+# Never commit user characters or upstream Chummer data copies
+*.chum5
+/chummer-data-cache/
