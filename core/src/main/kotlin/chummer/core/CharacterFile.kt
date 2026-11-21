@@ -56,6 +56,20 @@ class CharacterFile(val doc: Document) {
             .filter { it.text("type") == type }
             .sumOf { it.text("amount")?.trim()?.toDoubleOrNull() ?: 0.0 }
 
+    /** What the character list needs, read from the top-level fields. */
+    data class Summary(
+        val name: String, val alias: String, val metatype: String, val buildMethod: String,
+        val isCareer: Boolean, val karma: String, val nuyen: String, val appVersion: String, val edition: String,
+    )
+
+    fun summary() = Summary(
+        name = name, alias = root.text("alias").orEmpty(), metatype = root.text("metatype").orEmpty(),
+        buildMethod = buildMethod, isCareer = root.text("created")?.trim().equals("True", true),
+        karma = root.text("karma")?.trim().orEmpty(),
+        nuyen = root.text("nuyen")?.trim()?.toBigDecimalOrNull()?.toBigInteger()?.toString().orEmpty(),
+        appVersion = appVersion, edition = root.text("gameedition").orEmpty(),
+    )
+
     /** Every non-empty `<sourceid>` in the file, with its parent's tag for reporting. */
     fun sourceIds(): List<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
@@ -71,6 +85,6 @@ class CharacterFile(val doc: Document) {
     }
 
     companion object {
-        fun load(file: File) = CharacterFile(parseXml(file))
+        fun load(file: File) = CharacterIo.readFile(file)
     }
 }

@@ -3,17 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-}
-
-// M0 spike: bundle Chummer's data files into the APK so the device benchmark can load them.
-// Production will fetch/cache the data pack instead (see docs/PLAN.md).
-val chummerSrc = providers.gradleProperty("chummer.src").get()
-val chummerRef = providers.gradleProperty("chummer.reference").get()
-val spikeAssets = layout.buildDirectory.dir("spikeAssets")
-val copySpikeAssets = tasks.register<Copy>("copySpikeAssets") {
-    from("$chummerSrc/Chummer/data") { include("*.xml"); into("data") }
-    from("$chummerRef/Viper_career.chum5") { into("fixtures") }
-    into(spikeAssets)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -25,10 +15,10 @@ android {
         minSdk = 31
         targetSdk = 36
         versionCode = 1
-        versionName = "0.0.1-spike"
+        versionName = "0.1.0"
     }
 
-    sourceSets["main"].assets.srcDir(spikeAssets)
+    buildFeatures { compose = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -43,8 +33,15 @@ kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
-tasks.named("preBuild") { dependsOn(copySpikeAssets) }
-
 dependencies {
     implementation(project(":core"))
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.icons)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.documentfile)
+    debugImplementation(libs.compose.tooling)
 }

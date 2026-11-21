@@ -1,7 +1,7 @@
 # Chummer 5e for Android: Plan
 
 Living document. Update the status checkboxes, the decisions log and the open questions as work proceeds.
-Last updated: 2026-11-21 (M0 complete)
+Last updated: 2026-11-21 (M1 nearly complete)
 
 ## Goal
 
@@ -76,11 +76,18 @@ M0 findings (all in `core/src/test`, run with `./gradlew :core:test`):
 - 12 of 34 fixtures have a karma log that does not equal the stored karma. Most of these look like chargen files with no log, but this is unchecked.
 
 ### M1: Core model and I/O (M)
-- [ ] Character model and data loader with indexes
-- [ ] Lossless `.chum5` import and export, with unknown XML preserved
-- [ ] Round-trip test over all 35 fixtures
-- [ ] Android file handling: open, save, share, "open with", visible folder
-- [ ] Character list screen
+- [x] Data access behind a `GameData` interface (`DataPack` is the current DOM-backed implementation), so storage can change later
+- [x] Lossless `.chum5` import and export: the DOM is read and written back, so unknown XML is preserved
+- [x] Round-trip test over all 35 fixtures: content identical after read, write, read, and a second write is byte-stable. Files are not byte-identical to Chummer's own output (XML declaration and self-closing-tag formatting differ), which Chummer does not mind.
+- [x] DTD and entity declarations are refused on import (shared files are untrusted). Checked on the raw bytes, because Android's XML parser does not support the usual parser feature.
+- [x] Android file handling: import from the system picker, "open with" and "share to" for `.chum5`, share out through a FileProvider, delete, and a choice of app storage or a shared folder (system folder picker, access kept across restarts)
+- [x] Character list and a read-only detail screen (summary and stored attribute totals)
+- [ ] Verify on the phone: share out, delete, shared-folder choice, and the list with several characters. Only "open with" and the detail screen have been checked so far.
+- [ ] Mugshot thumbnails in the list (the image is in the file, base64)
+
+Notes:
+- Compose and AndroidX versions are pinned to what builds with AGP 8.13 and compileSdk 36 (Compose BOM 2026.03.01). Current releases need AGP 9.1 and compileSdk 37; upgrading the toolchain is a separate decision.
+- The list parses each file's DOM to read its summary (about 60 ms for Viper) and caches by modified time and size. Fine for now; revisit if lists get large.
 
 ### M2: Calculation engine (L)
 - [ ] Attributes, skills, limits, initiative, condition monitors, essence, armor, derived stats
@@ -136,3 +143,4 @@ M0 findings (all in `core/src/test`, run with `./gradlew :core:test`):
 - 2026-11-21: Reviewed Chummer source and data, Viper and hg-glow. Agreed scope and wrote this plan. No code yet.
 - 2026-11-21: Started M0 in `hgCOMMLINK` (confirmed as the project root). Created the Gradle project with a `core` JVM module: DOM XML helpers, `DataPack`, `CharacterFile`, `Expr`, and `SpikeTest` and `FixtureSurveyTest`. Found that prerequisites are not XPath. Remaining for M0: the `app` module and on-device measurement.
 - 2026-11-21: Finished M0. Added the `:app` module (benchmark screen, data bundled into the APK for the spike only) and ran it on the S24 Ultra over wireless debugging. Load times and memory are in the M0 findings.
+- 2026-11-21: M1 built. Added `GameData`, `CharacterIo` (lossless read and write, DTD refusal), `CharacterFile.summary()`, and the Compose app: list, detail, import, "open with", share, delete, folder choice. First device test failed on import because Android's parser rejected the DTD-hardening feature; fixed by checking the prolog bytes instead. Viper now imports and displays on the S24 Ultra.

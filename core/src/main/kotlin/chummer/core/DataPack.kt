@@ -9,16 +9,14 @@ import java.io.File
  * character file stores in `<sourceid>`.
  */
 class DataPack private constructor(
-    val byId: Map<String, Entry>,
+    val byId: Map<String, DataEntry>,
     val fileCount: Int,
-) {
-    class Entry(val file: String, val element: Element)
-
-    operator fun get(id: String): Entry? = byId[id.lowercase()]
+) : GameData {
+    override operator fun get(id: String): DataEntry? = byId[id.lowercase()]
 
     companion object {
         fun load(dataDir: File): DataPack {
-            val index = HashMap<String, Entry>(20_000)
+            val index = HashMap<String, DataEntry>(20_000)
             val files = dataDir.listFiles { f -> f.extension == "xml" }.orEmpty().sortedBy { it.name }
             for (f in files) {
                 val doc = try { parseXml(f) } catch (e: Exception) { continue }
@@ -28,7 +26,7 @@ class DataPack private constructor(
                     val kids = e.children()
                     val id = kids.firstOrNull { it.tagName == "id" }?.textContent?.trim()
                     if (!id.isNullOrEmpty() && kids.any { it.tagName == "name" }) {
-                        index.putIfAbsent(id.lowercase(), Entry(f.name, e))
+                        index.putIfAbsent(id.lowercase(), DataEntry(f.name, e))
                     }
                     stack.addAll(kids)
                 }
