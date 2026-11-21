@@ -71,8 +71,8 @@ class CharacterEditorTest {
             // The element, apart from the new GUID.
             val want = original.root.child("qualities")!!.children("quality").first { it.text("guid")?.trim() == guid }
             for (tag in want.children().map { it.tagName }.distinct()) {
-                // Notes are free text the user may have edited; the name can differ when the game data was renamed since saving.
-                if (tag == "guid" || tag == "notes") continue
+                // Notes are free text the user may have edited, and Viper was saved with the older colour name; the name can differ when the game data was renamed since saving.
+                if (tag == "guid" || tag == "notes" || tag == "notesColor") continue
                 val a = want.children(tag).joinToString { canon(it) }
                 val b = added.children(tag).joinToString { canon(it) }
                 if (a != b) misses += "${q.text("name")?.trim()} <$tag>: Chummer='$a' ours='$b'"

@@ -8,6 +8,9 @@ import chummer.core.text
 import org.w3c.dom.Element
 import java.util.UUID
 
+/** The colour Chummer 5.226 gives the notes of new items (older files hold the name "Chocolate" for the same colour). */
+private const val NOTES_COLOR = "#E3813C"
+
 /**
  * Changes to a character: adding and removing items, with the improvements those items grant kept in step.
  *
@@ -68,7 +71,7 @@ class CharacterEditor(
             q.appendChild(if (node != null) doc.importNode(node, true) else element(tag))
         }
         add("notes")
-        add("notesColor", "Chocolate")
+        add("notesColor", NOTES_COLOR)
         container("qualities").appendChild(q)
 
         grantBonus(entry.child("bonus"), BonusContext("Quality", guid, levels, extra, name, translate))
@@ -127,7 +130,7 @@ object ImprovementWriter {
         add("enabled", if (i.enabled) "1" else "0")
         add("order", "0")
         add("notes")
-        add("notesColor", "Chocolate")
+        add("notesColor", NOTES_COLOR)
         return e
     }
 }
