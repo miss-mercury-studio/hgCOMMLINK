@@ -14,9 +14,9 @@ import java.io.File
 /**
  * Compares derived stats with Chummer's own print XML for Viper (reference/exports).
  *
- * The export was made with a different state than the saved file: the Kamikaze drug group was on, CHA was
- * raised by a custom improvement the user added by hand on the Improvements tab (the user confirmed this; the
- * +3 is inferred from the totals), and the Social Situations armor set was equipped instead of the Runner Armor set
+ * The export was made with a different state than the saved file: the Kamikaze drug group was on, an
+ * ungrouped custom improvement named "Spell" (Attribute CHA, rating 1, augmented 3) was active (seen in the
+ * user's Improvements tab; it is not in the saved file), and the Social Situations armor set was equipped instead of the Runner Armor set
  * saved in the file (the user confirmed this), which is why there is no armor encumbrance. This test
  * replays that state, so it checks the calculations, not the state itself.
  */
@@ -34,11 +34,11 @@ class GoldenExportDerivedTest {
         val pack = DataPack.load(dataDir, dirs.dirs)
         val rules = settings.toRuleSettings()
 
-        // The export's state: Kamikaze on, a hand-added CHA improvement, and no armor encumbrance.
-        val handAddedCha = Improvement("Attribute", "Custom", "CHA", "", "", 0.0, 3.0, 0.0, 0.0, 0.0, 1.0, false, true, false, "")
+        // The export's state: Kamikaze on, the "Spell" CHA +3 improvement, and no armor encumbrance.
+        val spellCha = Improvement("Attribute", "Custom", "CHA", "", "", 0.0, 3.0, 0.0, 0.0, 0.0, 1.0, false, true, false, "")
         val improvements = Improvement.parseAll(c.root)
             .filter { it.source != "ArmorEncumbrance" }
-            .map { if (it.customGroup == "Kamikaze") it.copy(enabled = true) else it } + handAddedCha
+            .map { if (it.customGroup == "Kamikaze") it.copy(enabled = true) else it } + spellCha
         val set = ImprovementSet(improvements, isCareer = true)
         val attrs = AttributeEngine.forSet(c, set, rules)
 
