@@ -262,7 +262,7 @@ private fun AddQualityDialog(vm: AppViewModel, onDismiss: () -> Unit) {
 
     val shown = remember(query) {
         val q = query.trim().lowercase()
-        (if (q.isEmpty()) options else options.filter { it.name.lowercase().contains(q) }).take(80)
+        if (q.isEmpty()) options else options.filter { it.name.lowercase().contains(q) }
     }
     AlertDialog(
         onDismissRequest = onDismiss,
