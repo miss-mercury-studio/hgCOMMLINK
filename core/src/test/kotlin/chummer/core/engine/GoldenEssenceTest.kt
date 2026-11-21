@@ -3,6 +3,7 @@ package chummer.core.engine
 import chummer.core.CharacterIo
 import chummer.core.DataPack
 import chummer.core.child
+import chummer.core.data.CharacterSettings
 import chummer.core.children
 import chummer.core.text
 import org.junit.Assert.assertTrue
@@ -26,10 +27,14 @@ class GoldenEssenceTest {
             val c = CharacterIo.readFile(f)
             val stored = c.root.text("totaless")?.trim()?.toDoubleOrNull() ?: continue
             val career = c.root.text("created")?.trim().equals("True", true)
+            val rules = CharacterSettings.find(c.root.text("settings").orEmpty(), File(src, "Chummer/data/settings.xml"), listOf(File(System.getProperty("chummer.reference"), "Viper_career/settings"))).toRuleSettings()
             val set = ImprovementSet(Improvement.parseAll(c.root), career)
             val essRow = c.root.child("attributes")?.children("attribute").orEmpty().first { it.text("name") == "ESS" }
             val max = essRow.text("metatypemax")?.trim()?.toDoubleOrNull() ?: 6.0
-            val ours = EssenceEngine(set, pack, career, isPrototypeTranshuman = (c.root.text("prototypetranshuman")?.trim()?.toDoubleOrNull() ?: 0.0) > 0).essence(max, c.augmentations())
+            val ours = EssenceEngine(
+                set, pack, career, rules.essenceDecimals, rules.dontRoundEssenceInternally,
+                isPrototypeTranshuman = (c.root.text("prototypetranshuman")?.trim()?.toDoubleOrNull() ?: 0.0) > 0,
+            ).essence(max, c.augmentations())
             checked++
             if (abs(ours - stored) > 0.005) {
                 misses += "%s stored=%s ours=%.2f (ver %s)".format(f.name.take(24), stored, ours, c.appVersion)

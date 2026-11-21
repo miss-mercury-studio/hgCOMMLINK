@@ -14,6 +14,8 @@ data class RuleSettings(
     val cyberlimbAttributeBonusCap: Int = 4,
     val excludeLimbSlots: Set<String> = emptySet(),
     val redlinerExcludes: Set<String> = setOf("skull", "torso"),
+    val essenceDecimals: Int = 2,
+    val dontRoundEssenceInternally: Boolean = false,
 )
 
 /** An attribute as stored plus the figures the engine derives from it. */

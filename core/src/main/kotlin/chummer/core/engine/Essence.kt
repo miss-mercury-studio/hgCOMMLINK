@@ -16,6 +16,7 @@ class EssenceEngine(
     private val data: GameData,
     private val isCreated: Boolean,
     private val essenceDecimals: Int = 2,
+    private val dontRoundInternally: Boolean = false,
     /** Prototype Transhuman: bioware flagged as prototype costs no Essence. */
     private val isPrototypeTranshuman: Boolean = false,
 ) {
@@ -74,7 +75,7 @@ class EssenceEngine(
             }
         }
         cost *= maxOf(0.0, additive * multiplicative)
-        cost = BigDecimal(cost).setScale(essenceDecimals, RoundingMode.HALF_UP).toDouble()
+        if (!dontRoundInternally) cost = BigDecimal(cost).setScale(essenceDecimals, RoundingMode.HALF_UP).toDouble()
         cost += c.children.filter { it.addToParent }.sumOf { calculatedEss(it, hasParent = true) }
         return cost
     }

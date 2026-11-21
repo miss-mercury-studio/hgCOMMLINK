@@ -1,12 +1,14 @@
 package chummer.core
 
+import chummer.core.data.CustomData
+import chummer.core.data.CustomDataDir
 import org.w3c.dom.Element
 import java.io.File
 
 /**
- * Chummer's game data, loaded unmodified from its XML files in `data/`.
- * Every entry that has an `<id>` child is indexed by that GUID, which is what a
- * character file stores in `<sourceid>`.
+ * Chummer's game data, loaded from the XML files in `data/`, with any custom data folders
+ * applied on top in order. Every entry that has an `<id>` child is indexed by that GUID,
+ * which is what a character file stores in `<sourceid>`.
  */
 class DataPack private constructor(
     val byId: Map<String, DataEntry>,
@@ -18,12 +20,18 @@ class DataPack private constructor(
     override operator fun get(id: String): DataEntry? = byId[id.lowercase()]
 
     companion object {
-        fun load(dataDir: File): DataPack {
+        /** Load the base data and apply [customDirs] (already in load order). */
+        fun load(dataDir: File, customDirs: List<CustomDataDir> = emptyList()): DataPack {
             val index = HashMap<String, DataEntry>(20_000)
             val grades = HashMap<String, Double>()
             val files = dataDir.listFiles { f -> f.extension == "xml" }.orEmpty().sortedBy { it.name }
             for (f in files) {
-                val doc = try { parseXml(f) } catch (e: Exception) { continue }
+                val doc = try {
+                    parseXml(f)
+                } catch (e: Exception) {
+                    continue
+                }
+                if (customDirs.isNotEmpty()) CustomData.apply(doc, f.name, customDirs)
                 val stack = ArrayDeque<Element>().apply { add(doc.documentElement) }
                 while (stack.isNotEmpty()) {
                     val e = stack.removeLast()

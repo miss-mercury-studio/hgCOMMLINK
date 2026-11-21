@@ -1,3 +1,5 @@
+- [x] Character settings (`CharacterSettings`): resolves a character's settings GUID against the user's settings folder, then Chummer's built-in `data/settings.xml`; a legacy name such as `default.xml` falls back to the first built-in profile. Reads simple values, books, custom data refs, banned grades, redliner exclusions and karma costs; expression settings evaluate through `Expr` (which now accepts `{Name}` variables); `toRuleSettings()` feeds the engines (limb count, excluded slots, cyberlimb cap, essence decimals and rounding).
+- [x] Data amend layer (`DataAmender`, `CustomData`, `CustomDataLocator`): a port of Chummer's `AmendNodeChildren` and its `override_`, `custom_`, `amend_` loading order. Custom folders are found by manifest GUID. Tests on Viper's campaign: settings resolve, all 7 folders found (6 from Chummer, 1 campaign), the amends remove and add the expected entries, and all 299 of Viper's `sourceid`s still resolve in the amended data. Not ported: re-creating missing parent nodes when recursing into nodes absent from the base data.
 # Chummer 5e for Android: Plan
 
 Living document. Update the status checkboxes, the decisions log and the open questions as work proceeds.
@@ -108,10 +110,16 @@ Engine code is in `core/src/main/kotlin/chummer/core/engine/`. Each calculation 
 - [ ] Data amend layer: apply `amend_*.xml` and `custom_*.xml` from custom data folders over the base data (moved up from M7 because Viper needs it to match Chummer)
 - [ ] Remaining golden misses (below)
 
+Findings from the amend layer (from reading Chummer's source and running our port; not yet seen in Chummer itself):
+- **`amend_weapon.xml` is never applied.** Chummer only pairs a custom file with a base file when its name ends in `_` plus the base file's name, so `amend_weapon.xml` does not match `weapons.xml`. The campaign's change to a weapon's damage has no effect. Probably a typo for `amend_weapons.xml`.
+- **`amendoperation="removenode"` is not an operation Chummer knows.** An unknown operation falls through to the default rules, which here means "replace every matching node". In our port, Automatics' five specializations all become `Machine Pistols`, instead of one being removed, and Pistols does gain Machine Pistols. If that matches Chummer, it is a bug in the campaign data that we must reproduce. To confirm: open Viper in Chummer with this settings profile and look at the Automatics specializations.
+- **Cost:** loading with 7 custom folders takes about 1.7 s against 0.15 s without, on a warm desktop JVM (XPath over the whole DOM for every amend). On the phone this needs a cache keyed on the data version, settings and custom folders, so the amended data is built once.
+- Fixtures that name `default.xml` do not change when given their settings, because the fallback is the standard profile; their real settings were never recorded.
+
 Open golden misses, with what is known:
 - Attributes, Davis Jones (10): saved by Chummer 5.183, which stores values differently. Probably out of scope; may need an old-format reader.
 - Attributes, Bastion and Blindfire (4): cyberlimb averaging is one too low. Numbers fit a character with 5 limbs instead of 6, but no `AddLimb` improvement or setting explains it.
-- Essence, Bastion and Monomax (differ by 0.04 and 0.02), Fuzzy-chargen (1.745 stored, which looks like a "do not round essence" setting), SCSi (off by 1.8). Not investigated yet.
+- Essence, Bastion and Monomax (differ by 0.04 and 0.02), Fuzzy-chargen (1.745 stored, which looks like a "do not round essence" setting), SCSi (off by 1.8). Settings did not change these. Not investigated further.
 - Condition monitors and lift/carry limits can only be checked against Viper; the older fixtures do not store them. A fuller golden source would be Chummer's own XML export of a few characters.
 
 ### M3: Read-only character sheet (M)
@@ -165,3 +173,4 @@ Open golden misses, with what is known:
 - 2026-11-21: M1 built. Added `GameData`, `CharacterIo` (lossless read and write, DTD refusal), `CharacterFile.summary()`, and the Compose app: list, detail, import, "open with", share, delete, folder choice. First device test failed on import because Android's parser rejected the DTD-hardening feature; fixed by checking the prolog bytes instead. Viper now imports and displays on the S24 Ultra.
 - 2026-11-21: M2 started. Added the improvement model and Chummer's summing rules, the attribute engine (including cyberlimbs) and the essence engine, each with a ratcheting golden test. Attribute goldens went from 403 to 440 of 454, essence is 31 of 35. Noted that Chummer's C# duplicates every method as sync and async plus locking, so ports read the logic only.
 - 2026-11-21: Received Viper's settings file and its San Francisco Showdown custom data. Filed them under `reference/Viper_career/` with a README mapping every GUID. Confirmed the settings GUID matches, and that 6 of the 7 custom data folders are Chummer's own. Learned that amend files use XPath and that settings contain expressions; planned a settings loader and an amend layer in M2.
+- 2026-11-21: Built the settings loader and the data amend layer, with tests against Viper's campaign files. Found that `amend_weapon.xml` is never applied and that `removenode` is an unknown operation that behaves as replace. Amended loading is about 10x slower than plain loading, so the phone will need a cache.

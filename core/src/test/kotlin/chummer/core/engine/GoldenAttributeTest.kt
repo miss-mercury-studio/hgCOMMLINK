@@ -2,6 +2,7 @@ package chummer.core.engine
 
 import chummer.core.CharacterIo
 import chummer.core.child
+import chummer.core.data.CharacterSettings
 import chummer.core.children
 import chummer.core.int
 import chummer.core.text
@@ -27,7 +28,8 @@ class GoldenAttributeTest {
         val misses = ArrayList<String>()
         for (f in fixtures) {
             val c = CharacterIo.readFile(f)
-            val calc = AttributeEngine.forFile(c)
+            val rules = CharacterSettings.find(c.root.text("settings").orEmpty(), File(src, "Chummer/data/settings.xml"), listOf(File(System.getProperty("chummer.reference"), "Viper_career/settings"))).toRuleSettings()
+            val calc = AttributeEngine.forFile(c, rules)
             for (row in c.root.child("attributes")?.children("attribute").orEmpty()) {
                 val name = row.text("name").orEmpty()
                 if (name == "ESS") continue
