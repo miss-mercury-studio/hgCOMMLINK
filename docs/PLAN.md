@@ -155,11 +155,14 @@ Open golden misses, with what is known:
 
 ## Risks
 
-1. **Engine parity:** about 20 years of accumulated rules behavior. M2 shows the real size. The golden tests keep it measurable.
-2. **Creation validation (M4 and M5):** the most complex rules. Mirror Chummer's source behavior and check each rule against fixtures.
-3. **Phone usability:** Chummer's UI is dense and desktop-oriented. We need a distinct mobile design, not a port.
-4. **Data drift:** Chummer is under active development (last upstream commit seen: 2026-11-20). Mitigation: the sync script and a pinned upstream commit.
-5. **Data load cost:** 7.7 MB of XML on a phone. M0 measures it.
+1. **Engine parity:** about 20 years of accumulated rules behavior. M2 is the measure: attributes 440/454, essence 31/35, skills 78/78 and derived stats 32/32 against Chummer's numbers for Viper. The golden tests keep progress measurable, but creation and bonus handling (M4) are still ahead.
+2. **Checking against Chummer needs its own output.** Saved files store few computed values (no skill totals, limits or armor). Only Viper has a full Chummer print XML. Every other character is checked against stored values or hand-derived numbers until exported. Mitigation: export more characters (Bastion, Blindfire, SCSi, Monomax, Fuzzy-chargen, one magic character).
+3. **Creation validation (M4 and M5):** the most complex rules. Mirror Chummer's source behavior and check each rule against fixtures.
+4. **Phone usability:** Chummer's UI is dense and desktop-oriented. We need a distinct mobile design, not a port.
+5. **Data drift:** Chummer is under active development (last upstream commit seen: 2026-11-20). Mitigation: the sync script and a pinned upstream commit.
+6. **Data load cost on the phone:** the base data loads in about 0.4 s and 80 MB heap on the S24 Ultra; with 7 custom data folders applied the desktop time is about ten times higher. Needs a cache of the amended data (not built yet).
+7. **Old-format files:** Chummer 5.183 files (Davis Jones) store values differently and miss all checks. May need a separate reader.
+8. **Campaign data quirks must be reproduced:** `amend_weapon.xml` is never applied, and `removenode` acts as replace. Both come from reading Chummer's source, not from seeing Chummer do it.
 
 ## Open questions
 
@@ -167,6 +170,8 @@ Open golden misses, with what is known:
 - Mobile design: sketch the main screens first, or propose a layout once M2 gives real data.
 - Languages: English only at first? Chummer ships de, fr and ja language files.
 - Which source books are enabled by default? (Viper uses 18 books, including non-core ones.)
+- Do you want to export more characters from Chummer (list in the risks above)? Each one closes golden gaps.
+- Phone check of M1 features not yet tried: share out, delete, list with several characters.
 
 ## Progress log
 
