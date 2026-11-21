@@ -36,6 +36,8 @@ data class Sheet(
     val knowledgeSkills: List<SkillResult>,
     val qualities: List<QualityLine>,
     val sections: SheetSections,
+    /** Karma spent and remaining; only for a Karma-build character still in creation. */
+    val karmaLedger: KarmaLedger?,
 ) {
     data class AttributeLine(val name: String, val total: Int, val maximum: Int)
     data class Limits(val physical: Int, val mental: Int, val social: Int, val astral: Int)
@@ -100,6 +102,7 @@ data class Sheet(
                 ),
                 activeSkills = active, knowledgeSkills = knowledge,
                 qualities = qualities(c),
+                karmaLedger = if (!career && s.buildMethod == "Karma") KarmaLedger.of(c, settings) else null,
                 sections = SheetSections.read(c, WeaponEngine(c.root, set, str, d.limitPhysical).all(), essenceEngine),
             )
         }

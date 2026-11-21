@@ -163,4 +163,20 @@ class NewCharacterTemplateTest {
         }
         assertEquals(a, b)
     }
+
+    /**
+     * The karma ledger on the reference characters. Chummer does not store the remaining karma, so these figures are
+     * computed from the rules (budget 800, attribute step cost 5, new skill 2, quality bp x 1, Troll metatype 90) and are
+     * waiting for the user to confirm them against Chummer's "Karma Remaining" for each file.
+     */
+    @Test
+    fun karmaLedgerOnTheReferenceCharacters() {
+        val settings = CharacterSettings.find("ab2a5404-252f-4100-9efa-7ac281c5cb9b", File(src, "Chummer/data/settings.xml"), listOf(ref))
+        fun remaining(file: String): KarmaLedger = KarmaLedger.of(load(file), settings).also { println("$file: $it remaining=${it.remaining}") }
+        assertEquals(800, remaining("New_Empty.chum5").remaining)
+        assertEquals(800 - 10 - 2, remaining("New_Spent.chum5").remaining)
+        assertEquals(800 - 20, remaining("New_Quality.chum5").remaining)
+        assertEquals(800 - 90, remaining("empty_troll.chum5").remaining)
+        assertEquals(800 - 90 - 45 - 70, remaining("troll_spent.chum5").remaining)
+    }
 }

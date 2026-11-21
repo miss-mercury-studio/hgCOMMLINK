@@ -87,7 +87,8 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
 private fun Header(s: Sheet) {
     val line = listOfNotNull(
         s.metatype.takeIf { it.isNotBlank() }, if (s.isCareer) "Career" else "Creation",
-        s.karma.takeIf { it.isNotBlank() }?.let { "Karma $it" }, s.nuyen.takeIf { it.isNotBlank() }?.let { "¥$it" },
+        s.karmaLedger?.let { "Karma left ${it.remaining}" } ?: s.karma.takeIf { it.isNotBlank() }?.let { "Karma $it" },
+        s.nuyen.takeIf { it.isNotBlank() }?.let { "¥$it" },
     ).joinToString("  ·  ")
     Text(line, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
 }
@@ -98,6 +99,7 @@ private fun Overview(s: Sheet) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        s.karmaLedger?.let { KarmaSection(it) }
         Section("Attributes") {
             // Four to a row reads well on a phone held upright.
             s.attributes.chunked(4).forEach { row ->
@@ -395,5 +397,26 @@ private fun Life(g: chummer.core.engine.SheetSections) {
         }
         if (g.martialArts.isNotEmpty()) item { SubHeader("Martial arts") }
         items(g.martialArts) { Text(it) }
+    }
+}
+
+/** Where the karma of a character in creation has gone. */
+@Composable
+private fun KarmaSection(l: chummer.core.engine.KarmaLedger) {
+    Section("Karma") {
+        Row2("Budget", l.budget.toString())
+        Row2("Metatype", (-l.metatype).toString())
+        Row2("Attributes", (-l.attributes).toString())
+        Row2("Skills", (-l.skills).toString())
+        Row2("Qualities", (-l.qualities).toString())
+        if (l.contacts != 0) Row2("Contacts", (-l.contacts).toString())
+        HorizontalDivider()
+        Row2("Remaining", l.remaining.toString(), bold = true)
+        if (l.notCounted.isNotEmpty()) {
+            Text(
+                "Not counted yet: ${l.notCounted.joinToString()}. The remaining karma is higher than Chummer would show.",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }
