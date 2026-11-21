@@ -124,7 +124,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Add a quality from the game data to the open character, save the file and recalculate the sheet. */
-    fun addQuality(entryId: String, extra: String = "") = edit("Added quality") { editor -> editor.addQuality(entryId, extra); true }
+    fun addQuality(entryId: String, extra: String = "") {
+        val current = open ?: return
+        viewModelScope.launch {
+            val problem = try { io { gameData.editor(current.character).qualityLimitProblem(entryId) } } catch (e: Throwable) { null }
+            if (problem != null) message = problem
+            else edit("Added quality") { editor -> editor.addQuality(entryId, extra); true }
+        }
+    }
 
     /** Buy (+1) or give back (-1) a point of an attribute with karma, in creation. */
     fun changeAttribute(name: String, delta: Int) =

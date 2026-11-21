@@ -83,6 +83,23 @@ class CharacterEditor(
         return guid
     }
 
+    /**
+     * Why a quality cannot be added to a Karma-build character in creation, or null if it can: Chummer does not allow
+     * positive or negative qualities beyond the settings' karma limit. Other prerequisites are not checked yet.
+     */
+    fun qualityLimitProblem(entryId: String): String? {
+        val cfg = settings ?: return null
+        if (root.text("created")?.trim().equals("True", true) || root.text("buildmethod")?.trim() != "Karma") return null
+        val entry = data[entryId]?.element ?: return null
+        val karma = (entry.child("karma")?.textContent?.trim()?.toIntOrNull() ?: 0) * (cfg.karmaCost["karmaquality"] ?: 1)
+        val ledger = KarmaLedger.of(file, cfg)
+        return if (entry.child("category")?.textContent?.trim().equals("Negative", true)) {
+            if (ledger.negativeQualities + karma > ledger.qualityLimit) "Negative qualities would be ${ledger.negativeQualities + karma}/${ledger.qualityLimit} karma" else null
+        } else {
+            if (ledger.positiveQualities + karma > ledger.qualityLimit) "Positive qualities would be ${ledger.positiveQualities + karma}/${ledger.qualityLimit} karma" else null
+        }
+    }
+
     private fun attributeRow(name: String): Element? =
         root.child("attributes")?.children("attribute")?.firstOrNull { it.text("name")?.trim() == name }
 

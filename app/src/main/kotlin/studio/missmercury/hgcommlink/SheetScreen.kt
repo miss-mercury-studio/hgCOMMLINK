@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -91,7 +92,10 @@ private fun Header(s: Sheet) {
         s.karmaLedger?.let { "Karma left ${it.remaining}" } ?: s.karma.takeIf { it.isNotBlank() }?.let { "Karma $it" },
         s.nuyen.takeIf { it.isNotBlank() }?.let { "¥$it" },
     ).joinToString("  ·  ")
-    Text(line, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Text(line, style = MaterialTheme.typography.bodySmall, color = if (s.karmaLedger?.remaining?.let { it < 0 } == true) MaterialTheme.colorScheme.error else Color.Unspecified)
+        s.karmaLedger?.problems?.forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+    }
 }
 
 @Composable
@@ -236,6 +240,7 @@ private fun Qualities(s: Sheet, vm: AppViewModel) {
         }
         val positive = s.qualities.filter { it.positive }
         val negative = s.qualities.filter { !it.positive }
+        s.karmaLedger?.let { l -> item { Text("Positive ${l.positiveQualities}/${l.qualityLimit} karma    Negative ${l.negativeQualities}/${l.qualityLimit} karma", style = MaterialTheme.typography.bodySmall) } }
         item { SubHeader("Positive") }
         items(positive, key = { it.guid }) { QualityRow(it) { removing = it } }
         item { SubHeader("Negative") }
@@ -416,6 +421,7 @@ private fun KarmaSection(l: chummer.core.engine.KarmaLedger) {
         Row2("Attributes", (-l.attributes).toString())
         Row2("Skills", (-l.skills).toString())
         Row2("Qualities", (-l.qualities).toString())
+        Row2("  positive / negative karma", "${l.positiveQualities}/${l.qualityLimit}  ${l.negativeQualities}/${l.qualityLimit}")
         if (l.contacts != 0) Row2("Contacts", (-l.contacts).toString())
         HorizontalDivider()
         Row2("Remaining", l.remaining.toString(), bold = true)

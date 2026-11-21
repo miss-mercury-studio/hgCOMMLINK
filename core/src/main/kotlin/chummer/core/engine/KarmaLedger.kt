@@ -24,9 +24,21 @@ data class KarmaLedger(
     val qualities: Int,
     val contacts: Int,
     val notCounted: List<String>,
+    /** Karma in positive and negative qualities the user chose, and the limit for each (Chummer shows e.g. 9/50). */
+    val positiveQualities: Int = 0,
+    val negativeQualities: Int = 0,
+    val qualityLimit: Int = 25,
 ) {
     val spent get() = metatype + attributes + skills + qualities + contacts
     val remaining get() = budget - spent
+
+    /** What is wrong with the character as it stands; empty when nothing is. */
+    val problems: List<String>
+        get() = buildList {
+            if (remaining < 0) add("Overspent by ${-remaining} karma")
+            if (positiveQualities > qualityLimit) add("Positive qualities $positiveQualities/$qualityLimit karma")
+            if (negativeQualities > qualityLimit) add("Negative qualities $negativeQualities/$qualityLimit karma")
+        }
 
     companion object {
         private fun triangle(n: Int) = n * (n + 1) / 2
@@ -84,12 +96,16 @@ data class KarmaLedger(
             // Qualities the user chose: positive ones cost karma, negative ones give it back. Free ones from the
             // metatype are not counted.
             var qualities = 0
+            var positive = 0
+            var negative = 0
             for (q in c.root.child("qualities")?.children("quality").orEmpty()) {
                 if (q.text("qualitysource")?.trim() != "Selected") continue
                 if (q.text("contributetobp")?.trim().equals("False", true)) continue
                 val bp = q.text("bp")?.trim()?.toIntOrNull() ?: 0
                 val amount = bp * k("karmaquality", 1)
-                if (q.text("qualitytype")?.trim().equals("Negative", true)) qualities -= amount else qualities += amount
+                val countsToLimit = !q.text("contributetolimit")?.trim().equals("False", true)
+                if (q.text("qualitytype")?.trim().equals("Negative", true)) { qualities -= amount; if (countsToLimit) negative += amount }
+                else { qualities += amount; if (countsToLimit) positive += amount }
             }
 
             // Contacts: connection plus loyalty points beyond the free contact points cost karma.
@@ -107,7 +123,7 @@ data class KarmaLedger(
             )) if (c.root.child(tag)?.children().orEmpty().isNotEmpty()) notCounted += label
             if ((c.root.text("nuyenbp")?.trim()?.toIntOrNull() ?: 0) != 0) notCounted += "nuyen bought with karma"
 
-            return KarmaLedger(budget, metatype, attributes, skills, qualities, contacts, notCounted)
+            return KarmaLedger(budget, metatype, attributes, skills, qualities, contacts, notCounted, positive, negative, settings.int("qualitykarmalimit", 25))
         }
     }
 }

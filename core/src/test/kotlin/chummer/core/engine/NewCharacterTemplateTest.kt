@@ -256,6 +256,9 @@ class NewCharacterTemplateTest {
         // Active Skills 8 and Positive Qualities 9 in its Karma Summary.
         assertEquals(583, ledger.remaining)
         assertEquals(listOf(50, 50, 8, 9), listOf(ledger.metatype, ledger.attributes, ledger.skills, ledger.qualities))
+        // Chummer's Karma Summary showed Positive Qualities 9/50 and Negative Qualities 0/50.
+        assertEquals(listOf(9, 0, 50), listOf(ledger.positiveQualities, ledger.negativeQualities, ledger.qualityLimit))
+        assertEquals(emptyList<String>(), ledger.problems)
 
         // Viper with Toughness added (the settings and data Viper was saved with).
         val viperSettings = CharacterSettings.find(load("Viper_career.chum5").root.text("settings").orEmpty(), File(src, "Chummer/data/settings.xml"), listOf(File(ref, "Viper_career/settings")))
@@ -266,5 +269,27 @@ class NewCharacterTemplateTest {
         CharacterEditor(v, viperData, translations::get, viperSettings).addQuality(vt.key)
         File(out, "AppEdited_Viper_Toughness.chum5").outputStream().use { CharacterIo.write(v, it) }
         println("Wrote samples to ${out.absolutePath}")
+    }
+
+    @Test
+    fun qualityLimitAndOverspendAreReported() {
+        val settings = settingsForTemplates()
+        val data = DataPack.load(File(src, "Chummer/data"))
+        val c = load("New_Empty.chum5")
+        val editor = CharacterEditor(c, data, translations::get, settings)
+        fun entry(name: String) = data.byId.entries.first { it.value.file == "qualities.xml" && it.value.element.child("name")?.textContent?.trim() == name }.key
+        // Lightning Reflexes (20) and Toughness (9) fit in 50; adding a third big one does not.
+        assertEquals(null, editor.qualityLimitProblem(entry("Toughness")))
+        editor.addQuality(entry("Lightning Reflexes"))
+        editor.addQuality(entry("Toughness"))
+        val big = data.byId.entries.filter { it.value.file == "qualities.xml" && it.value.element.child("category")?.textContent?.trim() == "Positive" }
+            .first { (it.value.element.child("karma")?.textContent?.trim()?.toIntOrNull() ?: 0) >= 25 }
+        val problem = editor.qualityLimitProblem(big.key)
+        println("limit problem: $problem")
+        assertTrue(problem!!.startsWith("Positive qualities would be"))
+        // Overspending and an over-limit quality list show up as problems.
+        val over = KarmaLedger(budget = 100, metatype = 50, attributes = 60, skills = 0, qualities = 0, contacts = 0,
+            notCounted = emptyList(), positiveQualities = 60, negativeQualities = 0, qualityLimit = 50)
+        assertEquals(listOf("Overspent by 10 karma", "Positive qualities 60/50 karma"), over.problems)
     }
 }
