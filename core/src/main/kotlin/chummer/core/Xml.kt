@@ -37,3 +37,12 @@ fun Element.child(tag: String): Element? {
 fun Element.text(tag: String): String? = child(tag)?.textContent
 
 fun Element.int(tag: String, default: Int = 0): Int = text(tag)?.trim()?.toIntOrNull() ?: default
+
+/** Write a document to a file, writing to a temporary file first so a crash cannot leave a half-written file. */
+fun writeXml(doc: Document, file: File) {
+    val tmp = File(file.path + ".tmp")
+    val transformer = javax.xml.transform.TransformerFactory.newInstance().newTransformer()
+    transformer.setOutputProperty(javax.xml.transform.OutputKeys.ENCODING, "UTF-8")
+    tmp.outputStream().buffered().use { transformer.transform(javax.xml.transform.dom.DOMSource(doc), javax.xml.transform.stream.StreamResult(it)) }
+    if (!tmp.renameTo(file)) { tmp.copyTo(file, overwrite = true); tmp.delete() }
+}

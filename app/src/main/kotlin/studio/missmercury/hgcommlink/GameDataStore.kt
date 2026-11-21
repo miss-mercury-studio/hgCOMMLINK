@@ -62,13 +62,17 @@ class GameDataStore(private val context: Context) {
     @Synchronized
     private fun packFor(dirs: List<CustomDataDir>): DataPack {
         val key = keyOf(dirs)
-        return pack?.takeIf { key == packKey } ?: DataPack.load(dataDir(), dirs).also { pack = it; packKey = key }
+        return pack?.takeIf { key == packKey } ?: DataPack.load(dataDir(), dirs, File(context.filesDir, "amended-cache")).also { pack = it; packKey = key }
     }
 
     /** Build the sheet, plus a warning to show when its numbers may differ from Chummer's (null when none). */
     fun sheet(c: CharacterFile): Pair<Sheet, String?> {
+        var t = System.nanoTime()
+        fun lap(what: String) { val n = System.nanoTime(); android.util.Log.i("hgcommlink", "  $what: ${(n - t) / 1_000_000} ms"); t = n }
         val settings = settingsFor(c)
+        lap("settings")
         val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(settings.customData)
+        lap("locate custom data (${resolved.dirs.size} folders)")
         val warning = when {
             settings.isFallback -> "Settings profile not on this device: default rules used, numbers may differ. " +
                 "Put the profile's .xml in your characters folder."
@@ -77,6 +81,8 @@ class GameDataStore(private val context: Context) {
                     "Chummer's original values. Put their files (including manifest.xml) in your characters folder."
             else -> null
         }
-        return Sheet.build(c, packFor(resolved.dirs), settings) to warning
+        val data = packFor(resolved.dirs)
+        lap("data pack")
+        return (Sheet.build(c, data, settings) to warning).also { lap("sheet") }
     }
 }

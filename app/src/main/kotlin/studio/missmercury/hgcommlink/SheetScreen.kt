@@ -40,7 +40,7 @@ fun SheetScreen(open: OpenCharacter) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize()) {
         when {
-            sheet == null && open.sheetError == null -> Text("Calculating...", Modifier.padding(24.dp))
+            sheet == null && open.sheetError == null -> Text("Preparing game data. This takes several seconds the first time, and again whenever custom data changes.", Modifier.padding(24.dp))
             sheet == null -> Text(
                 "Could not calculate this character: ${open.sheetError}",
                 Modifier.padding(24.dp), color = MaterialTheme.colorScheme.error,

@@ -54,10 +54,13 @@ class CustomDataLocator(roots: List<File>) {
  * `amend_weapon.xml` matches nothing, because the base file is `weapons.xml`).
  */
 object CustomData {
+    /** The custom data files that change [baseFileName], in folder order. */
+    fun filesFor(baseFileName: String, dirs: List<CustomDataDir>): List<File> = dirs.flatMap { d ->
+        d.dir.listFiles { f -> f.isFile && f.name.endsWith("_$baseFileName", ignoreCase = true) }.orEmpty().sortedBy { it.name }
+    }
+
     fun apply(doc: Document, baseFileName: String, dirs: List<CustomDataDir>) {
-        val files = dirs.flatMap { d ->
-            d.dir.listFiles { f -> f.isFile && f.name.endsWith("_$baseFileName", ignoreCase = true) }.orEmpty().sortedBy { it.name }
-        }
+        val files = filesFor(baseFileName, dirs)
         fun named(prefix: String) = files.filter { it.name.startsWith(prefix, ignoreCase = true) }
         for (f in named("override_")) applyOverride(doc, parseXml(f).documentElement)
         for (f in named("custom_")) applyCustom(doc, parseXml(f).documentElement)
