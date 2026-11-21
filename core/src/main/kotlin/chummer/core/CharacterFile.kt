@@ -71,6 +71,40 @@ class CharacterFile(val doc: Document) {
     fun augmentations(): List<Augmentation> =
         root.child("cyberwares")?.children("cyberware").orEmpty().map(::parseAug)
 
+    /** One armor mod. */
+    data class ArmorMod(val name: String, val armor: Int, val equipped: Boolean, val encumbrance: Boolean, val guid: String)
+
+    /** One piece of armor with its mods. `equipped` is the stored flag; the engine can be given another. */
+    data class ArmorItem(
+        val guid: String, val name: String, val armorValue: String, val armorOverride: String,
+        val rating: Int, val equipped: Boolean, val encumbrance: Boolean,
+        /** The equipment set (armor location) id, empty when none. */
+        val location: String, val damage: Int, val mods: List<ArmorMod>,
+    ) {
+        /** Stacking accessories start with `+` (or `-`) and add to the best armor instead of replacing it. */
+        val isStacking get() = armorValue.startsWith("+") || armorValue.startsWith("-")
+    }
+
+    private fun Element.flag(tag: String) = text(tag)?.trim().let { it == "1" || it.equals("True", true) }
+
+    fun armors(): List<ArmorItem> =
+        root.child("armors")?.children("armor").orEmpty().map { a ->
+            ArmorItem(
+                guid = a.text("guid").orEmpty().trim(), name = a.text("name").orEmpty().trim(),
+                armorValue = a.text("armor").orEmpty().trim(), armorOverride = a.text("armoroverride").orEmpty().trim(),
+                rating = a.int("rating"), equipped = a.flag("equipped"), encumbrance = a.flag("encumbrance"),
+                location = a.text("location").orEmpty().trim(), damage = a.int("damage"),
+                mods = a.child("armormods")?.children("armormod").orEmpty().map { m ->
+                    ArmorMod(m.text("name").orEmpty().trim(), m.int("armor"), m.flag("equipped"), m.flag("encumbrance"), m.text("guid").orEmpty().trim())
+                },
+            )
+        }
+
+    /** Equipment set ids and names (Chummer calls them armor locations). */
+    fun armorLocations(): Map<String, String> =
+        root.child("armorlocations")?.children("location").orEmpty()
+            .associate { it.text("guid").orEmpty().trim() to it.text("name").orEmpty().trim() }
+
     /** Sum of expense amounts by type ("Karma" or "Nuyen"), as recorded in the career log. */
     fun expenseTotal(type: String): Double =
         root.child("expenses")?.children("expense").orEmpty()
