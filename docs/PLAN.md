@@ -24,7 +24,7 @@ An Android app (Kotlin, Compose) for creating and managing Shadowrun 5e characte
 | What | Where |
 |---|---|
 | Chummer source (read-only reference) | `C:\Users\kross\Documents\CODE\chummer5a` |
-| Example career character | `C:\Users\kross\Documents\CODE\reference\Viper_career.chum5` |
+| Example career character | `C:\Users\kross\Documents\CODE\reference\Viper_career.chum5`, with its settings and custom data in `reference\Viper_career\` (see the README there) |
 | 34 more fixture characters | `chummer5a\Chummer.Tests\TestFiles\*.chum5` |
 | Previous Android project (toolchain to reuse) | `C:\Users\kross\Documents\CODE\hg-glow` (Kotlin 2.2.20, AGP 8.13, Gradle version catalog) |
 | Game data | `chummer5a\Chummer\data\*.xml` (about 96 files, 7.7 MB), `chummer5a\Chummer\lang\en-us.xml` |
@@ -41,6 +41,13 @@ An Android app (Kotlin, Compose) for creating and managing Shadowrun 5e characte
 - `.chum5` is plain XML and stores Chummer's calculated values. That makes a golden test: load, recompute, diff against the stored values.
 - Quirks seen so far: `essenceatspecialstart` is .NET `decimal.MinValue` (`-79228162514264337593543950335`). The file embeds a base64 mugshot (Viper is 2.3 MB, mostly that and the expense log).
 - Largest catalogs: gear 1,601, qualities 803, weapons 787, vehicles 611, cyberware 381, spells 363, bioware 222.
+
+## Settings and custom data (learned from the Viper campaign files)
+
+- A character stores only a settings **GUID** (`<settings>`), not the settings. Viper's GUID matches `reference/Viper_career/settings/San Francisco Showdown.xml`. Chummer's older fixtures say `default.xml`. We need a settings loader that finds the right file (Chummer's own `data/settings.xml` holds the built-in ones; user-made ones live in the user's settings folder, which is what Viper's file is).
+- Settings change calculations. Viper's differ from the defaults in limb count (4, not 6), excluded limb slots (`torso,skull`), lift limit `{STR} * 15`, carry limit `{STR} * 10`, max skill ratings, banned ware grades, build method and points. Several settings are **expressions** with `{Name}` variables, for example `({INTUnaug} + {LOGUnaug}) * 2` and `{Karma} * 2000 + {PriorityNuyen}`, so `Expr` needs `{Name}` variable support.
+- Custom data is a folder with a `manifest.xml` (GUID, version) plus `custom_*.xml` files that add entries and `amend_*.xml` files that change existing ones. The settings list the folders as `GUID>version` with an `order` and an `enabled` flag. Viper uses 7 folders: 6 ship inside Chummer's `Chummer/customdata`, one (San Francisco Showdown) is campaign-specific.
+- **Amend files use XPath.** Each entry has `xpathfilter="name = 'Pistols' and count(specs/spec[. = 'Machine Pistols']) = 0"` and an `amendoperation` (`remove`, `addnode`, `removenode`, ...). These are XPath 1.0, which Android supports (`javax.xml.xpath`). So the data pack needs an amend layer that applies these over the base data, in order. (This is separate from prerequisites, which are not XPath.)
 
 ## Architecture
 
@@ -97,7 +104,8 @@ Engine code is in `core/src/main/kotlin/chummer/core/engine/`. Each calculation 
 - [ ] Skills: ratings, specializations, dice pools, skill groups
 - [ ] Limits (physical, mental, social), initiative, condition monitors, movement, lift and carry, armor
 - [ ] Improvement handler registry for item creation (about 30 `<bonus>` node handlers)
-- [ ] Character settings: read from the settings GUID, with the defaults in `data/settings.xml` (the settings a file used are not stored in the file)
+- [ ] Character settings: load the settings file a character names (see "Settings and custom data"), including expression settings; use Viper's San Francisco Showdown file as the first real test
+- [ ] Data amend layer: apply `amend_*.xml` and `custom_*.xml` from custom data folders over the base data (moved up from M7 because Viper needs it to match Chummer)
 - [ ] Remaining golden misses (below)
 
 Open golden misses, with what is known:
@@ -156,3 +164,4 @@ Open golden misses, with what is known:
 - 2026-11-21: Finished M0. Added the `:app` module (benchmark screen, data bundled into the APK for the spike only) and ran it on the S24 Ultra over wireless debugging. Load times and memory are in the M0 findings.
 - 2026-11-21: M1 built. Added `GameData`, `CharacterIo` (lossless read and write, DTD refusal), `CharacterFile.summary()`, and the Compose app: list, detail, import, "open with", share, delete, folder choice. First device test failed on import because Android's parser rejected the DTD-hardening feature; fixed by checking the prolog bytes instead. Viper now imports and displays on the S24 Ultra.
 - 2026-11-21: M2 started. Added the improvement model and Chummer's summing rules, the attribute engine (including cyberlimbs) and the essence engine, each with a ratcheting golden test. Attribute goldens went from 403 to 440 of 454, essence is 31 of 35. Noted that Chummer's C# duplicates every method as sync and async plus locking, so ports read the logic only.
+- 2026-11-21: Received Viper's settings file and its San Francisco Showdown custom data. Filed them under `reference/Viper_career/` with a README mapping every GUID. Confirmed the settings GUID matches, and that 6 of the 7 custom data folders are Chummer's own. Learned that amend files use XPath and that settings contain expressions; planned a settings loader and an amend layer in M2.
