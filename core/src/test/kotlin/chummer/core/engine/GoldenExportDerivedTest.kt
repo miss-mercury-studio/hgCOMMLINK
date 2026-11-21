@@ -14,10 +14,10 @@ import java.io.File
 /**
  * Compares derived stats with Chummer's own print XML for Viper (reference/exports).
  *
- * The export was made with a different state than the saved file: the Kamikaze drug group was on and
- * armor encumbrance was not applied. The saved file cannot explain the export's CHA of 7 (stored 4), so a
- * +3 CHA improvement is added as an assumption. This test replays that state, so it checks the
- * calculations, not the state itself.
+ * The export was made with a different state than the saved file: the Kamikaze drug group was on, CHA was
+ * raised by a custom improvement the user added by hand on the Improvements tab (the user confirmed this; the
+ * +3 is inferred from the totals), and armor encumbrance was not applied (inferred, not confirmed). This test
+ * replays that state, so it checks the calculations, not the state itself.
  */
 class GoldenExportDerivedTest {
     private val src = File(System.getProperty("chummer.src"))
@@ -33,11 +33,11 @@ class GoldenExportDerivedTest {
         val pack = DataPack.load(dataDir, dirs.dirs)
         val rules = settings.toRuleSettings()
 
-        // The export's state: Kamikaze on, no armor encumbrance, and an unexplained +3 CHA.
-        val mystery = Improvement("Attribute", "Custom", "CHA", "", "", 0.0, 3.0, 0.0, 0.0, 0.0, 1.0, false, true, false, "")
+        // The export's state: Kamikaze on, a hand-added CHA improvement, and no armor encumbrance.
+        val handAddedCha = Improvement("Attribute", "Custom", "CHA", "", "", 0.0, 3.0, 0.0, 0.0, 0.0, 1.0, false, true, false, "")
         val improvements = Improvement.parseAll(c.root)
             .filter { it.source != "ArmorEncumbrance" }
-            .map { if (it.customGroup == "Kamikaze") it.copy(enabled = true) else it } + mystery
+            .map { if (it.customGroup == "Kamikaze") it.copy(enabled = true) else it } + handAddedCha
         val set = ImprovementSet(improvements, isCareer = true)
         val attrs = AttributeEngine.forSet(c, set, rules)
 
