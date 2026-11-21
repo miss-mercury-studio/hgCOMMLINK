@@ -165,19 +165,20 @@ class NewCharacterTemplateTest {
     }
 
     /**
-     * The karma ledger on the reference characters. Chummer does not store the remaining karma, so these figures are
-     * computed from the rules (budget 800, attribute step cost 5, new skill 2, quality bp x 1, Troll metatype 90) and are
-     * waiting for the user to confirm them against Chummer's "Karma Remaining" for each file.
+     * The karma ledger on the reference characters, with the San Francisco Showdown budget of 700. Chummer does not store
+     * the remaining karma, so only the figure the user read from Chummer's status bar for `AppMade_Ork` is confirmed
+     * (see [karmaLedgerMatchesChummerForTheAppMadeOrk]); the others are computed from the rules.
      */
     @Test
     fun karmaLedgerOnTheReferenceCharacters() {
         val settings = CharacterSettings.find("ab2a5404-252f-4100-9efa-7ac281c5cb9b", File(src, "Chummer/data/settings.xml"), listOf(ref))
+        assertEquals(700, settings.int("buildpoints"))
         fun remaining(file: String): KarmaLedger = KarmaLedger.of(load(file), settings).also { println("$file: $it remaining=${it.remaining}") }
-        assertEquals(800, remaining("New_Empty.chum5").remaining)
-        assertEquals(800 - 10 - 2, remaining("New_Spent.chum5").remaining)
-        assertEquals(800 - 20, remaining("New_Quality.chum5").remaining)
-        assertEquals(800 - 90, remaining("empty_troll.chum5").remaining)
-        assertEquals(800 - 90 - 45 - 70, remaining("troll_spent.chum5").remaining)
+        assertEquals(700, remaining("New_Empty.chum5").remaining)
+        assertEquals(700 - 10 - 2, remaining("New_Spent.chum5").remaining)
+        assertEquals(700 - 20, remaining("New_Quality.chum5").remaining)
+        assertEquals(700 - 90, remaining("empty_troll.chum5").remaining)
+        assertEquals(700 - 90 - 45 - 70, remaining("troll_spent.chum5").remaining)
     }
 
     private fun settingsForTemplates() = CharacterSettings.find("ab2a5404-252f-4100-9efa-7ac281c5cb9b", File(src, "Chummer/data/settings.xml"), listOf(ref))
@@ -227,6 +228,9 @@ class NewCharacterTemplateTest {
      * the assertions only guard the numbers the user is told to expect.
      */
     @Test
+    fun karmaLedgerMatchesChummerForTheAppMadeOrk() = writeSamplesToTryInDesktopChummer()
+
+    @Test
     fun writeSamplesToTryInDesktopChummer() {
         val settings = settingsForTemplates()
         val resolved = chummer.core.data.CustomDataLocator(listOf(File(src, "Chummer/customdata"))).resolve(settings.customData)
@@ -248,7 +252,10 @@ class NewCharacterTemplateTest {
         File(out, "AppMade_Ork.chum5").outputStream().use { CharacterIo.write(c, it) }
         val ledger = KarmaLedger.of(c, settings)
         println("AppMade_Ork: $ledger remaining=${ledger.remaining}")
-        assertEquals(800 - 50 - 25 - 25 - 6 - 2 - 9, ledger.remaining)
+        // Chummer 5.226 showed Karma 700, Karma Remaining 583 for this file, with Metatype 50, Attributes 50,
+        // Active Skills 8 and Positive Qualities 9 in its Karma Summary.
+        assertEquals(583, ledger.remaining)
+        assertEquals(listOf(50, 50, 8, 9), listOf(ledger.metatype, ledger.attributes, ledger.skills, ledger.qualities))
 
         // Viper with Toughness added (the settings and data Viper was saved with).
         val viperSettings = CharacterSettings.find(load("Viper_career.chum5").root.text("settings").orEmpty(), File(src, "Chummer/data/settings.xml"), listOf(File(ref, "Viper_career/settings")))

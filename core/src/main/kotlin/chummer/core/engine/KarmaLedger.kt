@@ -38,7 +38,8 @@ data class KarmaLedger(
             fun k(key: String, default: Int) = cost[key] ?: default
             val notCounted = ArrayList<String>()
 
-            val budget = settings.int("buildkarma", 800)
+            // Stored in the settings as `buildpoints` (the Karma build budget; 800 in Chummer's own profiles, 700 in San Francisco Showdown).
+            val budget = settings.int("buildpoints", 800)
 
             // Metatype (and metavariant) cost.
             val metatype = (c.root.text("metatypebp")?.trim()?.toIntOrNull() ?: 0) * settings.int("metatypecostskarmamultiplier", 1)
