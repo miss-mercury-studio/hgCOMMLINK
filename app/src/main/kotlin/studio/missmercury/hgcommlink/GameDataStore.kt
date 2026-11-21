@@ -61,7 +61,8 @@ class GameDataStore(private val context: Context) {
     /** Qualities that can be added, as far as the current game data goes. Needs the data loaded (open a character first). */
     fun qualityOptions(): List<QualityOption> = synchronized(this) { pack?.let(QualityCatalog::list).orEmpty() }
 
-    fun editor(c: CharacterFile) = CharacterEditor(c, synchronized(this) { pack ?: error("Game data is not loaded yet") }, translations::get)
+    fun editor(c: CharacterFile) =
+        CharacterEditor(c, synchronized(this) { pack ?: error("Game data is not loaded yet") }, translations::get, settingsFor(c))
     private fun chummerCustomDir() = unpack("chummer-customdata", "chummer-customdata")
 
     /** Settings profiles copied from the user's folder (see CharacterRepository.syncSideFiles). */

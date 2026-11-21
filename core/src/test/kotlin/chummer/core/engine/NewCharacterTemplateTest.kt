@@ -179,4 +179,45 @@ class NewCharacterTemplateTest {
         assertEquals(800 - 90, remaining("empty_troll.chum5").remaining)
         assertEquals(800 - 90 - 45 - 70, remaining("troll_spent.chum5").remaining)
     }
+
+    private fun settingsForTemplates() = CharacterSettings.find("ab2a5404-252f-4100-9efa-7ac281c5cb9b", File(src, "Chummer/data/settings.xml"), listOf(ref))
+
+    /** Buying a point of BOD and a rating of Pistols on Chummer's empty character gives Chummer's "spent" character. */
+    @Test
+    fun buyingBodAndPistolsMatchesNewSpent() {
+        val settings = settingsForTemplates()
+        val c = load("New_Empty.chum5")
+        val editor = CharacterEditor(c, pack, translations::get, settings)
+        assertTrue(editor.changeAttribute("BOD", 1))
+        assertTrue(editor.changeSkill("Pistols", 1))
+        assertEquals(canonNoGuids(load("New_Spent.chum5").root), canonNoGuids(c.root))
+        // And giving them back restores the empty character.
+        assertTrue(editor.changeAttribute("BOD", -1))
+        assertTrue(editor.changeSkill("Pistols", -1))
+        assertEquals(canonNoGuids(load("New_Empty.chum5").root), canonNoGuids(c.root))
+        assertTrue(!editor.changeAttribute("BOD", -1))
+    }
+
+    @Test
+    fun buyingReaAndWilOnTheTrollMatchesTrollSpent() {
+        val settings = settingsForTemplates()
+        val c = load("empty_troll.chum5")
+        val editor = CharacterEditor(c, pack, translations::get, settings)
+        repeat(3) { assertTrue(editor.changeAttribute("REA", 1)) }
+        repeat(4) { assertTrue(editor.changeAttribute("WIL", 1)) }
+        assertEquals(canonNoGuids(load("troll_spent.chum5").root), canonNoGuids(c.root))
+    }
+
+    @Test
+    fun attributesStopAtTheMetatypeMaximum() {
+        val settings = settingsForTemplates()
+        val c = load("New_Empty.chum5")
+        val editor = CharacterEditor(c, pack, translations::get, settings)
+        repeat(5) { assertTrue(editor.changeAttribute("STR", 1)) }   // 1 to 6, the human maximum
+        assertTrue(!editor.changeAttribute("STR", 1))
+        val max = settings.toRuleSettings().maxSkillRatingCreate      // 5 in the San Francisco Showdown profile
+        assertEquals(5, max)
+        repeat(max) { assertTrue(editor.changeSkill("Pistols", 1)) }
+        assertTrue(!editor.changeSkill("Pistols", 1))
+    }
 }

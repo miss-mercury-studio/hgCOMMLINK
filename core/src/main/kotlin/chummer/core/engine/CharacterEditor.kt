@@ -4,6 +4,7 @@ import chummer.core.CharacterFile
 import chummer.core.GameData
 import chummer.core.child
 import chummer.core.children
+import chummer.core.data.CharacterSettings
 import chummer.core.text
 import org.w3c.dom.Element
 import java.util.UUID
@@ -21,6 +22,8 @@ class CharacterEditor(
     val file: CharacterFile,
     private val data: GameData,
     private val translate: (String) -> String? = { null },
+    /** Needed for buying attributes and skills (their limits and the stored derived values come from the rules). */
+    private val settings: CharacterSettings? = null,
 ) {
     private val doc get() = file.doc
     private val root get() = file.root
@@ -78,6 +81,56 @@ class CharacterEditor(
 
         grantBonus(entry.child("bonus"), BonusContext("Quality", guid, levels, extra, name, translate))
         return guid
+    }
+
+    private fun attributeRow(name: String): Element? =
+        root.child("attributes")?.children("attribute")?.firstOrNull { it.text("name")?.trim() == name }
+
+    /**
+     * Buy ([delta] = 1) or give back ([delta] = -1) one point of an attribute with karma, as in Chummer's creation
+     * screen. Fails (returns false) at the metatype maximum, or when no karma point is left to give back. The row's
+     * stored total and the stored condition monitor values are updated, as Chummer does on saving.
+     */
+    fun changeAttribute(name: String, delta: Int): Boolean {
+        require(delta == 1 || delta == -1)
+        val rules = (settings ?: error("Settings are needed to change attributes")).toRuleSettings()
+        val row = attributeRow(name) ?: return false
+        val karma = row.text("karma")?.trim()?.toIntOrNull() ?: 0
+        val now = AttributeEngine.forFile(file, rules)[name] ?: return false
+        if (delta > 0 && now.value >= now.totalMaximum) return false
+        if (delta < 0 && karma <= 0) return false
+        row.child("karma")!!.textContent = (karma + delta).toString()
+        AttributeEngine.forFile(file, rules)[name]?.let { row.child("totalvalue")?.textContent = it.totalValue.toString() }
+        refreshCalculatedValues()
+        return true
+    }
+
+    /** Buy or give back one rating point of an active skill with karma. Fails at the creation maximum or with no karma point to give back. */
+    fun changeSkill(name: String, delta: Int): Boolean {
+        require(delta == 1 || delta == -1)
+        val rules = (settings ?: error("Settings are needed to change skills")).toRuleSettings()
+        val row = root.child("newskills")?.child("skills")?.children("skill")
+            ?.firstOrNull { it.text("name")?.trim() == name && it.text("isknowledge")?.trim() != "True" } ?: return false
+        val karma = row.text("karma")?.trim()?.toIntOrNull() ?: 0
+        val base = row.text("base")?.trim()?.toIntOrNull() ?: 0
+        if (delta > 0 && base + karma >= rules.maxSkillRatingCreate) return false
+        if (delta < 0 && karma <= 0) return false
+        row.child("karma")!!.textContent = (karma + delta).toString()
+        return true
+    }
+
+    /** Rewrite the values Chummer keeps beside the character (condition monitor boxes and thresholds). */
+    private fun refreshCalculatedValues() {
+        val cfg = settings ?: return
+        val set = ImprovementSet(Improvement.parseAll(root), isCareer = false)
+        val attrs = AttributeEngine.forSet(file, set, cfg.toRuleSettings())
+        val d = DerivedStats(set, attrs, 6.0, cfg)
+        val values = mapOf(
+            "physicalcm" to d.physicalCM, "physicalcmthresholdoffset" to d.physicalCMThresholdOffset,
+            "physicalcmoverflow" to d.cmOverflow, "stuncm" to d.stunCM, "stuncmthresholdoffset" to d.stunCMThresholdOffset,
+        )
+        val cv = root.child("calculatedvalues") ?: return
+        for ((tag, v) in values) cv.child(tag)?.textContent = v.toString()
     }
 
     /** Remove the item with this GUID (a quality, for now) and every improvement it granted. Returns false if none. */

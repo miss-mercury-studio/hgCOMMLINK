@@ -32,6 +32,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -71,8 +72,8 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
                     TABS.forEachIndexed { i, t -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) }) }
                 }
                 when (tab) {
-                    0 -> Overview(sheet)
-                    1 -> Skills(sheet)
+                    0 -> Overview(sheet, vm)
+                    1 -> Skills(sheet, vm)
                     2 -> Gear(sheet.sections)
                     3 -> Ware(sheet.sections, sheet.essence)
                     4 -> Life(sheet.sections)
@@ -94,7 +95,7 @@ private fun Header(s: Sheet) {
 }
 
 @Composable
-private fun Overview(s: Sheet) {
+private fun Overview(s: Sheet, vm: AppViewModel) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -104,7 +105,12 @@ private fun Overview(s: Sheet) {
             // Four to a row reads well on a phone held upright.
             s.attributes.chunked(4).forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    row.forEach { a -> Stat(a.name, a.total.toString(), Modifier.weight(1f)) }
+                    row.forEach { a ->
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Stat(a.name, a.total.toString())
+                            if (s.karmaLedger != null && a.name in BUYABLE) Stepper({ vm.changeAttribute(a.name, -1) }, { vm.changeAttribute(a.name, 1) })
+                        }
+                    }
                     repeat(4 - row.size) { Column(Modifier.weight(1f)) {} }
                 }
             }
@@ -181,17 +187,17 @@ private fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun Skills(s: Sheet) {
+private fun Skills(s: Sheet, vm: AppViewModel) {
     LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         // Skills the character has come first; the rest are listed after, as Chummer does.
         val (rated, unrated) = s.activeSkills.partition { it.rating > 0 }
         item { SubHeader("Active skills") }
-        items(rated, key = { "a-" + it.name }) { SkillRow(it) }
+        items(rated, key = { "a-" + it.name }) { SkillRow(it, if (s.karmaLedger != null) vm else null) }
         if (unrated.isNotEmpty()) item { SubHeader("Unrated") }
-        items(unrated, key = { "u-" + it.name }) { SkillRow(it) }
+        items(unrated, key = { "u-" + it.name }) { SkillRow(it, if (s.karmaLedger != null) vm else null) }
         if (s.knowledgeSkills.isNotEmpty()) {
             item { SubHeader("Knowledge and languages") }
-            items(s.knowledgeSkills.sortedByDescending { it.rating }, key = { "k-" + it.name }) { SkillRow(it) }
+            items(s.knowledgeSkills.sortedByDescending { it.rating }, key = { "k-" + it.name }) { SkillRow(it, null) }
         }
     }
 }
@@ -202,7 +208,7 @@ private fun SubHeader(text: String) {
 }
 
 @Composable
-private fun SkillRow(r: SkillResult) {
+private fun SkillRow(r: SkillResult, buy: AppViewModel?) {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(r.name)
@@ -211,6 +217,7 @@ private fun SkillRow(r: SkillResult) {
                 style = MaterialTheme.typography.labelSmall,
             )
         }
+        if (buy != null) Stepper({ buy.changeSkill(r.name, -1) }, { buy.changeSkill(r.name, 1) })
         Text("${r.rating}", Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.bodyMedium)
         Text("${r.pool}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
     }
@@ -418,5 +425,17 @@ private fun KarmaSection(l: chummer.core.engine.KarmaLedger) {
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error,
             )
         }
+    }
+}
+
+/** The attributes that can be bought with karma in creation. */
+private val BUYABLE = setOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL", "EDG")
+
+/** A small minus and plus pair for buying and giving back points. */
+@Composable
+private fun Stepper(onMinus: () -> Unit, onPlus: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onMinus, modifier = Modifier.size(40.dp)) { Text("−", style = MaterialTheme.typography.titleLarge) }
+        IconButton(onClick = onPlus, modifier = Modifier.size(40.dp)) { Text("+", style = MaterialTheme.typography.titleLarge) }
     }
 }

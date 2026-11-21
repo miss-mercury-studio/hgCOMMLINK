@@ -126,21 +126,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Add a quality from the game data to the open character, save the file and recalculate the sheet. */
     fun addQuality(entryId: String, extra: String = "") = edit("Added quality") { editor -> editor.addQuality(entryId, extra); true }
 
+    /** Buy (+1) or give back (-1) a point of an attribute with karma, in creation. */
+    fun changeAttribute(name: String, delta: Int) =
+        edit(null, blocked = if (delta > 0) "$name is at its maximum" else "No karma point in $name to give back") { it.changeAttribute(name, delta) }
+
+    /** Buy (+1) or give back (-1) a rating point of an active skill with karma, in creation. */
+    fun changeSkill(name: String, delta: Int) =
+        edit(null, blocked = if (delta > 0) "$name is at the creation maximum" else "No karma point in $name to give back") { it.changeSkill(name, delta) }
+
     /** Remove a quality (and the improvements it granted) from the open character. */
     fun removeQuality(guid: String) = edit("Removed quality") { editor -> editor.removeItem(guid) }
 
-    private fun edit(done: String, change: (chummer.core.engine.CharacterEditor) -> Boolean) {
+    private fun edit(done: String?, blocked: String = "Nothing changed", change: (chummer.core.engine.CharacterEditor) -> Boolean) {
         val current = open ?: return
         viewModelScope.launch {
             try {
                 val (sheet, warning) = io {
                     val editor = gameData.editor(current.character)
-                    if (!change(editor)) error("Nothing changed")
-                    repo.save(current.file, current.character)
-                    gameData.sheet(current.character)
-                }
+                    if (!change(editor)) null
+                    else {
+                        repo.save(current.file, current.character)
+                        gameData.sheet(current.character)
+                    }
+                } ?: run { message = blocked; return@launch }
                 open = OpenCharacter(current.file, current.character, sheet, warning)
-                message = done
+                if (done != null) message = done
             } catch (e: Throwable) {
                 message = "Could not change the character: ${e.message ?: e.javaClass.simpleName}"
             }
