@@ -248,6 +248,11 @@ object BonusHandlers {
             out += improvement(ctx, "RestrictedGear", unique, v, rating = count)
         }
 
+        // Extra reach, optionally only for the weapon named in the `name` attribute.
+        put("reach") { node, ctx, unique, out ->
+            value(node.textContent, ctx.rating)?.let { out += improvement(ctx, "Reach", unique, it, node.attr("name").orEmpty()) }
+        }
+
         put("selectrestricted") { _, ctx, unique, out ->
             if (ctx.choice.isNotEmpty()) out += improvement(ctx, "Restricted", unique, 0.0, ctx.choice)
         }

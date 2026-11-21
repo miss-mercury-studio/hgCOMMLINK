@@ -68,9 +68,7 @@ object NewCharacter {
         set("metatypeid", request.metatypeId.lowercase())
         set("metatypebp", meta("karma").ifEmpty { "0" })
         set("metatypecategory", meta("category"))
-        for (tag in listOf("walk", "walkalt")) set(tag, meta("walk"))
-        for (tag in listOf("run", "runalt")) set(tag, meta("run"))
-        for (tag in listOf("sprint", "sprintalt")) set(tag, meta("sprint"))
+        // The walk, run and sprint fields keep the skeleton's defaults: Chummer does not store the metatype's own values there.
 
         root.child("sources")!!.let { e -> settings.books.forEach { e.appendChild(element("source", it)) } }
         root.child("customdatadirectorynames")!!.let { e -> request.customDataNames.forEach { e.appendChild(element("directoryname", it)) } }
@@ -134,6 +132,35 @@ object NewCharacter {
                     e.appendChild(element("name", g))
                 })
             }
+
+        // Base lift and carry limits come from the settings' expressions with the starting STR (defaults: STR x 15 and x 10).
+        val str = totals.getValue("STR").toDouble()
+        set("basecarrylimit", standardRound(settings.evaluate("carrylimitexpression", mapOf("STR" to str), "{STR} * 10")).toString())
+        set("baseliftlimit", standardRound(settings.evaluate("liftlimitexpression", mapOf("STR" to str), "{STR} * 15")).toString())
+
+        // Every new character gets its own ids for the built-in unarmed attack.
+        root.child("weapons")?.children("weapon")?.forEach { w ->
+            w.child("guid")?.textContent = UUID.randomUUID().toString()
+            w.child("parentid")?.textContent = UUID.randomUUID().toString()
+        }
+
+        // What the metatype grants: its own bonus (armor, reach and so on, with the metatype as the source) and free qualities.
+        val improvements = root.child("improvements")!!
+        metatype.child("bonus")?.let { bonus ->
+            BonusHandlers.apply(bonus, BonusContext("Metatype", request.metatypeId.lowercase(), 1))
+                .improvements.forEach { improvements.appendChild(ImprovementWriter.toElement(doc, it)) }
+        }
+        val editor = CharacterEditor(character, data)
+        for (group in listOf("positive", "negative")) {
+            for (q in metatype.child("qualities")?.child(group)?.children("quality").orEmpty()) {
+                val wanted = q.textContent.trim()
+                val entry = data.byId.entries.firstOrNull {
+                    it.value.file == "qualities.xml" && it.value.element.tagName == "quality" &&
+                        it.value.element.child("name")?.textContent?.trim() == wanted
+                } ?: error("Metatype quality $wanted is not in the game data")
+                editor.addQuality(entry.key, qualitySource = "Metatype")
+            }
+        }
 
         // Values Chummer stores for a character at rest.
         val bod = totals.getValue("BOD")

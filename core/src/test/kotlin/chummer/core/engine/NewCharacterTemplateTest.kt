@@ -78,7 +78,7 @@ class NewCharacterTemplateTest {
         append('<').append(e.tagName).append('>')
         val kids = e.children()
         if (kids.isEmpty()) {
-            val random = e.tagName == "guid" || (e.tagName == "id" && parent == "group")
+            val random = e.tagName == "guid" || e.tagName == "parentid" || (e.tagName == "id" && parent == "group")
             append(if (random) "*" else e.textContent.trim().replace(Regex("\\s+"), " "))
         } else kids.forEach { append(canonNoGuids(it, e.tagName)) }
         append("</").append(e.tagName).append('>')
@@ -141,5 +141,26 @@ class NewCharacterTemplateTest {
         val orkSheet = Sheet.build(NewCharacter.createKarma(data, settings, NewCharacterRequest(metatypeId = ork.key)), data, settings)
         println("Ork at creation: " + orkSheet.attributes.joinToString { "${it.name} ${it.total}/${it.maximum}" })
         assertEquals(4, orkSheet.attributes.first { it.name == "BOD" }.total)
+    }
+
+    @Test
+    fun generatedTrollMatchesChummersEmptyTroll() {
+        val settings = CharacterSettings.find("ab2a5404-252f-4100-9efa-7ac281c5cb9b", File(src, "Chummer/data/settings.xml"), listOf(ref))
+        val resolved = chummer.core.data.CustomDataLocator(listOf(File(src, "Chummer/customdata"))).resolve(settings.customData)
+        val data = DataPack.load(File(src, "Chummer/data"), resolved.dirs)
+        val troll = data.byId.values.first { it.file == "metatypes.xml" && it.element.tagName == "metatype" && it.element.child("name")?.textContent?.trim() == "Troll" }
+        val generated = NewCharacter.createKarma(
+            data, settings,
+            NewCharacterRequest(metatypeId = troll.element.child("id")!!.textContent.trim(), settingsHash = 1889893532, customDataNames = resolved.dirs.map { it.name }),
+        )
+        val a = canonNoGuids(load("empty_troll.chum5").root)
+        val b = canonNoGuids(generated.root)
+        if (a != b) {
+            val at = a.zip(b).indexOfFirst { it.first != it.second }.let { if (it < 0) minOf(a.length, b.length) else it }
+            println("TROLL DIFF at $at:")
+            println("  Chummer: ${a.substring(maxOf(0, at - 150), minOf(a.length, at + 400))}")
+            println("  ours:    ${b.substring(maxOf(0, at - 150), minOf(b.length, at + 400))}")
+        }
+        assertEquals(a, b)
     }
 }

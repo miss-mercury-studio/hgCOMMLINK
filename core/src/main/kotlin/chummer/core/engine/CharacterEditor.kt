@@ -38,9 +38,11 @@ class CharacterEditor(
 
     /**
      * Add a quality from the game data. [extra] is the user's choice for qualities that ask for one (a skill, a
-     * text), [levels] the level for qualities that have several. Returns the new item's GUID.
+     * text), [levels] the level for qualities that have several. [qualitySource] is "Selected" for a quality the
+     * user bought, or "Metatype" for a free one the metatype grants (those do not count toward the quality limit).
+     * Returns the new item's GUID.
      */
-    fun addQuality(entryId: String, extra: String = "", levels: Int = 1): String {
+    fun addQuality(entryId: String, extra: String = "", levels: Int = 1, qualitySource: String = "Selected"): String {
         val entry = data[entryId]?.element ?: error("No quality with id $entryId in the game data")
         val guid = UUID.randomUUID().toString()
         val name = entryText(entry, "name").orEmpty()
@@ -54,14 +56,14 @@ class CharacterEditor(
         add("bp", entryText(entry, "karma") ?: "0")
         add("implemented", "True")
         add("contributetobp", entryFlag(entry, "contributetobp", true))
-        add("contributetolimit", entryFlag(entry, "contributetolimit", true))
+        add("contributetolimit", if (qualitySource == "Metatype") "False" else entryFlag(entry, "contributetolimit", true))
         add("stagedpurchase", "False")
         add("doublecareer", entryFlag(entry, "doublecareer", true))
         add("canbuywithspellpoints", entryFlag(entry, "canbuywithspellpoints", false))
         add("metagenic", entryFlag(entry, "metagenic", false))
         add("print", entryFlag(entry, "print", true))
         add("qualitytype", entryText(entry, "category") ?: "Positive")
-        add("qualitysource", "Selected")
+        add("qualitysource", qualitySource)
         add("mutant", entryFlag(entry, "mutant", false))
         add("source", entryText(entry, "source").orEmpty())
         add("page", entryText(entry, "page").orEmpty())
@@ -108,7 +110,8 @@ object ImprovementWriter {
     fun toElement(doc: org.w3c.dom.Document, i: Improvement): Element {
         val e = doc.createElement("improvement")
         fun add(tag: String, text: String = "") { e.appendChild(doc.createElement(tag).also { if (text.isNotEmpty()) it.textContent = text }) }
-        add("unique", i.uniqueName)
+        // Chummer leaves the element out when there is no unique name.
+        if (i.uniqueName.isNotEmpty()) add("unique", i.uniqueName)
         add("target")
         add("improvedname", i.improvedName)
         add("sourcename", i.sourceName)
