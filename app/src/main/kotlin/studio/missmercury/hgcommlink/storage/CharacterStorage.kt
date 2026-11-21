@@ -20,6 +20,9 @@ interface CharacterStorage {
     fun list(): List<StoredFile>
     fun open(id: String): InputStream
 
+    /** `.xml` files kept beside the characters: Chummer settings profiles exported from desktop Chummer. */
+    fun listSettingsFiles(): List<StoredFile>
+
     /** Create a new file (the name is made unique) and return its id and an output stream. */
     fun create(name: String): Pair<String, OutputStream>
     fun overwrite(id: String): OutputStream
@@ -49,6 +52,9 @@ class AppFolderStorage(private val dir: File) : CharacterStorage {
 
     override fun open(id: String): InputStream = File(id).inputStream().buffered()
 
+    override fun listSettingsFiles() = dir.listFiles { f -> f.isFile && f.name.endsWith(".xml", true) }.orEmpty()
+        .map { StoredFile(it.absolutePath, it.name, it.lastModified(), it.length()) }
+
     override fun create(name: String): Pair<String, OutputStream> {
         val safe = safeFileName(name)
         var f = File(dir, safe)
@@ -68,6 +74,10 @@ class TreeStorage(private val context: Context, private val tree: Uri) : Charact
 
     override fun list(): List<StoredFile> = root?.listFiles().orEmpty()
         .filter { it.isFile && it.name?.endsWith(EXT, true) == true }
+        .map { StoredFile(it.uri.toString(), it.name.orEmpty(), it.lastModified(), it.length()) }
+
+    override fun listSettingsFiles(): List<StoredFile> = root?.listFiles().orEmpty()
+        .filter { it.isFile && it.name?.endsWith(".xml", true) == true }
         .map { StoredFile(it.uri.toString(), it.name.orEmpty(), it.lastModified(), it.length()) }
 
     override fun open(id: String): InputStream =

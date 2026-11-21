@@ -21,8 +21,8 @@ data class OpenCharacter(
     val character: CharacterFile,
     /** Null while the sheet is being calculated or if that failed (see [sheetError]). */
     val sheet: Sheet? = null,
-    /** False when the character's own settings profile is not on this device and a stand-in was used. */
-    val exactSettings: Boolean = true,
+    /** Why the numbers may differ from Chummer's (for example a missing settings profile), or null. */
+    val warning: String? = null,
     val sheetError: String? = null,
 )
 
@@ -107,8 +107,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 open = OpenCharacter(file, character)
                 // The sheet takes a moment the first time (the game data has to be unpacked and read).
                 open = try {
-                    val (sheet, exact) = io { gameData.sheet(character) }
-                    OpenCharacter(file, character, sheet, exact)
+                    val (sheet, warning) = io {
+                        repo.syncSettings(gameData.userSettingsDir)
+                        gameData.sheet(character)
+                    }
+                    OpenCharacter(file, character, sheet, warning)
                 } catch (e: Throwable) {
                     OpenCharacter(file, character, sheetError = e.message ?: e.javaClass.simpleName)
                 }

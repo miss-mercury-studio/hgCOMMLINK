@@ -47,9 +47,9 @@ fun SheetScreen(open: OpenCharacter) {
             )
             else -> {
                 Header(sheet)
-                if (!open.exactSettings) {
+                if (open.warning != null) {
                     Text(
-                        "Settings profile not on this device: default rules used, numbers may differ.",
+                        open.warning,
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                     )

@@ -34,13 +34,23 @@ class GameDataStore(private val context: Context) {
     @Synchronized
     fun pack(): DataPack = pack ?: DataPack.load(dataDir()).also { pack = it }
 
+    /** Settings profiles copied from the user's folder (see CharacterRepository.syncSettings). */
+    val userSettingsDir: File get() = File(context.filesDir, "user-settings")
+
     /** The character's settings profile; `isFallback` is set when it is not available on this device. */
     fun settingsFor(c: CharacterFile): CharacterSettings =
-        CharacterSettings.find(c.root.text("settings").orEmpty(), File(dataDir(), "settings.xml"))
+        CharacterSettings.find(c.root.text("settings").orEmpty(), File(dataDir(), "settings.xml"), listOf(userSettingsDir))
 
-    /** Build the sheet. The flag says whether the character's own settings profile was used. */
-    fun sheet(c: CharacterFile): Pair<Sheet, Boolean> {
+    /** Build the sheet, plus a warning to show when its numbers may differ from Chummer's (null when none). */
+    fun sheet(c: CharacterFile): Pair<Sheet, String?> {
         val settings = settingsFor(c)
-        return Sheet.build(c, pack(), settings) to !settings.isFallback
+        val warning = when {
+            settings.isFallback -> "Settings profile not on this device: default rules used, numbers may differ. " +
+                "Put the profile's .xml in your characters folder."
+            settings.customData.any { it.enabled } ->
+                "Custom data from this profile is not loaded yet, so items it changes may show Chummer's original values."
+            else -> null
+        }
+        return Sheet.build(c, pack(), settings) to warning
     }
 }

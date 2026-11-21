@@ -61,6 +61,23 @@ class CharacterRepository(private val context: Context) {
         CharacterEntry(f, null, e.message ?: e.javaClass.simpleName)
     }
 
+    /** Copy the settings files kept beside the characters into [target] (replacing what was there). Returns how many. */
+    @Synchronized
+    fun syncSettings(target: File): Int {
+        target.deleteRecursively()
+        target.mkdirs()
+        var n = 0
+        for (f in storage.listSettingsFiles()) {
+            try {
+                storage.open(f.id).use { i -> File(target, f.name).outputStream().use { i.copyTo(it) } }
+                n++
+            } catch (e: Exception) {
+                // An unreadable file is skipped; the sheet then warns that the profile is missing.
+            }
+        }
+        return n
+    }
+
     fun load(id: String): CharacterFile = storage.open(id).use { CharacterIo.read(it) }
 
     /**
