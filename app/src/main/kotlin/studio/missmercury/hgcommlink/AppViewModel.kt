@@ -107,10 +107,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 open = OpenCharacter(file, character)
                 // The sheet takes a moment the first time (the game data has to be unpacked and read).
                 open = try {
+                    val started = System.nanoTime()
                     val (sheet, warning) = io {
-                        repo.syncSettings(gameData.userSettingsDir)
+                        repo.syncSideFiles(gameData.userSettingsDir, gameData.userCustomDir)
                         gameData.sheet(character)
                     }
+                    android.util.Log.i("hgcommlink", "sheet ready in ${(System.nanoTime() - started) / 1_000_000} ms")
                     OpenCharacter(file, character, sheet, warning)
                 } catch (e: Throwable) {
                     OpenCharacter(file, character, sheetError = e.message ?: e.javaClass.simpleName)

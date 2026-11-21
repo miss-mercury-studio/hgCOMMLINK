@@ -61,18 +61,34 @@ class CharacterRepository(private val context: Context) {
         CharacterEntry(f, null, e.message ?: e.javaClass.simpleName)
     }
 
-    /** Copy the settings files kept beside the characters into [target] (replacing what was there). Returns how many. */
+    /**
+     * Copy the `.xml` files kept beside the characters into the app's folders (replacing what was there).
+     * Files that belong to a custom data folder (a manifest, `amend_`, `custom_` and `override_` files) go to
+     * [customDir]; the rest (settings profiles) go to [settingsDir]. Returns how many files were copied.
+     */
     @Synchronized
-    fun syncSettings(target: File): Int {
-        target.deleteRecursively()
-        target.mkdirs()
-        var n = 0
+    fun syncSideFiles(settingsDir: File, customDir: File): Int {
+        val shared = File(customDir, "Shared folder")
+        settingsDir.mkdirs()
+        shared.mkdirs()
+        val wanted = HashMap<File, StoredFile>()
         for (f in storage.listSettingsFiles()) {
+            val lower = f.name.lowercase()
+            val isCustom = lower == "manifest.xml" || listOf("amend_", "custom_", "override_").any { lower.startsWith(it) }
+            wanted[File(if (isCustom) shared else settingsDir, f.name)] = f
+        }
+        // Remove copies whose source is gone.
+        for (dir in listOf(settingsDir, shared)) dir.listFiles().orEmpty().filter { it.isFile && it !in wanted }.forEach { it.delete() }
+        var n = 0
+        for ((target, source) in wanted) {
+            // Unchanged files are left alone, so the loaded game data stays valid between opens.
+            if (target.isFile && target.length() == source.size && target.lastModified() == source.modified) { n++; continue }
             try {
-                storage.open(f.id).use { i -> File(target, f.name).outputStream().use { i.copyTo(it) } }
+                storage.open(source.id).use { i -> target.outputStream().use { i.copyTo(it) } }
+                if (source.modified > 0) target.setLastModified(source.modified)
                 n++
             } catch (e: Exception) {
-                // An unreadable file is skipped; the sheet then warns that the profile is missing.
+                // An unreadable file is skipped; the sheet then warns about what is missing.
             }
         }
         return n

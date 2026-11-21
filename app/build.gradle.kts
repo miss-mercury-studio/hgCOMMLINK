@@ -55,5 +55,9 @@ val copyChummerData = tasks.register<Copy>("copyChummerData") {
     }
     into(layout.buildDirectory.dir("generated/chummerAssets/chummer-data"))
 }
+val copyChummerCustomData = tasks.register<Copy>("copyChummerCustomData") {
+    from(File(chummerSrc.get(), "Chummer/customdata")) { exclude("*.xsd") }
+    into(layout.buildDirectory.dir("generated/chummerAssets/chummer-customdata"))
+}
 android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/chummerAssets"))
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(copyChummerData) }
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(copyChummerData, copyChummerCustomData) }
