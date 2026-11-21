@@ -56,6 +56,43 @@ class DerivedStats(
     val liftAndCarry: Int get() = attr("STR") + attr("BOD") + improvement("LiftAndCarry")
     val fatigueResist: Int get() = attr("BOD") + attr("WIL") + improvement("FatigueResist")
     val dodge: Int get() = attr("REA") + attr("INT") + improvement("Dodge")
-    val directManaResist: Int get() = attr("WIL") + improvement("DirectManaSpellResist")
     val physicalCMNaturalRecovery: Int get() = attr("BOD") + attr("WIL") + improvement("PhysicalCMRecovery")
+
+    private fun sum(attrs: List<String>, vararg types: String) =
+        attrs.sumOf { attr(it) } + standardRound(types.sumOf { improvements.valueOf(it) })
+
+    /**
+     * Resistance pools by their name in Chummer's print output. Each is the listed attributes plus the
+     * improvements of the listed types. Spell defences also take the general "SpellResistance" improvement.
+     * Immunity to toxins and pathogens is not handled yet.
+     */
+    fun resistances(): Map<String, Int> {
+        val bw = listOf("BOD", "WIL")
+        val m = linkedMapOf<String, Int>()
+        m["judgeintentionsresist"] = sum(listOf("CHA", "WIL"), "JudgeIntentions", "JudgeIntentionsDefense")
+        m["fatigueresist"] = sum(bw, "FatigueResist")
+        m["radiationresist"] = sum(bw, "RadiationResist")
+        m["sonicresist"] = sum(listOf("WIL"), "SonicResist")
+        for (vector in listOf("Contact", "Ingestion", "Inhalation", "Injection")) {
+            m["toxin${vector.lowercase()}resist"] = sum(bw, "Toxin${vector}Resist")
+            m["pathogen${vector.lowercase()}resist"] = sum(bw, "Pathogen${vector}Resist")
+        }
+        m["physiologicaladdictionresistfirsttime"] = sum(bw, "PhysiologicalAddictionFirstTime")
+        m["physiologicaladdictionresistalreadyaddicted"] = sum(bw, "PhysiologicalAddictionAlreadyAddicted")
+        m["psychologicaladdictionresistfirsttime"] = sum(listOf("LOG", "WIL"), "PsychologicalAddictionFirstTime")
+        m["psychologicaladdictionresistalreadyaddicted"] = sum(listOf("LOG", "WIL"), "PsychologicalAddictionAlreadyAddicted")
+        m["indirectdefenseresist"] = dodge
+        m["directmanaresist"] = sum(listOf("WIL"), "SpellResistance", "DirectManaSpellResist")
+        m["directphysicalresist"] = sum(listOf("BOD"), "SpellResistance", "DirectPhysicalSpellResist")
+        m["detectionspellresist"] = sum(listOf("LOG", "WIL"), "SpellResistance", "DetectionSpellResist")
+        for (a in listOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL")) {
+            m["decrease${a.lowercase()}resist"] =
+                sum(listOf(a, "WIL"), "SpellResistance", "Decrease${a}Resist")
+        }
+        m["illusionmanaresist"] = sum(listOf("LOG", "WIL"), "SpellResistance", "ManaIllusionResist")
+        m["illusionphysicalresist"] = sum(listOf("LOG", "INT"), "SpellResistance", "PhysicalIllusionResist")
+        m["manipulationmentalresist"] = sum(listOf("LOG", "WIL"), "SpellResistance", "MentalManipulationResist")
+        m["manipulationphysicalresist"] = sum(listOf("BOD", "STR"), "SpellResistance", "PhysicalManipulationResist")
+        return m
+    }
 }

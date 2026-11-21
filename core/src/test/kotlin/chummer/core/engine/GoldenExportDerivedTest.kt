@@ -84,7 +84,7 @@ class GoldenExportDerivedTest {
         expect("liftandcarry", d.liftAndCarry)
         expect("fatigueresist", d.fatigueResist)
         expect("dodge", d.dodge)
-        expect("directmanaresist", d.directManaResist)
+        for ((field, v) in d.resistances()) expect(field, v)
         expect("physicalcmnaturalrecovery", d.physicalCMNaturalRecovery)
         // Essence from the engine against the export's total essence.
         val wantEss = export.text("totaless")!!.trim().toDouble()
