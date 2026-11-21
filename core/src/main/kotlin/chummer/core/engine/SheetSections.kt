@@ -7,12 +7,12 @@ import chummer.core.text
 import org.w3c.dom.Element
 
 /**
- * The equipment and life sections of the sheet. These show values as stored in the file; only a few are
- * calculated (weapon damage from STR, essence of ware). Weapon figures do not yet include accessories and mods.
+ * The equipment and life sections of the sheet. Most show values as stored in the file; weapons and ware are
+ * calculated (see [WeaponEngine] and [EssenceEngine]).
  */
 data class SheetSections(
     val armorSets: List<ArmorSet>,
-    val weapons: List<WeaponLine>,
+    val weapons: List<WeaponTotals>,
     val ware: List<WareLine>,
     val gear: List<GearLine>,
     val vehicles: List<VehicleLine>,
@@ -23,10 +23,6 @@ data class SheetSections(
     data class ArmorItemLine(val name: String, val value: String, val equipped: Boolean, val mods: List<String>)
     /** Armor grouped by equipment set; the set name is empty for armor not in any set. */
     data class ArmorSet(val name: String, val items: List<ArmorItemLine>)
-    data class WeaponLine(
-        val name: String, val category: String, val damage: String, val ap: String, val mode: String,
-        val rc: String, val ammo: String, val reach: String, val accuracy: String, val accessories: List<String>,
-    )
     data class WareLine(val name: String, val grade: String, val rating: Int, val essence: Double, val isBioware: Boolean, val children: List<WareLine>)
     data class GearLine(val name: String, val category: String, val quantity: String, val rating: Int, val children: List<String>)
     data class VehicleLine(val name: String, val category: String, val stats: String)
@@ -37,7 +33,7 @@ data class SheetSections(
         private fun Element.t(tag: String) = text(tag).orEmpty().trim()
         private fun Element.n(tag: String) = t(tag).toIntOrNull() ?: 0
 
-        fun read(c: CharacterFile, strength: Int, essence: EssenceEngine): SheetSections {
+        fun read(c: CharacterFile, weapons: List<WeaponTotals>, essence: EssenceEngine): SheetSections {
             val locations = c.armorLocations()
             val armors = c.root.child("armors")?.children("armor").orEmpty()
             val sets = armors.groupBy { locations[it.t("location")].orEmpty() }.map { (set, items) ->
@@ -53,16 +49,6 @@ data class SheetSections(
                     },
                 )
             }.sortedBy { if (it.name.isEmpty()) "~" else it.name }
-
-            val weapons = c.root.child("weapons")?.children("weapon").orEmpty()
-                .map { w ->
-                    val melee = w.t("type").equals("Melee", true)
-                    WeaponLine(
-                        w.t("name"), w.t("category"), damageText(w.t("damage"), strength), w.t("ap"), w.t("mode"),
-                        w.t("rc"), if (melee) "" else w.t("ammo"), if (melee) w.t("reach") else "", w.t("accuracy"),
-                        w.child("accessories")?.children("accessory").orEmpty().map { it.t("name") },
-                    )
-                }
 
             fun ware(a: CharacterFile.Augmentation, hasParent: Boolean): WareLine = WareLine(
                 a.name, a.grade.takeIf { it != "None" }.orEmpty(), a.rating,
@@ -107,15 +93,6 @@ data class SheetSections(
             }.getOrNull() ?: return base
             val total = own + mods
             return if (base.startsWith("+")) "+$total" else total.toString()
-        }
-
-        /** Damage such as `({STR}+1)P` shown with STR filled in; anything that is not plain arithmetic is left as stored. */
-        fun damageText(stored: String, strength: Int): String {
-            if (!stored.contains("{STR}")) return stored
-            val m = Regex("^(.*)([A-Za-z]+(?:\\(.*\\))?)$").find(stored) ?: return stored
-            val expr = m.groupValues[1].replace("{STR}", strength.toString())
-            val value = runCatching { standardRound(chummer.core.Expr.eval(expr)) }.getOrNull() ?: return stored
-            return "$value${m.groupValues[2]}"
         }
     }
 }

@@ -100,7 +100,7 @@ data class Sheet(
                 ),
                 activeSkills = active, knowledgeSkills = knowledge,
                 qualities = qualities(c),
-                sections = SheetSections.read(c, str, essenceEngine),
+                sections = SheetSections.read(c, WeaponEngine(c.root, set, str, d.limitPhysical).all(), essenceEngine),
             )
         }
 

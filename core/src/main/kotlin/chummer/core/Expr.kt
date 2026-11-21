@@ -11,6 +11,10 @@ class Expr private constructor(private val s: String, private val vars: Map<Stri
     private var i = 0
 
     companion object {
+        /** The value of [formula], or null when it is not plain arithmetic (for example "Special"). */
+        fun evalOrNull(formula: String, vars: Map<String, Double> = emptyMap()): Double? =
+            runCatching { eval(formula, vars) }.getOrNull()
+
         fun eval(formula: String, vars: Map<String, Double> = emptyMap()): Double {
             val e = Expr(formula.trim(), vars)
             val v = e.sum()

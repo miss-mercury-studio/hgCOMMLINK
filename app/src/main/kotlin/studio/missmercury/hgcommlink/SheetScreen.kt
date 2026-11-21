@@ -248,13 +248,13 @@ private fun Gear(g: chummer.core.engine.SheetSections) {
         }
         if (g.weapons.isNotEmpty()) {
             item { SubHeader("Weapons") }
-            item { Small("Base figures: accessories and modifications are not applied yet.") }
         }
         items(g.weapons) { w ->
             Column {
                 Row2(w.name, w.damage + if (w.ap.isNotBlank() && w.ap != "-") "  AP ${w.ap}" else "", bold = true)
                 Small(listOf(w.category, w.mode.takeIf { it.isNotBlank() && it != "0" }, w.ammo.takeIf { it.isNotBlank() && it != "0" }?.let { "ammo $it" },
-                    w.reach.takeIf { it.isNotBlank() }?.let { "reach $it" }, w.accuracy.takeIf { it.isNotBlank() }?.let { "acc $it" }).filterNotNull().filter { it.isNotBlank() }.joinToString("  ·  "))
+                    w.reach.takeIf { w.type.equals("Melee", true) && it.isNotBlank() }?.let { "reach $it" }, w.accuracy.takeIf { it.isNotBlank() }?.let { "acc $it" },
+                    "RC ${w.rc}", w.conceal.takeIf { it != "0" }?.let { "conceal $it" }).filterNotNull().filter { it.isNotBlank() }.joinToString("  ·  "))
                 Small(w.accessories.groupingBy { it }.eachCount().entries.joinToString(", ") { (n, c) -> if (c > 1) "$n x$c" else n })
             }
         }
