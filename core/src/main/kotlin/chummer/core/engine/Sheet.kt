@@ -35,6 +35,7 @@ data class Sheet(
     val activeSkills: List<SkillResult>,
     val knowledgeSkills: List<SkillResult>,
     val qualities: List<QualityLine>,
+    val sections: SheetSections,
 ) {
     data class AttributeLine(val name: String, val total: Int, val maximum: Int)
     data class Limits(val physical: Int, val mental: Int, val social: Int, val astral: Int)
@@ -50,8 +51,8 @@ data class Sheet(
             val set = ImprovementSet(Improvement.parseAll(c.root), career)
             val attrs = AttributeEngine.forSet(c, set, rules)
 
-            val essence = EssenceEngine(set, data, true, rules.essenceDecimals, rules.dontRoundEssenceInternally)
-                .essence(6.0, c.augmentations())
+            val essenceEngine = EssenceEngine(set, data, true, rules.essenceDecimals, rules.dontRoundEssenceInternally)
+            val essence = essenceEngine.essence(6.0, c.augmentations())
             val d = DerivedStats(set, attrs, essence, settings)
 
             val str = attrs["STR"]?.totalValue ?: 0
@@ -99,6 +100,7 @@ data class Sheet(
                 ),
                 activeSkills = active, knowledgeSkills = knowledge,
                 qualities = qualities(c),
+                sections = SheetSections.read(c, str, essenceEngine),
             )
         }
 

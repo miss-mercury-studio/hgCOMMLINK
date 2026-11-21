@@ -16,7 +16,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import chummer.core.engine.Sheet
 import chummer.core.engine.SkillResult
 
-private val TABS = listOf("Overview", "Skills", "Qualities")
+private val TABS = listOf("Overview", "Skills", "Gear", "Ware", "Life", "Qualities")
 
 /** The character sheet: calculated numbers on three tabs. Read-only. */
 @Composable
@@ -54,12 +54,15 @@ fun SheetScreen(open: OpenCharacter) {
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                     )
                 }
-                TabRow(selectedTabIndex = tab) {
+                ScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
                     TABS.forEachIndexed { i, t -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) }) }
                 }
                 when (tab) {
                     0 -> Overview(sheet)
                     1 -> Skills(sheet)
+                    2 -> Gear(sheet.sections)
+                    3 -> Ware(sheet.sections, sheet.essence)
+                    4 -> Life(sheet.sections)
                     else -> Qualities(sheet)
                 }
             }
@@ -213,4 +216,97 @@ private fun Qualities(s: Sheet) {
 @Composable
 private fun QualityRow(q: Sheet.QualityLine) {
     Text(if (q.extra.isBlank()) q.name else "${q.name} (${q.extra})")
+}
+
+@Composable
+private fun Row2(left: String, right: String, bold: Boolean = false) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(left, Modifier.weight(1f), fontWeight = if (bold) FontWeight.Bold else null)
+        if (right.isNotBlank()) Text(right, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun Small(text: String) {
+    if (text.isNotBlank()) Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun Gear(g: chummer.core.engine.SheetSections) {
+    LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (g.armorSets.isNotEmpty()) item { SubHeader("Armor") }
+        items(g.armorSets) { set ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                    Text(set.name.ifBlank { "Not in a set" }, style = MaterialTheme.typography.titleSmall)
+                    set.items.forEach { a ->
+                        Row2(a.name, a.value.let { v -> if (a.equipped) v else "$v (off)" })
+                        Small(a.mods.joinToString(", "))
+                    }
+                }
+            }
+        }
+        if (g.weapons.isNotEmpty()) {
+            item { SubHeader("Weapons") }
+            item { Small("Base figures: accessories and modifications are not applied yet.") }
+        }
+        items(g.weapons) { w ->
+            Column {
+                Row2(w.name, w.damage + if (w.ap.isNotBlank() && w.ap != "-") "  AP ${w.ap}" else "", bold = true)
+                Small(listOf(w.category, w.mode.takeIf { it.isNotBlank() && it != "0" }, w.ammo.takeIf { it.isNotBlank() && it != "0" }?.let { "ammo $it" },
+                    w.reach.takeIf { it.isNotBlank() }?.let { "reach $it" }, w.accuracy.takeIf { it.isNotBlank() }?.let { "acc $it" }).filterNotNull().filter { it.isNotBlank() }.joinToString("  ·  "))
+                Small(w.accessories.groupingBy { it }.eachCount().entries.joinToString(", ") { (n, c) -> if (c > 1) "$n x$c" else n })
+            }
+        }
+        if (g.vehicles.isNotEmpty()) item { SubHeader("Vehicles") }
+        items(g.vehicles) { v -> Column { Row2(v.name, v.category, bold = true); Small(v.stats) } }
+        if (g.gear.isNotEmpty()) item { SubHeader("Gear") }
+        items(g.gear) { it ->
+            Column {
+                Row2(it.name + if (it.rating > 0) " (rating ${it.rating})" else "", if (it.quantity != "1") "x${it.quantity}" else "")
+                Small(listOf(it.category, it.children.joinToString(", ")).filter { x -> x.isNotBlank() }.joinToString("  ·  "))
+            }
+        }
+    }
+}
+
+@Composable
+private fun Ware(g: chummer.core.engine.SheetSections, essence: Double) {
+    LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        item { Row2("Essence", formatEssence(essence), bold = true) }
+        val (bio, cyber) = g.ware.partition { it.isBioware }
+        if (cyber.isNotEmpty()) item { SubHeader("Cyberware") }
+        items(cyber) { WareRow(it, 0) }
+        if (bio.isNotEmpty()) item { SubHeader("Bioware") }
+        items(bio) { WareRow(it, 0) }
+        if (g.ware.isEmpty()) item { Text("No augmentations.") }
+    }
+}
+
+@Composable
+private fun WareRow(w: chummer.core.engine.SheetSections.WareLine, depth: Int) {
+    Column(Modifier.padding(start = (depth * 16).dp)) {
+        Row2(w.name + if (w.rating > 0) " (rating ${w.rating})" else "", if (w.essence != 0.0) formatEssence(w.essence) else "", bold = depth == 0)
+        Small(w.grade.takeIf { !it.equals("Standard", true) }.orEmpty())
+        w.children.forEach { WareRow(it, depth + 1) }
+    }
+}
+
+@Composable
+private fun Life(g: chummer.core.engine.SheetSections) {
+    LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (g.contacts.isNotEmpty()) item { SubHeader("Contacts   (connection / loyalty)") }
+        items(g.contacts) { c ->
+            Column {
+                Row2(c.name, "${c.connection} / ${c.loyalty}", bold = true)
+                Small(listOf(c.type, c.notes).filter { it.isNotBlank() }.joinToString("  ·  "))
+            }
+        }
+        if (g.lifestyles.isNotEmpty()) item { SubHeader("Lifestyle") }
+        items(g.lifestyles) { l ->
+            Column { Row2(l.name, "${l.type}  ¥${l.monthly}/mo"); Small(l.notes) }
+        }
+        if (g.martialArts.isNotEmpty()) item { SubHeader("Martial arts") }
+        items(g.martialArts) { Text(it) }
+    }
 }
