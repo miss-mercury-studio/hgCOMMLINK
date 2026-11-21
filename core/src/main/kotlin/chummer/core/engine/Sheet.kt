@@ -40,7 +40,7 @@ data class Sheet(
     data class AttributeLine(val name: String, val total: Int, val maximum: Int)
     data class Limits(val physical: Int, val mental: Int, val social: Int, val astral: Int)
     data class ArmorLines(val general: Int, val encumbrance: Int, val byType: List<Pair<String, Int>>)
-    data class QualityLine(val name: String, val positive: Boolean, val extra: String)
+    data class QualityLine(val guid: String, val name: String, val positive: Boolean, val extra: String)
 
     companion object {
         private val ORDER = listOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL", "EDG", "MAG", "RES", "DEP")
@@ -109,6 +109,7 @@ data class Sheet(
         private fun qualities(c: CharacterFile): List<QualityLine> =
             c.root.child("qualities")?.children("quality").orEmpty().map {
                 QualityLine(
+                    it.text("guid").orEmpty().trim(),
                     it.text("name").orEmpty().trim(),
                     it.text("qualitytype")?.trim().equals("Positive", true),
                     it.text("extra").orEmpty().trim(),

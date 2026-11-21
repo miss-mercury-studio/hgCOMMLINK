@@ -94,6 +94,23 @@ class CharacterRepository(private val context: Context) {
         return n
     }
 
+    private val backedUp = HashSet<String>()
+
+    /**
+     * Write an edited character back to its file. The first save of each file in a session keeps the original
+     * as a timestamped copy in the app's private backups folder, so a bad edit can be recovered.
+     */
+    @Synchronized
+    fun save(entry: StoredFile, character: CharacterFile) {
+        if (backedUp.add(entry.id)) {
+            val dir = File(context.filesDir, "backups").apply { mkdirs() }
+            val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.ROOT).format(java.util.Date())
+            storage.open(entry.id).use { i -> File(dir, entry.name.removeSuffix(".chum5") + "-" + stamp + ".chum5").outputStream().use { i.copyTo(it) } }
+        }
+        storage.overwrite(entry.id).use { CharacterIo.write(character, it) }
+        summaryCache.remove(entry.id)
+    }
+
     fun load(id: String): CharacterFile = storage.open(id).use { CharacterIo.read(it) }
 
     /**

@@ -6,7 +6,13 @@ import chummer.core.DataPack
 import chummer.core.data.CharacterSettings
 import chummer.core.data.CustomDataDir
 import chummer.core.data.CustomDataLocator
+import chummer.core.child
+import chummer.core.children
+import chummer.core.engine.CharacterEditor
+import chummer.core.engine.QualityCatalog
+import chummer.core.engine.QualityOption
 import chummer.core.engine.Sheet
+import chummer.core.parseXml
 import chummer.core.text
 import java.io.File
 
@@ -43,6 +49,17 @@ class GameDataStore(private val context: Context) {
     }
 
     private fun dataDir() = unpack("chummer-data", "chummer-data")
+
+    /** Chummer's texts by key (for example the English text of a limit condition), read from the bundled language file. */
+    private val translations: Map<String, String> by lazy {
+        parseXml(File(unpack("chummer-lang", "chummer-lang"), "en-us.xml")).documentElement.child("strings")?.children("string").orEmpty()
+            .associate { (it.child("key")?.textContent ?: "").trim() to (it.child("text")?.textContent ?: "").trim() }
+    }
+
+    /** Qualities that can be added, as far as the current game data goes. Needs the data loaded (open a character first). */
+    fun qualityOptions(): List<QualityOption> = synchronized(this) { pack?.let(QualityCatalog::list).orEmpty() }
+
+    fun editor(c: CharacterFile) = CharacterEditor(c, synchronized(this) { pack ?: error("Game data is not loaded yet") }, translations::get)
     private fun chummerCustomDir() = unpack("chummer-customdata", "chummer-customdata")
 
     /** Settings profiles copied from the user's folder (see CharacterRepository.syncSideFiles). */

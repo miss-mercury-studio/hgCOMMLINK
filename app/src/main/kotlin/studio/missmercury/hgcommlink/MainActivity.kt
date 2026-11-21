@@ -176,7 +176,7 @@ private fun App(vm: AppViewModel) {
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            if (open != null) SheetScreen(open) else CharacterList(vm)
+            if (open != null) SheetScreen(open, vm) else CharacterList(vm)
         }
     }
 }

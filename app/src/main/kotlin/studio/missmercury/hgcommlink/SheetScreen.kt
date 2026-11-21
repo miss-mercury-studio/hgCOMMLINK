@@ -28,6 +28,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import chummer.core.engine.QualityOption
 import chummer.core.engine.Sheet
 import chummer.core.engine.SkillResult
 
@@ -35,7 +48,7 @@ private val TABS = listOf("Overview", "Skills", "Gear", "Ware", "Life", "Qualiti
 
 /** The character sheet: calculated numbers on three tabs. Read-only. */
 @Composable
-fun SheetScreen(open: OpenCharacter) {
+fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
     val sheet = open.sheet
     var tab by rememberSaveable { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize()) {
@@ -63,7 +76,7 @@ fun SheetScreen(open: OpenCharacter) {
                     2 -> Gear(sheet.sections)
                     3 -> Ware(sheet.sections, sheet.essence)
                     4 -> Life(sheet.sections)
-                    else -> Qualities(sheet)
+                    else -> Qualities(sheet, vm)
                 }
             }
         }
@@ -202,20 +215,94 @@ private fun SkillRow(r: SkillResult) {
 }
 
 @Composable
-private fun Qualities(s: Sheet) {
+private fun Qualities(s: Sheet, vm: AppViewModel) {
+    var adding by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf<Sheet.QualityLine?>(null) }
     LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        item {
+            Button(onClick = { adding = true }) {
+                Icon(Icons.Default.Add, null)
+                Text("  Add quality")
+            }
+        }
         val positive = s.qualities.filter { it.positive }
         val negative = s.qualities.filter { !it.positive }
         item { SubHeader("Positive") }
-        items(positive) { QualityRow(it) }
+        items(positive, key = { it.guid }) { QualityRow(it) { removing = it } }
         item { SubHeader("Negative") }
-        items(negative) { QualityRow(it) }
+        items(negative, key = { it.guid }) { QualityRow(it) { removing = it } }
+    }
+    if (adding) AddQualityDialog(vm, onDismiss = { adding = false })
+    removing?.let { q ->
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            title = { Text("Remove ${q.name}?") },
+            text = { Text("The improvements it gave this character are removed too. A copy of the file is kept in the app's backups folder.") },
+            confirmButton = { TextButton(onClick = { removing = null; vm.removeQuality(q.guid) }) { Text("Remove") } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
+        )
     }
 }
 
 @Composable
-private fun QualityRow(q: Sheet.QualityLine) {
-    Text(if (q.extra.isBlank()) q.name else "${q.name} (${q.extra})")
+private fun QualityRow(q: Sheet.QualityLine, onRemove: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(if (q.extra.isBlank()) q.name else "${q.name} (${q.extra})", Modifier.weight(1f))
+        IconButton(onClick = onRemove) { Icon(Icons.Default.Delete, "Remove ${q.name}") }
+    }
+}
+
+/** Pick a quality from the game data. Prerequisites and karma limits are not checked yet. */
+@Composable
+private fun AddQualityDialog(vm: AppViewModel, onDismiss: () -> Unit) {
+    val options = remember { vm.qualityOptions() }
+    var query by remember { mutableStateOf("") }
+    var needsText by remember { mutableStateOf<QualityOption?>(null) }
+    var text by remember { mutableStateOf("") }
+
+    val shown = remember(query) {
+        val q = query.trim().lowercase()
+        (if (q.isEmpty()) options else options.filter { it.name.lowercase().contains(q) }).take(80)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add quality") },
+        text = {
+            Column {
+                OutlinedTextField(query, { query = it }, label = { Text("Search") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text(
+                    "Prerequisites and karma limits are not checked yet.",
+                    style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(vertical = 4.dp),
+                )
+                LazyColumn(Modifier.weight(1f, fill = false)) {
+                    items(shown, key = { it.id }) { o ->
+                        Column(
+                            Modifier.fillMaxWidth().clickable {
+                                if (o.needsText) { needsText = o; text = "" } else { vm.addQuality(o.id); onDismiss() }
+                            }.padding(vertical = 6.dp),
+                        ) {
+                            Text(o.name)
+                            Text(
+                                listOfNotNull(o.category, "${o.karma} karma", if (o.unsupported.isNotEmpty()) "some bonuses not applied yet: " + o.unsupported.joinToString() else null).joinToString("  ·  "),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+    needsText?.let { o ->
+        AlertDialog(
+            onDismissRequest = { needsText = null },
+            title = { Text(o.name) },
+            text = { OutlinedTextField(text, { text = it }, label = { Text("Enter text (a name, a group...)") }, singleLine = true) },
+            confirmButton = { TextButton(enabled = text.isNotBlank(), onClick = { vm.addQuality(o.id, text.trim()); needsText = null; onDismiss() }) { Text("Add") } },
+            dismissButton = { TextButton(onClick = { needsText = null }) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable

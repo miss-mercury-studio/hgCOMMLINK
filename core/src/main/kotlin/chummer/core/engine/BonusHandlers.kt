@@ -238,6 +238,16 @@ object BonusHandlers {
             }
         }
 
+        put("restrictedgear") { node, ctx, unique, out ->
+            // The availability limit is the value and the number of items the rating; old files held the limit as plain text.
+            var limit = node.t("availability")
+            var amount = node.t("amount")
+            if (amount.isNullOrEmpty()) { amount = "1"; if (limit.isNullOrEmpty()) limit = node.textContent.trim() }
+            val v = value(limit, ctx.rating) ?: return@put
+            val count = intValue(amount, ctx.rating) ?: return@put
+            out += improvement(ctx, "RestrictedGear", unique, v, rating = count)
+        }
+
         put("selectrestricted") { _, ctx, unique, out ->
             if (ctx.choice.isNotEmpty()) out += improvement(ctx, "Restricted", unique, 0.0, ctx.choice)
         }

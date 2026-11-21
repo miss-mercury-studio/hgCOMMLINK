@@ -123,6 +123,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Add a quality from the game data to the open character, save the file and recalculate the sheet. */
+    fun addQuality(entryId: String, extra: String = "") = edit("Added quality") { editor -> editor.addQuality(entryId, extra); true }
+
+    /** Remove a quality (and the improvements it granted) from the open character. */
+    fun removeQuality(guid: String) = edit("Removed quality") { editor -> editor.removeItem(guid) }
+
+    private fun edit(done: String, change: (chummer.core.engine.CharacterEditor) -> Boolean) {
+        val current = open ?: return
+        viewModelScope.launch {
+            try {
+                val (sheet, warning) = io {
+                    val editor = gameData.editor(current.character)
+                    if (!change(editor)) error("Nothing changed")
+                    repo.save(current.file, current.character)
+                    gameData.sheet(current.character)
+                }
+                open = OpenCharacter(current.file, current.character, sheet, warning)
+                message = done
+            } catch (e: Throwable) {
+                message = "Could not change the character: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }
+    }
+
+    fun qualityOptions() = gameData.qualityOptions()
+
     fun close() {
         open = null
     }
