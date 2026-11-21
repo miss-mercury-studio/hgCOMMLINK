@@ -25,6 +25,9 @@ class CharacterSettings(
     /** True when the character named a profile we could not find and this is the stand-in. */
     val isFallback: Boolean = false,
 ) {
+    /** How characters made with this profile are built: Priority, SumtoTen, Karma or LifeModule. */
+    val buildMethod: String get() = string("buildmethod")
+
     fun string(key: String, default: String = ""): String = values[key.lowercase()] ?: default
     fun int(key: String, default: Int = 0): Int = values[key.lowercase()]?.trim()?.toIntOrNull() ?: default
     fun bool(key: String, default: Boolean = false): Boolean =
@@ -78,6 +81,19 @@ class CharacterSettings(
                 bannedWareGrades = list("bannedwaregrades", "grade"), redlinerExclusion = list("redlinerexclusion", "limb"),
                 karmaCost = karma, isFallback = isFallback,
             )
+        }
+
+        /** Every profile available: the standalone files in [userDirs] first, then Chummer's built-in ones. */
+        fun available(builtInFile: File, userDirs: List<File> = emptyList()): List<CharacterSettings> {
+            val out = ArrayList<CharacterSettings>()
+            for (dir in userDirs) {
+                for (f in dir.listFiles { x -> x.extension == "xml" }.orEmpty().sortedBy { it.name }) {
+                    val root = try { parseXml(f).documentElement } catch (ex: Exception) { continue }
+                    if (root.tagName == "settings" && root.child("id") != null) out += parse(root)
+                }
+            }
+            parseXml(builtInFile).documentElement.child("settings")?.children("setting").orEmpty().forEach { out += parse(it) }
+            return out
         }
 
         /**

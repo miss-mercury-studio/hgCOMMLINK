@@ -45,6 +45,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -98,6 +103,7 @@ private fun App(vm: AppViewModel) {
     val snackbar = remember { SnackbarHostState() }
     val ctx = LocalContext.current
     val open = vm.open
+    var showNew by remember { mutableStateOf(false) }
 
     LaunchedEffect(vm.message) {
         vm.message?.let {
@@ -134,6 +140,7 @@ private fun App(vm: AppViewModel) {
                             if (vm.isSharedFolder) {
                                 DropdownMenuItem(text = { Text("Use app storage") }, onClick = { menu = false; vm.useAppFolder() })
                             }
+                            DropdownMenuItem(text = { Text("New character") }, onClick = { menu = false; showNew = true })
                             DropdownMenuItem(text = { Text("Refresh") }, onClick = { menu = false; vm.refresh() })
                         }
                     },
@@ -176,6 +183,7 @@ private fun App(vm: AppViewModel) {
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
+            if (showNew) NewCharacterDialog(vm) { showNew = false }
             if (open != null) SheetScreen(open, vm) else CharacterList(vm)
         }
     }
@@ -212,4 +220,67 @@ private fun CharacterList(vm: AppViewModel) {
             }
         }
     }
+}
+
+/** Start a new Karma-build character: a name, a metatype, and (if there are several) a settings profile. */
+@Composable
+private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
+    val options = produceState<GameDataStore.NewCharacterOptions?>(null) {
+        value = try { vm.newCharacterOptions() } catch (e: Throwable) { null }
+    }.value
+    var name by remember { mutableStateOf("") }
+    var alias by remember { mutableStateOf("") }
+    var metatype by remember { mutableStateOf<String?>(null) }
+    var profile by remember { mutableStateOf<Int?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New character") },
+        text = {
+            if (options == null) {
+                Text("Loading game data. This takes several seconds the first time.")
+            } else if (options.profiles.isEmpty()) {
+                Text("No settings profile with the Karma build method was found. Put your profile's .xml file in your characters folder.")
+            } else {
+                val chosenProfile = profile ?: 0
+                val chosenMetatype = metatype ?: options.metatypes.firstOrNull { it.second == "Human" }?.first
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(alias, { alias = it }, label = { Text("Street name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Text("Metatype", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 12.dp))
+                    options.metatypes.forEach { (id, label) ->
+                        Row(Modifier.fillMaxWidth().clickable { metatype = id }, verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = id == chosenMetatype, onClick = { metatype = id })
+                            Text(label)
+                        }
+                    }
+                    if (options.profiles.size > 1) {
+                        Text("Settings profile", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 12.dp))
+                        options.profiles.forEachIndexed { i, p ->
+                            Row(Modifier.fillMaxWidth().clickable { profile = i }, verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = i == chosenProfile, onClick = { profile = i })
+                                Text(p.name)
+                            }
+                        }
+                    } else {
+                        Text("Settings: ${options.profiles[0].name}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 12.dp))
+                    }
+                    Text(
+                        "Karma build. Attributes and skills start at the metatype minimum; buying with karma comes next.",
+                        style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            val ready = options != null && options.profiles.isNotEmpty()
+            TextButton(enabled = ready, onClick = {
+                val o = options!!
+                val id = metatype ?: o.metatypes.firstOrNull { it.second == "Human" }?.first ?: o.metatypes.first().first
+                vm.createCharacter(o.profiles[profile ?: 0], name.trim(), alias.trim(), id)
+                onDismiss()
+            }) { Text("Create") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

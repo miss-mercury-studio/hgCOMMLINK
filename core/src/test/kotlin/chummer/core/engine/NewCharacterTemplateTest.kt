@@ -72,4 +72,74 @@ class NewCharacterTemplateTest {
         println("Empty vs Spent: $diffs")
         assertEquals(4, diffs.size)
     }
+
+    /** Text of an element tree with the random parts (GUIDs and group ids) blanked, so two files can be compared. */
+    private fun canonNoGuids(e: Element, parent: String = ""): String = buildString {
+        append('<').append(e.tagName).append('>')
+        val kids = e.children()
+        if (kids.isEmpty()) {
+            val random = e.tagName == "guid" || (e.tagName == "id" && parent == "group")
+            append(if (random) "*" else e.textContent.trim().replace(Regex("\\s+"), " "))
+        } else kids.forEach { append(canonNoGuids(it, e.tagName)) }
+        append("</").append(e.tagName).append('>')
+    }
+
+    @Test
+    fun generatedHumanKarmaCharacterMatchesChummersEmptyCharacter() {
+        val settings = CharacterSettings.find(
+            "ab2a5404-252f-4100-9efa-7ac281c5cb9b", File(src, "Chummer/data/settings.xml"), listOf(ref),
+        )
+        assertTrue("settings profile not found", !settings.isFallback)
+        val resolved = chummer.core.data.CustomDataLocator(listOf(File(src, "Chummer/customdata"))).resolve(settings.customData)
+        val data = DataPack.load(File(src, "Chummer/data"), resolved.dirs)
+        val human = data.byId.values.first { it.file == "metatypes.xml" && it.element.tagName == "metatype" && it.element.child("name")?.textContent?.trim() == "Human" }
+        val humanId = human.element.child("id")!!.textContent.trim()
+
+        val generated = NewCharacter.createKarma(
+            data, settings,
+            NewCharacterRequest(metatypeId = humanId, settingsHash = 1889893532, customDataNames = resolved.dirs.map { it.name }),
+        )
+        val want = load("New_Empty.chum5")
+
+        val a = canonNoGuids(want.root)
+        val b = canonNoGuids(generated.root)
+        if (a != b) {
+            // Show the first difference with some context.
+            val at = a.zip(b).indexOfFirst { it.first != it.second }.let { if (it < 0) minOf(a.length, b.length) else it }
+            println("DIFF at $at:")
+            println("  Chummer: ${a.substring(maxOf(0, at - 120), minOf(a.length, at + 200))}")
+            println("  ours:    ${b.substring(maxOf(0, at - 120), minOf(b.length, at + 200))}")
+        }
+        assertEquals(a, b)
+
+        // The random ids are unique, and the file writes out and reads back.
+        val guids = generated.root.child("newskills")!!.child("skills")!!.children("skill").map { it.child("guid")!!.textContent }
+        assertEquals(guids.size, guids.toSet().size)
+        val again = CharacterIo.read(CharacterIo.toBytes(generated).inputStream())
+        assertEquals(a, canonNoGuids(again.root))
+    }
+
+    @Test
+    fun everyBaseMetatypeGeneratesACharacterTheSheetCanRead() {
+        val settings = CharacterSettings.find("ab2a5404-252f-4100-9efa-7ac281c5cb9b", File(src, "Chummer/data/settings.xml"), listOf(ref))
+        val data = DataPack.load(File(src, "Chummer/data"))
+        val metatypes = data.byId.entries.filter { it.value.file == "metatypes.xml" && it.value.element.tagName == "metatype" }
+        assertTrue(metatypes.size >= 5)
+        for ((id, entry) in metatypes) {
+            val name = entry.element.child("name")!!.textContent.trim()
+            val c = NewCharacter.createKarma(data, settings, NewCharacterRequest(name = "Test $name", metatypeId = id))
+            val sheet = Sheet.build(c, data, settings)
+            // Every attribute starts at the metatype's minimum.
+            for (a in sheet.attributes.filter { it.name in setOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL") }) {
+                val min = entry.element.child(a.name.lowercase() + "min")!!.textContent.trim().toInt()
+                assertEquals("$name ${a.name}", maxOf(min, 1), a.total)
+            }
+            assertEquals("Test $name", sheet.name)
+            assertEquals(name, sheet.metatype)
+        }
+        val ork = metatypes.first { it.value.element.child("name")!!.textContent.trim() == "Ork" }
+        val orkSheet = Sheet.build(NewCharacter.createKarma(data, settings, NewCharacterRequest(metatypeId = ork.key)), data, settings)
+        println("Ork at creation: " + orkSheet.attributes.joinToString { "${it.name} ${it.total}/${it.maximum}" })
+        assertEquals(4, orkSheet.attributes.first { it.name == "BOD" }.total)
+    }
 }

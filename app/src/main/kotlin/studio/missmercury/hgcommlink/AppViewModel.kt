@@ -149,6 +149,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun qualityOptions() = gameData.qualityOptions()
 
+    /** The profiles and metatypes the new character dialog offers. Slow the first time (loads the game data). */
+    suspend fun newCharacterOptions(): GameDataStore.NewCharacterOptions = io {
+        repo.syncSideFiles(gameData.userSettingsDir, gameData.userCustomDir)
+        gameData.newCharacterOptions()
+    }
+
+    fun createCharacter(profile: chummer.core.data.CharacterSettings, name: String, alias: String, metatypeId: String) {
+        viewModelScope.launch {
+            try {
+                val file = io {
+                    val character = gameData.createCharacter(profile, name, alias, metatypeId)
+                    repo.saveNew(character, (alias.ifBlank { name }).ifBlank { "New character" })
+                }
+                refresh()
+                openFile(file)
+            } catch (e: Throwable) {
+                message = "Could not create the character: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }
+    }
+
     fun close() {
         open = null
     }

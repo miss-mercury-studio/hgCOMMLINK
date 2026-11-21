@@ -9,7 +9,7 @@ import org.w3c.dom.Element
 import java.util.UUID
 
 /** The colour Chummer 5.226 gives the notes of new items (older files hold the name "Chocolate" for the same colour). */
-private const val NOTES_COLOR = "#E3813C"
+internal const val NOTES_COLOR = "#E3813C"
 
 /**
  * Changes to a character: adding and removing items, with the improvements those items grant kept in step.

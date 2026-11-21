@@ -94,6 +94,15 @@ class CharacterRepository(private val context: Context) {
         return n
     }
 
+    /** Save a newly created character as a new file. */
+    @Synchronized
+    fun saveNew(character: CharacterFile, displayName: String): StoredFile {
+        val (id, out) = storage.create(displayName)
+        out.use { CharacterIo.write(character, it) }
+        summaryCache.clear()
+        return storage.list().first { it.id == id }
+    }
+
     private val backedUp = HashSet<String>()
 
     /**

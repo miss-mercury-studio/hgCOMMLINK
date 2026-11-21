@@ -9,6 +9,8 @@ import chummer.core.data.CustomDataLocator
 import chummer.core.child
 import chummer.core.children
 import chummer.core.engine.CharacterEditor
+import chummer.core.engine.NewCharacter
+import chummer.core.engine.NewCharacterRequest
 import chummer.core.engine.QualityCatalog
 import chummer.core.engine.QualityOption
 import chummer.core.engine.Sheet
@@ -71,6 +73,29 @@ class GameDataStore(private val context: Context) {
     /** The character's settings profile; `isFallback` is set when it is not available on this device. */
     fun settingsFor(c: CharacterFile): CharacterSettings =
         CharacterSettings.find(c.root.text("settings").orEmpty(), File(dataDir(), "settings.xml"), listOf(userSettingsDir))
+
+    /** A choice in the new character dialog. */
+    data class NewCharacterOptions(val profiles: List<CharacterSettings>, val metatypes: List<Pair<String, String>>)
+
+    /** Karma-build profiles and the base metatypes to offer when starting a character. Loads the game data. */
+    fun newCharacterOptions(): NewCharacterOptions {
+        val profiles = CharacterSettings.available(File(dataDir(), "settings.xml"), listOf(userSettingsDir)).filter { it.buildMethod == "Karma" }
+        val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(profiles.firstOrNull()?.customData.orEmpty())
+        val metatypes = packFor(resolved.dirs).byId.values
+            .filter { it.file == "metatypes.xml" && it.element.tagName == "metatype" }
+            .map { (it.element.child("id")?.textContent?.trim().orEmpty()) to (it.element.child("name")?.textContent?.trim().orEmpty()) }
+            .sortedBy { it.second.lowercase() }
+        return NewCharacterOptions(profiles, metatypes)
+    }
+
+    /** Create a new Karma-build character with the chosen profile (and the custom data that profile enables). */
+    fun createCharacter(profile: CharacterSettings, name: String, alias: String, metatypeId: String): CharacterFile {
+        val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(profile.customData)
+        return NewCharacter.createKarma(
+            packFor(resolved.dirs), profile,
+            NewCharacterRequest(name = name, alias = alias, metatypeId = metatypeId, customDataNames = resolved.dirs.map { it.name }),
+        )
+    }
 
     private fun keyOf(dirs: List<CustomDataDir>): String = dirs.joinToString("|") { d ->
         d.guid + ":" + d.dir.walkTopDown().filter { it.isFile }.sortedBy { it.path }.joinToString(",") { "${it.name}/${it.length()}/${it.lastModified()}" }
