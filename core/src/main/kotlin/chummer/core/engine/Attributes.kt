@@ -158,7 +158,11 @@ class AttributeEngine(
         /** All attributes of a character file, calculated. ESS is left to the essence calculation. */
         fun forFile(c: CharacterFile, settings: RuleSettings = RuleSettings()): Map<String, AttributeResult> {
             val career = c.root.text("created")?.trim().equals("True", true)
-            val set = ImprovementSet(Improvement.parseAll(c.root), career)
+            return forSet(c, ImprovementSet(Improvement.parseAll(c.root), career), settings)
+        }
+
+        /** Like [forFile], but with an explicit set of improvements (for example with a drug group switched on). */
+        fun forSet(c: CharacterFile, set: ImprovementSet, settings: RuleSettings = RuleSettings()): Map<String, AttributeResult> {
             val engine = AttributeEngine(set, settings, c.root.text("critter")?.trim().equals("True", true), c.augmentations())
             val rows = c.root.child("attributes")?.children("attribute").orEmpty()
             return rows.map {

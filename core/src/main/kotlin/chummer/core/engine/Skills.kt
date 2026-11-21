@@ -143,10 +143,10 @@ class SkillEngine(
             "Skill", "SkillGroup", "SkillCategory", "SkillAttribute", "SkillLinkedAttribute", "EnhancedArticulation",
         )
 
-        /** Attribute linked to a knowledge skill, by its type. */
+        /** Attribute linked to a knowledge skill, by its type. A skill with no type uses LOG, as a new one does in Chummer. */
         fun knowledgeAttribute(type: String) = when (type) {
-            "Academic", "Professional" -> "LOG"
-            else -> "INT"
+            "Interest", "Language", "Street" -> "INT"
+            else -> "LOG"
         }
 
         /** Build the engine's inputs from a character file and the game data. */
@@ -159,7 +159,8 @@ class SkillEngine(
                 val group = el?.getElementsByTagName("skillgroup")?.item(0)?.textContent?.trim().orEmpty()
                 val def = el?.getElementsByTagName("default")?.item(0)?.textContent?.trim().equals("True", true)
                 if (s.isKnowledge) {
-                    out += Raw(s.name, s.category, knowledgeAttribute(s.type), "", true, s.base, s.karma, true, s.isNativeLanguage)
+                    // Knowledge skills cannot default.
+                    out += Raw(s.name, s.category, knowledgeAttribute(s.type), "", false, s.base, s.karma, true, s.isNativeLanguage)
                 } else {
                     out += Raw(s.name, s.category.ifEmpty { entry?.category.orEmpty() }, attribute, group, def, s.base, s.karma, false)
                 }

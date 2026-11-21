@@ -27,6 +27,8 @@ data class Improvement(
     val custom: Boolean,
     val condition: String,
     val exclude: String = "",
+    /** The user-defined group this improvement belongs to (for example a drug), if any. */
+    val customGroup: String = "",
 ) {
     companion object {
         private fun Element.num(tag: String) = text(tag)?.trim()?.toDoubleOrNull() ?: 0.0
@@ -49,6 +51,7 @@ data class Improvement(
             custom = e.flag("custom"),
             condition = e.text("condition").orEmpty().trim(),
             exclude = e.text("exclude").orEmpty().trim(),
+            customGroup = e.text("customgroup").orEmpty().trim(),
         )
 
         fun parseAll(root: Element): List<Improvement> =
