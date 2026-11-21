@@ -10,6 +10,9 @@ import org.w3c.dom.Element
 interface GameData {
     /** The data entry with this GUID (case-insensitive), or null. */
     operator fun get(id: String): DataEntry?
+
+    /** Essence multiplier of an augmentation grade (for example Alphaware = 0.8), or null if unknown. */
+    fun gradeEssence(bioware: Boolean, grade: String): Double?
 }
 
 /** One entry from the data files. [element] is the raw XML so no field is lost. */

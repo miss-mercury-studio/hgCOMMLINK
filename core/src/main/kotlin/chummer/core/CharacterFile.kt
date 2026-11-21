@@ -39,12 +39,33 @@ class CharacterFile(val doc: Document) {
     data class Augmentation(
         val name: String, val sourceId: String, val grade: String, val rating: Int,
         val essFormula: String, val addToParent: Boolean, val children: List<Augmentation>,
-    )
+        val category: String = "", val limbSlot: String = "", val limbSlotCount: Int = 1,
+        val inheritAttributes: Boolean = false, val minAgility: Int = 3, val minStrength: Int = 3,
+        val plugsIntoModularMount: String = "",
+        val improvementSource: String = "Cyberware", val isGeneware: Boolean = false, val suite: Boolean = false,
+        val essDiscount: Double = 0.0, val extraEssAdditive: Double = 0.0, val extraEssMultiplicative: Double = 1.0,
+        val forceGrade: String = "", val minRating: Int = 0, val prototypeTranshuman: Boolean = false,
+    ) {
+        val isLimb get() = limbSlot.isNotEmpty()
+    }
 
     private fun parseAug(e: Element): Augmentation = Augmentation(
         e.text("name").orEmpty(), e.text("sourceid").orEmpty(), e.text("grade").orEmpty(), e.int("rating"),
         e.text("ess").orEmpty(), e.text("addtoparentess")?.trim().equals("True", true),
         e.child("children")?.children("cyberware").orEmpty().map(::parseAug),
+        category = e.text("category").orEmpty().trim(), limbSlot = e.text("limbslot").orEmpty().trim(),
+        limbSlotCount = e.text("limbslotcount")?.trim()?.toIntOrNull() ?: 1,
+        inheritAttributes = e.text("inheritattributes")?.trim().equals("True", true),
+        minAgility = e.int("minagility", 3), minStrength = e.int("minstrength", 3),
+        plugsIntoModularMount = e.text("plugsintomodularmount").orEmpty().trim(),
+        improvementSource = e.text("improvementsource").orEmpty().trim().ifEmpty { "Cyberware" },
+        isGeneware = e.text("isgeneware")?.trim().equals("True", true),
+        suite = e.text("suite")?.trim().equals("True", true),
+        essDiscount = e.text("essdiscount")?.trim()?.toDoubleOrNull() ?: 0.0,
+        extraEssAdditive = e.text("extraessadditivemultiplier")?.trim()?.toDoubleOrNull() ?: 0.0,
+        extraEssMultiplicative = e.text("extraessmultiplicativemultiplier")?.trim()?.toDoubleOrNull() ?: 1.0,
+        forceGrade = e.text("forcegrade").orEmpty().trim(), minRating = e.int("minrating"),
+        prototypeTranshuman = e.text("prototypetranshuman")?.trim().equals("True", true),
     )
 
     fun augmentations(): List<Augmentation> =

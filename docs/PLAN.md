@@ -1,7 +1,7 @@
 # Chummer 5e for Android: Plan
 
 Living document. Update the status checkboxes, the decisions log and the open questions as work proceeds.
-Last updated: 2026-11-21 (M1 nearly complete)
+Last updated: 2026-11-21 (M1 done; M2 started)
 
 ## Goal
 
@@ -89,11 +89,22 @@ Notes:
 - Compose and AndroidX versions are pinned to what builds with AGP 8.13 and compileSdk 36 (Compose BOM 2026.03.01). Current releases need AGP 9.1 and compileSdk 37; upgrading the toolchain is a separate decision.
 - The list parses each file's DOM to read its summary (about 60 ms for Viper) and caches by modified time and size. Fine for now; revisit if lists get large.
 
-### M2: Calculation engine (L)
-- [ ] Attributes, skills, limits, initiative, condition monitors, essence, armor, derived stats
-- [ ] Improvement handler registry with about 30 handlers, and logging of unhandled nodes
-- [ ] Golden tests against the 35 fixtures, with a divergence report
-- [ ] Character settings (build method, house-rule flags, `customdata`)
+### M2: Calculation engine (L), in progress
+Engine code is in `core/src/main/kotlin/chummer/core/engine/`. Each calculation has a golden test that compares against values Chummer stored in the 35 reference characters, with a ratchet: the test fails if the number of misses grows, and prints when it shrinks.
+- [x] Improvement model (`Improvement`) and Chummer's summing rules (`ImprovementSet`): enabled and unconditional filtering, `addToRating`, unique-name precedence (`precedence0`, `precedence-1`, `precedence1`), custom improvements
+- [x] Attributes (`AttributeEngine`): minimum and maximum modifiers, `Attributelevel` free base, attribute modifiers, augmented maximum, armor-encumbrance floor, cyberlimb averaging for AGI and STR (customization and enhancement children, bonus cap, Redliner, limb defaults of 3). **Golden: 440/454 match** (was 403 before the engine).
+- [x] Essence (`EssenceEngine`): metatype maximum, penalties, per-item cost from formula and grade, additive and multiplicative multipliers, Suite, discounts, cyberware, bioware and geneware multiplier improvements, children that add to the parent, Prototype Transhuman, rounding. **Golden: 31/35 match.** The Narco and Synaptic Acceleration exclusion found in M0 turned out to be a normal rule (geneware multiplier), not a special case.
+- [ ] Skills: ratings, specializations, dice pools, skill groups
+- [ ] Limits (physical, mental, social), initiative, condition monitors, movement, lift and carry, armor
+- [ ] Improvement handler registry for item creation (about 30 `<bonus>` node handlers)
+- [ ] Character settings: read from the settings GUID, with the defaults in `data/settings.xml` (the settings a file used are not stored in the file)
+- [ ] Remaining golden misses (below)
+
+Open golden misses, with what is known:
+- Attributes, Davis Jones (10): saved by Chummer 5.183, which stores values differently. Probably out of scope; may need an old-format reader.
+- Attributes, Bastion and Blindfire (4): cyberlimb averaging is one too low. Numbers fit a character with 5 limbs instead of 6, but no `AddLimb` improvement or setting explains it.
+- Essence, Bastion and Monomax (differ by 0.04 and 0.02), Fuzzy-chargen (1.745 stored, which looks like a "do not round essence" setting), SCSi (off by 1.8). Not investigated yet.
+- Condition monitors and lift/carry limits can only be checked against Viper; the older fixtures do not store them. A fuller golden source would be Chummer's own XML export of a few characters.
 
 ### M3: Read-only character sheet (M)
 - [ ] Mobile layout design (before building)
@@ -144,3 +155,4 @@ Notes:
 - 2026-11-21: Started M0 in `hgCOMMLINK` (confirmed as the project root). Created the Gradle project with a `core` JVM module: DOM XML helpers, `DataPack`, `CharacterFile`, `Expr`, and `SpikeTest` and `FixtureSurveyTest`. Found that prerequisites are not XPath. Remaining for M0: the `app` module and on-device measurement.
 - 2026-11-21: Finished M0. Added the `:app` module (benchmark screen, data bundled into the APK for the spike only) and ran it on the S24 Ultra over wireless debugging. Load times and memory are in the M0 findings.
 - 2026-11-21: M1 built. Added `GameData`, `CharacterIo` (lossless read and write, DTD refusal), `CharacterFile.summary()`, and the Compose app: list, detail, import, "open with", share, delete, folder choice. First device test failed on import because Android's parser rejected the DTD-hardening feature; fixed by checking the prolog bytes instead. Viper now imports and displays on the S24 Ultra.
+- 2026-11-21: M2 started. Added the improvement model and Chummer's summing rules, the attribute engine (including cyberlimbs) and the essence engine, each with a ratcheting golden test. Attribute goldens went from 403 to 440 of 454, essence is 31 of 35. Noted that Chummer's C# duplicates every method as sync and async plus locking, so ports read the logic only.
