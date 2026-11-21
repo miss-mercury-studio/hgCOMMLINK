@@ -16,7 +16,8 @@ import java.io.File
  *
  * The export was made with a different state than the saved file: the Kamikaze drug group was on, CHA was
  * raised by a custom improvement the user added by hand on the Improvements tab (the user confirmed this; the
- * +3 is inferred from the totals), and armor encumbrance was not applied (inferred, not confirmed). This test
+ * +3 is inferred from the totals), and the Social Situations armor set was equipped instead of the Runner Armor set
+ * saved in the file (the user confirmed this), which is why there is no armor encumbrance. This test
  * replays that state, so it checks the calculations, not the state itself.
  */
 class GoldenExportDerivedTest {
