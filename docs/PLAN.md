@@ -139,10 +139,18 @@ Open golden misses, with what is known:
 - [ ] Complete character display matching Chummer's numbers
 
 ### M4: Creation, Karma build (XL)
-- [ ] Metatype, attributes, skills, qualities
-- [ ] Gear, weapons, armor, cyberware and bioware, with availability and cost rules
-- [ ] Spells, adept powers, complex forms and other magic or resonance basics
-- [ ] Validation of creation limits
+Build order decision: **Karma build first**, then Sum-to-Ten (M5), then Priority. Karma build has no allocation tables, only a karma budget and per-item karma costs from the character's settings, so it gives the creation framework (a ledger of what has been bought, validation, writing a valid file) with the least rule surface. Sum-to-Ten and Priority then add point allocation on the same ledger. The fixtures are mostly Sum-to-Ten (31 of 35), so M5 follows directly.
+
+Approach: creation edits a character document (the same DOM we read) and every change goes through the improvement and engine layers already built, so the sheet recalculates live. The first step is knowing exactly what a new Chummer file contains.
+- [ ] **Template:** a freshly created Karma-build character saved from Chummer (empty, Human), plus one after buying a point of attribute and a skill, to see exactly what Chummer writes and how it tracks karma spent. Without this, a generated file may not open in Chummer.
+- [ ] Create a new character: name, metatype and variant (from `metatypes.xml`), build method and starting karma from the settings, written as a file Chummer opens (checked by opening it in desktop Chummer).
+- [ ] Attributes: raise and lower with karma costs, limits per metatype, special attribute points where they apply.
+- [ ] Skills and skill groups, specializations, knowledge and language skills, with karma costs.
+- [ ] Qualities with prerequisites (the prerequisite language, about 83 node types) and karma limits.
+- [ ] The improvement handler registry: the `<bonus>` nodes of qualities, gear, ware and so on turned into stored improvements (about 30 node types cover most of the data). Verified by reproducing the improvements already stored in the fixtures.
+- [ ] Gear, weapons, armor, cyberware and bioware with availability, cost and essence rules; nuyen budget and restricted gear.
+- [ ] Spells, adept powers, complex forms, programs, and magic/resonance basics.
+- [ ] Validation of creation limits, and the "finish creation" step that moves a character to career mode.
 
 ### M5: Creation, Priority build (L)
 - [ ] Priority table and free allotments
@@ -200,3 +208,4 @@ Open golden misses, with what is known:
 - 2026-11-21: Custom data applied on the device. Measured the cost: 6.7 s cold, 0.6 s warm for Viper with 7 folders. Found that re-copying the files on each open invalidated the loaded pack; now unchanged files are skipped.
 - 2026-11-21: Added the on-disk cache of amended data: cold open of Viper 6.7 s to 0.7 s after the first.
 - 2026-11-21: Weapon totals added and checked against the export (120/120). Found the export used a different loaded ammo slot for the Ingram than the saved file, another unsaved-state difference; the test replays it.
+- 2026-11-21: Surveyed the fixtures (31 Sum-to-Ten, 3 Priority, 1 Karma) and wrote the M4 breakdown. Decided Karma build first for the simplest framework; needs a fresh Chummer-made template file to write valid new characters.
