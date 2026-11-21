@@ -45,6 +45,10 @@ class CharacterSettings(
             redlinerExcludes = redlinerExclusion.toSet().ifEmpty { base.redlinerExcludes },
             essenceDecimals = decimalsOf(string("essenceformat", "#,0.00")),
             dontRoundEssenceInternally = bool("donotroundessenceinternally"),
+            maxSkillRating = int("maxskillrating", base.maxSkillRating),
+            maxSkillRatingCreate = int("maxskillratingcreate", base.maxSkillRatingCreate),
+            maxKnowledgeSkillRating = int("maxknowledgeskillrating", base.maxKnowledgeSkillRating),
+            maxKnowledgeSkillRatingCreate = int("maxknowledgeskillratingcreate", base.maxKnowledgeSkillRatingCreate),
         )
     }
 

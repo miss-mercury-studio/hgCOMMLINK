@@ -91,6 +91,32 @@ class CharacterFile(val doc: Document) {
         appVersion = appVersion, edition = root.text("gameedition").orEmpty(),
     )
 
+    /** A skill as stored (active or knowledge). Totals are not stored; the engine computes them. */
+    data class SkillRow(
+        val name: String, val suid: String, val category: String, val base: Int, val karma: Int,
+        val isKnowledge: Boolean, val type: String, val isNativeLanguage: Boolean,
+        val specializations: List<String>,
+    )
+
+    private fun parseSkill(e: Element) = SkillRow(
+        name = e.text("name").orEmpty().trim(), suid = e.text("suid").orEmpty().trim(),
+        category = e.text("skillcategory").orEmpty().trim(), base = e.int("base"), karma = e.int("karma"),
+        isKnowledge = e.text("isknowledge")?.trim().equals("True", true), type = e.text("type").orEmpty().trim(),
+        isNativeLanguage = e.text("isnativelanguage")?.trim().equals("True", true),
+        specializations = e.child("specs")?.children("spec").orEmpty().mapNotNull { it.text("name")?.trim() },
+    )
+
+    /** Active skills, then knowledge skills, in file order. */
+    fun skills(): List<SkillRow> {
+        val ns = root.child("newskills") ?: return emptyList()
+        return (ns.child("skills")?.children("skill").orEmpty() + ns.child("knoskills")?.children("skill").orEmpty()).map(::parseSkill)
+    }
+
+    /** Skill groups as stored: name -> (base points, karma points). */
+    fun skillGroups(): Map<String, Pair<Int, Int>> =
+        root.child("newskills")?.child("groups")?.children("group").orEmpty()
+            .associate { it.text("name").orEmpty().trim() to (it.int("base") to it.int("karma")) }
+
     /** Every non-empty `<sourceid>` in the file, with its parent's tag for reporting. */
     fun sourceIds(): List<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()

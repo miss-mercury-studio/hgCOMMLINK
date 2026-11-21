@@ -20,6 +20,8 @@ class DataPack private constructor(
     override operator fun get(id: String): DataEntry? = byId[id.lowercase()]
 
     companion object {
+        private const val ZERO_ID = "00000000-0000-0000-0000-000000000000"
+
         /** Load the base data and apply [customDirs] (already in load order). */
         fun load(dataDir: File, customDirs: List<CustomDataDir> = emptyList()): DataPack {
             val index = HashMap<String, DataEntry>(20_000)
@@ -42,7 +44,8 @@ class DataPack private constructor(
                         if (gn != null && ge != null) grades[(if (f.name == "bioware.xml") "bio:" else "cyb:") + gn] = ge
                     }
                     val id = kids.firstOrNull { it.tagName == "id" }?.textContent?.trim()
-                    if (!id.isNullOrEmpty() && kids.any { it.tagName == "name" }) {
+                    // The all-zero GUID means "no entry" in character files; some data rows use it as a placeholder.
+                    if (!id.isNullOrEmpty() && id != ZERO_ID && kids.any { it.tagName == "name" }) {
                         index.putIfAbsent(id.lowercase(), DataEntry(f.name, e))
                     }
                     stack.addAll(kids)

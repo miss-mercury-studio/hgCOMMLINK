@@ -16,6 +16,10 @@ data class RuleSettings(
     val redlinerExcludes: Set<String> = setOf("skull", "torso"),
     val essenceDecimals: Int = 2,
     val dontRoundEssenceInternally: Boolean = false,
+    val maxSkillRating: Int = 12,
+    val maxSkillRatingCreate: Int = 6,
+    val maxKnowledgeSkillRating: Int = 12,
+    val maxKnowledgeSkillRatingCreate: Int = 6,
 )
 
 /** An attribute as stored plus the figures the engine derives from it. */

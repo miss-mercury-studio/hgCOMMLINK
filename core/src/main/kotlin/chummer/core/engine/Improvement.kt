@@ -26,6 +26,7 @@ data class Improvement(
     val enabled: Boolean,
     val custom: Boolean,
     val condition: String,
+    val exclude: String = "",
 ) {
     companion object {
         private fun Element.num(tag: String) = text(tag)?.trim()?.toDoubleOrNull() ?: 0.0
@@ -47,6 +48,7 @@ data class Improvement(
             enabled = e.flag("enabled"),
             custom = e.flag("custom"),
             condition = e.text("condition").orEmpty().trim(),
+            exclude = e.text("exclude").orEmpty().trim(),
         )
 
         fun parseAll(root: Element): List<Improvement> =
