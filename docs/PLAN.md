@@ -1,5 +1,3 @@
-- [x] Character settings (`CharacterSettings`): resolves a character's settings GUID against the user's settings folder, then Chummer's built-in `data/settings.xml`; a legacy name such as `default.xml` falls back to the first built-in profile. Reads simple values, books, custom data refs, banned grades, redliner exclusions and karma costs; expression settings evaluate through `Expr` (which now accepts `{Name}` variables); `toRuleSettings()` feeds the engines (limb count, excluded slots, cyberlimb cap, essence decimals and rounding).
-- [x] Data amend layer (`DataAmender`, `CustomData`, `CustomDataLocator`): a port of Chummer's `AmendNodeChildren` and its `override_`, `custom_`, `amend_` loading order. Custom folders are found by manifest GUID. Tests on Viper's campaign: settings resolve, all 7 folders found (6 from Chummer, 1 campaign), the amends remove and add the expected entries, and all 299 of Viper's `sourceid`s still resolve in the amended data. Not ported: re-creating missing parent nodes when recursing into nodes absent from the base data.
 # Chummer 5e for Android: Plan
 
 Living document. Update the status checkboxes, the decisions log and the open questions as work proceeds.
@@ -67,7 +65,7 @@ Sizes are relative: S, M, L, XL.
 
 ### M0: Spike (S)
 Answers the questions that could change the design.
-- [x] Repo set up (git, Gradle, `core` module, toolchain from hg-glow). The `app` module is not created yet.
+- [x] Repo set up (git, Gradle, `core` and `app` modules, toolchain from hg-glow)
 - [x] Parse Viper and resolve `sourceid` GUIDs against the data pack (299/299)
 - [x] ~~Verify `required`/`forbidden` evaluate via XPath~~ Not XPath, see the correction above. Instead: surveyed the rule language (about 83 node types).
 - [x] Measure data pack parse time and memory on the S24 Ultra. Results below. Decision: keep the DOM loader for now; revisit caching in M1/M7.
@@ -109,8 +107,8 @@ Engine code is in `core/src/main/kotlin/chummer/core/engine/`. Each calculation 
 - [ ] Armor: equipment sets (armor locations), the total armor rule (highest base armor plus stacking `+` accessories up to STR, plus ware armor), armor encumbrance, and the elemental and resistance values. To check the Social set we must create the improvements that equipping it generates from the data's `<bonus>` nodes (for example Nonconductivity gives electricity armor), so this is also the first piece of the **improvement handler registry**. The saved file's own generated improvements (for the Runner set) give a second check: our handlers must reproduce them.
 - [ ] Still to do from this group: movement, matrix and astral initiative, wound modifiers
 - [ ] Improvement handler registry for item creation (about 30 `<bonus>` node handlers)
-- [ ] Character settings: load the settings file a character names (see "Settings and custom data"), including expression settings; use Viper's San Francisco Showdown file as the first real test
-- [ ] Data amend layer: apply `amend_*.xml` and `custom_*.xml` from custom data folders over the base data (moved up from M7 because Viper needs it to match Chummer)
+- [x] Character settings (`CharacterSettings`): resolves a character's settings GUID against the user's settings folder, then Chummer's built-in `data/settings.xml`; a legacy name such as `default.xml` falls back to the first built-in profile. Reads simple values, books, custom data refs, banned grades, redliner exclusions and karma costs; expression settings evaluate through `Expr` (which now accepts `{Name}` variables); `toRuleSettings()` feeds the engines (limb count, excluded slots, cyberlimb cap, essence decimals and rounding).
+- [x] Data amend layer (`DataAmender`, `CustomData`, `CustomDataLocator`): a port of Chummer's `AmendNodeChildren` and its `override_`, `custom_`, `amend_` loading order. Custom folders are found by manifest GUID. Tests on Viper's campaign: settings resolve, all 7 folders found (6 from Chummer, 1 campaign), the amends remove and add the expected entries, and all 299 of Viper's `sourceid`s still resolve in the amended data. Not ported: re-creating missing parent nodes when recursing into nodes absent from the base data.
 - [ ] Remaining golden misses (below)
 
 Findings from the amend layer (from reading Chummer's source and running our port; not yet seen in Chummer itself):
