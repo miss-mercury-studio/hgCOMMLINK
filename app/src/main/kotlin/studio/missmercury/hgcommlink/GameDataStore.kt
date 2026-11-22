@@ -110,9 +110,23 @@ class GameDataStore(private val context: Context) {
     /** Custom data files copied from the user's folder. */
     val userCustomDir: File get() = File(context.filesDir, "user-customdata")
 
-    /** The character's settings profile; `isFallback` is set when it is not available on this device. */
-    fun settingsFor(c: CharacterFile): CharacterSettings =
-        CharacterSettings.find(c.root.text("settings").orEmpty(), File(dataDir(), "settings.xml"), listOf(userSettingsDir))
+    private val settingsCache = HashMap<String, Pair<Long, CharacterSettings>>()
+
+    /**
+     * The character's settings profile; `isFallback` is set when it is not available on this device. Reading the profiles parses the whole
+     * settings file, so the result is kept until a settings file changes (screens ask for it many times, some on the main thread).
+     */
+    fun settingsFor(c: CharacterFile): CharacterSettings {
+        val ref = c.root.text("settings").orEmpty()
+        val builtIn = File(dataDir(), "settings.xml")
+        val stamp = builtIn.lastModified() + builtIn.length() + (userSettingsDir.listFiles()?.sumOf { it.lastModified() + it.length() } ?: 0L)
+        synchronized(settingsCache) {
+            settingsCache[ref]?.takeIf { it.first == stamp }?.let { return it.second }
+        }
+        val found = CharacterSettings.find(ref, builtIn, listOf(userSettingsDir))
+        synchronized(settingsCache) { settingsCache[ref] = stamp to found }
+        return found
+    }
 
     /** A choice in the new character dialog. */
     data class MetatypeOption(val id: String, val name: String, val variants: List<Pair<String, String>>)
