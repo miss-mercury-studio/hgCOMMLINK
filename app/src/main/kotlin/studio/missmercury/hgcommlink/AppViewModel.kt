@@ -164,6 +164,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun finishPlan() = open?.let { gameData.finishPlan(it.character) }
+
+    /** Finish creation: the character becomes a career character. A backup of the creation file is kept by the save. */
+    fun finishCreation(startingNuyen: Int) {
+        val current = open ?: return
+        viewModelScope.launch {
+            try {
+                val (problems, sheet) = io {
+                    val problems = gameData.finish(current.character, startingNuyen)
+                    if (problems.isNotEmpty()) problems to null
+                    else { repo.save(current.file, current.character); emptyList<String>() to gameData.sheet(current.character) }
+                }
+                if (sheet == null) { message = "Cannot finish: ${problems.joinToString("; ")}"; return@launch }
+                open = OpenCharacter(current.file, current.character, sheet.first, sheet.second)
+                message = "Character created. Career mode is on."
+            } catch (e: Throwable) {
+                message = "Could not finish the character: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }
+    }
+
     fun qualityOptions() = gameData.qualityOptions()
     fun knowledgeOptions() = gameData.knowledgeOptions()
     fun spellOptions() = gameData.spellOptions()

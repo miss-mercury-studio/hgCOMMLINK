@@ -71,6 +71,13 @@ class GameDataStore(private val context: Context) {
 
     fun qualityOptions(): List<QualityOption> = synchronized(this) { pack?.let(QualityCatalog::list).orEmpty() }
 
+    fun finishPlan(c: CharacterFile) =
+        chummer.core.engine.CharacterFinisher.plan(c, settingsFor(c), synchronized(this) { pack ?: error("Game data is not loaded yet") })
+
+    /** Move a character from creation to career; returns what stops it, or an empty list when done. */
+    fun finish(c: CharacterFile, startingNuyen: Int) =
+        chummer.core.engine.CharacterFinisher.finish(c, settingsFor(c), synchronized(this) { pack ?: error("Game data is not loaded yet") }, startingNuyen)
+
     fun editor(c: CharacterFile) =
         CharacterEditor(c, synchronized(this) { pack ?: error("Game data is not loaded yet") }, translations::get, settingsFor(c))
     private fun chummerCustomDir() = unpack("chummer-customdata", "chummer-customdata")

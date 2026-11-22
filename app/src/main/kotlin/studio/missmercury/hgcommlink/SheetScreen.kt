@@ -42,6 +42,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
@@ -133,6 +134,7 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         s.karmaLedger?.let { KarmaSection(it, s.review) }
+        if (s.review != null) FinishCard(s.review!!, vm)
 
         // The numbers needed in play, together: initiative, condition, armor.
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
@@ -675,4 +677,41 @@ private fun PickDialog(title: String, items: List<PickItem>, onPick: (String) ->
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
     )
+}
+
+/** The step that ends creation: shows what carries over, asks for the starting nuyen roll, and confirms. */
+@Composable
+private fun FinishCard(review: chummer.core.engine.CreationReview, vm: AppViewModel) {
+    var asking by remember { mutableStateOf(false) }
+    var roll by remember { mutableStateOf("") }
+    OutlinedButton(onClick = { asking = true }, enabled = review.canFinish, modifier = Modifier.fillMaxWidth()) {
+        Text(if (review.canFinish) "Finish creation (start career)" else "Cannot finish yet")
+    }
+    if (asking) {
+        val plan = vm.finishPlan()
+        val dice = roll.toIntOrNull()
+        AlertDialog(
+            onDismissRequest = { asking = false },
+            title = { Text("Finish creation?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (plan != null) {
+                        Text("Karma carried into the career: ${plan.karmaKept}" + if (plan.karmaLost > 0) " (${plan.karmaLost} lost)" else "")
+                        if (plan.nuyenLost > 0) Text("Nuyen lost beyond the carry-over: ${plan.nuyenLost}", color = MaterialTheme.colorScheme.error)
+                        if (plan.addsStreetLifestyle) Text("A Street lifestyle is added. Roll 1D6 for the starting nuyen (× 20 ¥).")
+                    }
+                    review.warnings.forEach { Text("• $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+                    OutlinedTextField(
+                        value = roll, onValueChange = { roll = it.filter(Char::isDigit).take(1) }, singleLine = true,
+                        label = { Text("Die roll (1-6)") },
+                    )
+                    Text("This cannot be undone from the app; a backup of the creation file is kept.", style = MaterialTheme.typography.labelSmall)
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = dice != null && dice in 1..6, onClick = { asking = false; vm.finishCreation(dice!! * 20) }) { Text("Finish") }
+            },
+            dismissButton = { TextButton(onClick = { asking = false }) { Text("Cancel") } },
+        )
+    }
 }
