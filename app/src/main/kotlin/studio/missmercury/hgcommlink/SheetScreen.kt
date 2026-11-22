@@ -908,6 +908,7 @@ private fun Resonance(s: Sheet, vm: AppViewModel) {
     val career = s.isCareer
     var adding by remember { mutableStateOf(false) }
     var choosing by remember { mutableStateOf<String?>(null) }
+    var addingSprite by remember { mutableStateOf(false) }
     val full = section.forms.size >= section.limit
     Column(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -927,8 +928,25 @@ private fun Resonance(s: Sheet, vm: AppViewModel) {
                     if (!career) StepButton("×", 36) { vm.removeComplexForm(f.guid) }
                 }
             }
+            item {
+                Text("// SPRITES", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
+                Small("${section.sprites.count { it.bound }} of ${section.spriteLimit} registered  ·  level up to ${section.spriteMax}")
+            }
+            if (section.sprites.isEmpty()) item { Text("No sprites.", style = MaterialTheme.typography.bodySmall) }
+            items(section.sprites, key = { it.guid }) { sp ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(sp.name + if (sp.critterName.isNotBlank()) " \"${sp.critterName}\"" else "", fontWeight = FontWeight.Bold)
+                        Small("level ${sp.force}  ·  ${sp.services} tasks  ·  ${if (sp.bound) "registered" else "not registered"}")
+                    }
+                    StepButton("×", 36) { vm.removeSprite(sp.guid) }
+                }
+            }
         }
-        PinnedAction(if (full) "Complex form limit reached" else "+ Add complex form") { if (!full) adding = true }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TerminalButton(if (full) "Form limit reached" else "+ Complex form", { if (!full) adding = true }, Modifier.weight(1f))
+            TerminalButton(if (section.sprites.count { it.bound } >= section.spriteLimit) "Sprite limit reached" else "+ Sprite", { if (section.sprites.count { it.bound } < section.spriteLimit) addingSprite = true }, Modifier.weight(1f))
+        }
     }
     if (adding) {
         val options = remember { vm.complexFormOptions().map { PickItem(it.id, it.name, listOf("target ${it.target}", "duration ${it.duration}", "fade ${it.fade}", it.source).filter { x -> x.isNotBlank() }.joinToString("  ·  ")) } }
@@ -936,6 +954,10 @@ private fun Resonance(s: Sheet, vm: AppViewModel) {
             val o = vm.complexFormOptions().first { x -> x.id == it }
             if (o.needsChoice) choosing = it else vm.addComplexForm(it)
         }) { adding = false }
+    }
+    if (addingSprite) {
+        val options = remember { vm.spriteOptions().map { PickItem(it.id, it.name, "level ${section.spriteMax}  ·  ${it.source}") } }
+        PickerSheet("Add a sprite", options, { vm.addSprite(it, "") }) { addingSprite = false }
     }
     choosing?.let { id ->
         // Forms named "[Matrix Attribute]" are learned for one of the four attributes.

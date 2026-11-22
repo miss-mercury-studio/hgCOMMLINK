@@ -357,7 +357,11 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
                         val variantName = meta?.variants?.firstOrNull { it.first == variant }?.second.orEmpty()
                         val problem = PriorityChoice(heritage, attributes, talentLetter, skillsLetter, resources, "x", method == "SumtoTen").problem()
                             ?: if (!vm.heritageOffered(heritage, meta?.name.orEmpty(), variantName)) "${meta?.name.orEmpty()} is not offered at metatype priority $heritage" else null
-                        problem?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = DrainAmber) }
+                        // What still blocks Create, so a disabled button is never a mystery (the last free-skill button can sit below the fold).
+                        val need = vm.priorityTalents(talentLetter).firstOrNull { it.value == (talent ?: vm.priorityTalents(talentLetter).firstOrNull()?.value.orEmpty()) }?.pickCount ?: 0
+                        val missing = need - talentSkills.count { it.isNotEmpty() }
+                        val hint = problem ?: if (missing > 0) "Choose ${if (missing == 1) "1 more free skill" else "$missing more free skills"} for the talent" else null
+                        hint?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = DrainAmber) }
                     }
                 }
                 Row(Modifier.padding(top = 10.dp).imePadding(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -78,4 +78,31 @@ class ComplexFormTest {
         adv.log.manualKarma(-adv.log.karma, "Spend all")
         assertNull(adv.addComplexForm(form("Cleaner")))
     }
+
+    @Test
+    fun spritesAreRegisteredUpToCharismaAndLevelUpToResonance() {
+        val c = technomancer()
+        val sprites = SpriteEditor(c, data, settings)
+        val res = AttributeEngine.forFile(c, settings.toRuleSettings())["RES"]!!.totalValue
+        assertEquals(res, sprites.maxLevel())
+        val cha = AttributeEngine.forFile(c, settings.toRuleSettings())["CHA"]!!.totalValue
+        assertEquals(cha, sprites.registeredLimit())
+        val options = sprites.options()
+        assertTrue(options.toString(), options.any { it.name == "Machine Sprite" })
+        val machine = options.first { it.name == "Machine Sprite" }.id
+        // Too high a level is refused; the default is the highest allowed.
+        assertNull(sprites.add(machine, "Too strong", force = res + 1))
+        val guid = sprites.add(machine, "Purphoros")!!
+        val s = c.root.child("spirits")!!.children("spirit").single()
+        assertEquals(listOf("guid", "name", "crittername", "services", "force", "bound", "fettered", "type", "file", "relative", "notes", "mainmugshotindex", "mugshots"), s.children().map { it.tagName })
+        assertEquals("Sprite", s.text("type")); assertEquals("True", s.text("bound")); assertEquals(res.toString(), s.text("force"))
+        assertEquals(listOf(SpriteLine(guid, "Machine Sprite", "Purphoros", res, 1, true)), sprites.sprites())
+        // The registered limit stops the next one.
+        var made = 1
+        while (sprites.add(machine, "n$made") != null) made++
+        assertEquals(cha, made)
+        assertTrue(sprites.remove(guid))
+        assertEquals(made - 1, sprites.sprites().size)
+        assertEquals(made - 1, Sheet.build(c, data, settings).complexForms!!.sprites.size)
+    }
 }

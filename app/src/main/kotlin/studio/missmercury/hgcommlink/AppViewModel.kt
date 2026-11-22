@@ -309,6 +309,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun removeSpell(guid: String) = edit("Removed spell") { it.removeItem(guid) }
 
     fun complexFormOptions() = gameData.complexFormOptions()
+    fun spriteOptions() = open?.let { gameData.career(it.character).sprites().options() }.orEmpty()
+    fun addSprite(entryId: String, name: String) = editCareer("Sprite added", "Cannot add that sprite (limit, or level)") { adv, _ -> adv.sprites().add(entryId, name) != null }
+    fun removeSprite(guid: String) = editCareer("Sprite removed", "Nothing changed") { adv, _ -> adv.sprites().remove(guid) }
     fun addComplexForm(entryId: String, extra: String = "") =
         if (open?.sheet?.isCareer == true) editCareer("Learned complex form", "Cannot learn that complex form (karma, limit, or already known)") { adv, _ -> adv.addComplexForm(entryId, extra) != null }
         else edit("Added complex form") { it.addComplexForm(entryId, extra); true }

@@ -257,6 +257,9 @@ class CareerAdvancement(
         return guid
     }
 
+    /** The character's sprites (in creation and career alike; sprites cost no karma). */
+    fun sprites() = SpriteEditor(file, data, settings)
+
     // ---- complex forms
 
     /** The karma price of learning a complex form (Chummer's `ComplexFormKarmaCost`). */
