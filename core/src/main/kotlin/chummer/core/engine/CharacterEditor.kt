@@ -92,7 +92,7 @@ class CharacterEditor(
         if (root.text("created")?.trim().equals("True", true) || root.text("buildmethod")?.trim() != "Karma") return null
         val entry = data[entryId]?.element ?: return null
         val karma = (entry.child("karma")?.textContent?.trim()?.toIntOrNull() ?: 0) * (cfg.karmaCost["karmaquality"] ?: 1)
-        val ledger = KarmaLedger.of(file, cfg)
+        val ledger = KarmaLedger.of(file, cfg, data)
         return if (entry.child("category")?.textContent?.trim().equals("Negative", true)) {
             if (ledger.negativeQualities + karma > ledger.qualityLimit) "Negative qualities would be ${ledger.negativeQualities + karma}/${ledger.qualityLimit} karma" else null
         } else {

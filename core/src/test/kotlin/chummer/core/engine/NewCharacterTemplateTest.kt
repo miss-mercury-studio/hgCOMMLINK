@@ -292,4 +292,22 @@ class NewCharacterTemplateTest {
             notCounted = emptyList(), positiveQualities = 60, negativeQualities = 0, qualityLimit = 50)
         assertEquals(listOf("Overspent by 10 karma", "Positive qualities 60/50 karma"), over.problems)
     }
+
+    /**
+     * New_Skills.chum5 (Ork, Karma build): Firearms group 1, Heavy Weapons 1 (karma), knowledge skills Black Markets (1 karma),
+     * English (native), Street Gangs: Seattle and Turkish (2 free points each). Chummer 5.226 showed Karma Remaining 642 and
+     * "Knowledge Skills 0 of 4: 1 Karma" with Skill Groups 5 and Active Skills 2.
+     */
+    @Test
+    fun karmaLedgerMatchesChummerForTheSkillsFile() {
+        val settings = settingsForTemplates()
+        val data = DataPack.load(File(src, "Chummer/data"))
+        val l = KarmaLedger.of(load("New_Skills.chum5"), settings, data)
+        println("New_Skills: $l remaining=${l.remaining} knowledgePointsLeft=${l.knowledgePointsLeft}")
+        assertEquals(listOf(50, 0, 5, 2, 1), listOf(l.metatype, l.attributes, l.skillGroups, l.skills, l.knowledge))
+        assertEquals(642, l.remaining)
+        assertEquals(listOf(4, 4, 0), listOf(l.knowledgePoints, l.knowledgePointsUsed, l.knowledgePointsLeft))
+        assertEquals(emptyList<String>(), l.problems)
+        assertEquals(emptyList<String>(), l.notCounted)
+    }
 }

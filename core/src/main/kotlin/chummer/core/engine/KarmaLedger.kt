@@ -1,6 +1,8 @@
 package chummer.core.engine
 
 import chummer.core.CharacterFile
+import chummer.core.Expr
+import chummer.core.GameData
 import chummer.core.child
 import chummer.core.children
 import chummer.core.data.CharacterSettings
@@ -8,13 +10,13 @@ import chummer.core.text
 
 /**
  * How much karma a Karma-build character has spent and has left, ported from Chummer's creation form
- * (`CalculateBPandRefreshBPDisplays`) and the cost rules of attributes, skills, skill groups and qualities.
- * Chummer does not store the remaining karma, so it is always calculated.
+ * (`CalculateBPandRefreshBPDisplays`) and the cost rules of attributes, skills, skill groups, knowledge skills and
+ * qualities. Chummer does not store the remaining karma, so it is always calculated.
  *
- * Covered: the metatype, attributes, active skills (with specializations), qualities and contacts.
- * Not covered, and reported in [notCounted] when the character has any: group karma, knowledge skills,
- * spells, foci, complex forms, programs, martial arts, initiation, critter powers, nuyen converted to karma
- * and gear bought with karma. These are left out of [spent], so [remaining] is then an upper bound.
+ * Covered: the metatype, attributes, active skills, skill groups, knowledge skills (with the free knowledge points),
+ * qualities and contacts. Not covered, and reported in [notCounted] when the character has any: specializations on
+ * knowledge skills, spells, foci, complex forms, programs, martial arts, initiation, critter powers, nuyen converted to
+ * karma and gear bought with karma. These are left out of [spent], so [remaining] is then an upper bound.
  */
 data class KarmaLedger(
     val budget: Int,
@@ -28,9 +30,15 @@ data class KarmaLedger(
     val positiveQualities: Int = 0,
     val negativeQualities: Int = 0,
     val qualityLimit: Int = 25,
+    val skillGroups: Int = 0,
+    val knowledge: Int = 0,
+    /** Free knowledge skill points: the pool the settings give, and how many are used. */
+    val knowledgePoints: Int = 0,
+    val knowledgePointsUsed: Int = 0,
 ) {
-    val spent get() = metatype + attributes + skills + qualities + contacts
+    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts
     val remaining get() = budget - spent
+    val knowledgePointsLeft get() = knowledgePoints - knowledgePointsUsed
 
     /** What is wrong with the character as it stands; empty when nothing is. */
     val problems: List<String>
@@ -38,12 +46,17 @@ data class KarmaLedger(
             if (remaining < 0) add("Overspent by ${-remaining} karma")
             if (positiveQualities > qualityLimit) add("Positive qualities $positiveQualities/$qualityLimit karma")
             if (negativeQualities > qualityLimit) add("Negative qualities $negativeQualities/$qualityLimit karma")
+            if (knowledgePointsUsed > knowledgePoints) add("Knowledge points $knowledgePointsUsed/$knowledgePoints")
         }
 
     companion object {
         private fun triangle(n: Int) = n * (n + 1) / 2
 
-        fun of(c: CharacterFile, settings: CharacterSettings): KarmaLedger {
+        /**
+         * [data] is needed to know which skill group a skill belongs to; without it, group karma cannot be priced and
+         * is reported as not counted.
+         */
+        fun of(c: CharacterFile, settings: CharacterSettings, data: GameData? = null): KarmaLedger {
             val rules = settings.toRuleSettings()
             val set = ImprovementSet(Improvement.parseAll(c.root), isCareer = false)
             val cost = settings.karmaCost
@@ -76,22 +89,65 @@ data class KarmaLedger(
                 attributes += maxOf(amount, 0)
             }
 
-            // Active skills: a new skill costs the new-skill price for its first rating, then each further rating costs
-            // the improve price times that rating. Specializations cost a flat amount each.
+            // Active skills. The price of rating steps from [lower] to [upper]: a new skill's first rating costs the
+            // new-skill price, every other step costs its rating times the improve price.
+            fun stepCost(lower: Int, upper: Int): Int {
+                if (upper <= lower) return 0
+                val levels = triangle(upper) - triangle(lower)
+                return if (lower == 0) (levels - 1) * k("karmaimproveactiveskill", 2) + k("karmanewactiveskill", 2)
+                else levels * k("karmaimproveactiveskill", 2)
+            }
+            val activeSkills = c.skills().filter { !it.isKnowledge }
+            val groups = c.skillGroups()
+            val groupOf = activeSkills.associate { s -> s.name to data?.get(s.suid)?.element?.child("skillgroup")?.textContent?.trim().orEmpty() }
             var skills = 0
-            for (s in c.skills().filter { !it.isKnowledge }) {
-                val upper = s.base + s.karma
-                if (upper == 0) continue
-                val lower = s.base
-                if (upper > lower) {
-                    val levels = triangle(upper) - triangle(lower)
-                    skills += if (lower == 0) (levels - 1) * k("karmaimproveactiveskill", 2) + k("karmanewactiveskill", 2)
-                    else levels * k("karmaimproveactiveskill", 2)
+            var skillGroups = 0
+            // A group's karma raises every member by that many ratings; the group pays for the steps all members share and
+            // each member only pays for what it has beyond that.
+            val groupKarma = groups.mapValues { it.value.second }
+            for ((name, g) in groupKarma.filter { it.value > 0 }) {
+                if (data == null) { notCounted += "skill group karma"; break }
+                val members = activeSkills.filter { groupOf[it.name] == name }
+                if (members.isEmpty()) continue
+                val upper = members.minOf { it.base + it.karma + g }
+                val lower = upper - g
+                val steps = triangle(upper) - triangle(lower)
+                skillGroups += steps * (if (steps == 1) k("karmanewskillgroup", 5) else k("karmaimproveskillgroup", 5))
+            }
+            for (s in activeSkills) {
+                val g = groupKarma[groupOf[s.name]] ?: 0
+                val total = s.base + s.karma + g
+                if (total == 0) continue
+                if (g > 0 && data != null) {
+                    val groupUpper = activeSkills.filter { groupOf[it.name] == groupOf[s.name] }.minOf { it.base + it.karma + g }
+                    skills += stepCost(s.base, groupUpper - g) + stepCost(groupUpper, total)
+                } else {
+                    skills += stepCost(s.base, s.base + s.karma)
                 }
                 skills += s.specializations.size * k("karmaspecialization", 7)
             }
-            if (c.skillGroups().values.any { it.second > 0 }) notCounted += "skill group karma"
-            if (c.skills().any { it.isKnowledge && it.karma > 0 }) notCounted += "knowledge skills"
+
+            // Knowledge skills (and languages). Points from the free pool are levels paid for already; karma buys the rest.
+            // A native language is free.
+            val knowledgeRows = c.skills().filter { it.isKnowledge && !it.isNativeLanguage }
+            var knowledge = 0
+            for (s in knowledgeRows) {
+                val upper = s.base + s.karma
+                val lower = s.base
+                if (upper > lower) {
+                    val improve = k("karmaimproveknowledgeskill", 1)
+                    knowledge += (triangle(upper) - triangle(lower)) * improve
+                    if (lower == 0) knowledge += k("karmanewknowledgeskill", 1) - improve
+                }
+                if (s.specializations.isNotEmpty() && "knowledge specializations" !in notCounted) notCounted += "knowledge specializations"
+            }
+            val unaug = results.mapValues { it.value.value.toDouble() }
+            val knowledgePoints = runCatching {
+                standardRound(Expr.eval(settings.string("knowledgepointsexpression", "({INTUnaug} + {LOGUnaug}) * 2"), mapOf(
+                    "INTUnaug" to (unaug["INT"] ?: 1.0), "LOGUnaug" to (unaug["LOG"] ?: 1.0),
+                )))
+            }.getOrDefault(0)
+            val knowledgePointsUsed = knowledgeRows.sumOf { it.base }
 
             // Qualities the user chose: positive ones cost karma, negative ones give it back. Free ones from the
             // metatype are not counted.
@@ -123,7 +179,10 @@ data class KarmaLedger(
             )) if (c.root.child(tag)?.children().orEmpty().isNotEmpty()) notCounted += label
             if ((c.root.text("nuyenbp")?.trim()?.toIntOrNull() ?: 0) != 0) notCounted += "nuyen bought with karma"
 
-            return KarmaLedger(budget, metatype, attributes, skills, qualities, contacts, notCounted, positive, negative, settings.int("qualitykarmalimit", 25))
+            return KarmaLedger(
+                budget, metatype, attributes, skills, qualities, contacts, notCounted, positive, negative,
+                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed,
+            )
         }
     }
 }

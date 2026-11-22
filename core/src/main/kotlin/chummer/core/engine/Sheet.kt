@@ -102,7 +102,7 @@ data class Sheet(
                 ),
                 activeSkills = active, knowledgeSkills = knowledge,
                 qualities = qualities(c),
-                karmaLedger = if (!career && s.buildMethod == "Karma") KarmaLedger.of(c, settings) else null,
+                karmaLedger = if (!career && s.buildMethod == "Karma") KarmaLedger.of(c, settings, data) else null,
                 sections = SheetSections.read(c, WeaponEngine(c.root, set, str, d.limitPhysical).all(), essenceEngine),
             )
         }
