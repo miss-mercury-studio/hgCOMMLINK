@@ -52,6 +52,15 @@ class EditorObjects(private val file: CharacterFile, private val data: GameData)
         return MentorRef(guid, d("id"))
     }
 
+    override fun addPower(name: String): PowerRef? {
+        val pack = data as? DataPack ?: return null
+        val id = pack.byId.entries.firstOrNull { it.value.file == "powers.xml" && it.value.element.tagName == "power" && it.value.name == name }?.key ?: return null
+        val editor = PowerEditor(file, data)
+        if (editor.problem(id, "") == null) editor.add(id, rating = 0)
+        else if (root.text("adept")?.trim() != "True") return null
+        return PowerRef(name, "")
+    }
+
     override fun addContact(loyalty: Int, connection: Int, group: Boolean, readOnly: Boolean): String? {
         val guid = UUID.randomUUID().toString()
         val c = el("contact")

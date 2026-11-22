@@ -51,6 +51,9 @@ data class Sheet(
     val movement: String = "",
     /** The nuyen budget and plug-in room of a Karma-build character in creation, where gear is bought from karma-bought nuyen. */
     val creationBuy: CreationBuy? = null,
+    /** An adept's power points and powers; null for anyone who is not an adept. */
+    val powers: PowerPoints? = null,
+    val isMagician: Boolean = false,
 ) {
     data class CreationBuy(val ledger: NuyenLedger, val pluginCapacity: Map<String, Double>)
     /**
@@ -155,6 +158,8 @@ data class Sheet(
                     },
                 ) else null,
                 movement = Movement.of(c, data, set, attrs)?.full().orEmpty(),
+                powers = if (flag(c, "adept")) PowerPoints.of(c, settings, data) else null,
+                isMagician = flag(c, "magician"),
                 creationBuy = if (!career && s.buildMethod == "Karma") CreationBuy(NuyenLedger.of(c, settings, data), CareerAdvancement(c, data, settings).pluginCapacity()) else null,
                 career = if (career) careerLines(c, data, settings, shown.map { it.name }) else null,
                 karmaLedger = if (!career && s.buildMethod == "Karma") KarmaLedger.of(c, settings, data) else null,

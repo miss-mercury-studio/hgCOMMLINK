@@ -253,6 +253,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Take a bought item out again, in creation (career uses undo). */
     fun removePurchase(guid: String) = editCareer("Removed", "Cannot remove that here") { adv, _ -> adv.removePurchase(guid) }
 
+    fun powerOptions() = gameData.powerOptions()
+    fun addPower(entryId: String, extra: String = "") = edit("Power added", "Cannot add that power (power points, or it is already taken)") { it.powerProblem(entryId, extra) == null && run { it.addPower(entryId, 1, extra); true } }
+    fun changePowerLevel(guid: String, delta: Int) = edit(null, "No more levels (power points, or the limit)") { it.changePowerLevel(guid, delta) }
+    fun removePower(guid: String) = edit("Power removed") { it.removePower(guid) }
+
     fun undoExpense(guid: String) = editCareer("Entry undone", "That entry cannot be undone") { adv, _ -> adv.log.undo(guid) }
 
     /** Karma price of a quality for the open career character, or null in creation. */

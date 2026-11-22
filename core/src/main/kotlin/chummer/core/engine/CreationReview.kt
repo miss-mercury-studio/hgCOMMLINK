@@ -32,6 +32,10 @@ data class CreationReview(val problems: List<String>, val warnings: List<String>
 
             // Nuyen: what the character carries against what the karma-to-nuyen budget gives, and the availability limit.
             val warnings = ArrayList<String>()
+            if (c.root.text("adept")?.trim().equals("True", true) && data != null) {
+                val pp = PowerPoints.of(c, settings, data)
+                if (pp.used > pp.total + 0.001) problems += "Power points used %.2f of %.2f".format(java.util.Locale.ROOT, pp.used, pp.total)
+            }
             if (data != null) {
                 val nuyen = NuyenLedger.of(c, settings, data)
                 if (nuyen.remaining < -0.004) problems += "Nuyen overspent by ¥" + "%,d".format(Math.round(-nuyen.remaining))

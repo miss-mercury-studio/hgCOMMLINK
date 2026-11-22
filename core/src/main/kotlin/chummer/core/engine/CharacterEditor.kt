@@ -248,6 +248,15 @@ class CharacterEditor(
         return true
     }
 
+    /** Adept powers: see [PowerEditor]. */
+    fun addPower(entryId: String, rating: Int = 1, extra: String = ""): String = PowerEditor(file, data, settings, translate).add(entryId, rating, extra)
+    fun changePowerLevel(guid: String, delta: Int): Boolean {
+        val p = root.child("powers")?.children("power")?.firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: return false
+        return PowerEditor(file, data, settings, translate).setRating(guid, (p.text("rating")?.trim()?.toIntOrNull() ?: 0) + delta)
+    }
+    fun removePower(guid: String): Boolean = PowerEditor(file, data, settings, translate).remove(guid)
+    fun powerProblem(entryId: String, extra: String = ""): String? = PowerEditor(file, data, settings, translate).problem(entryId, extra)
+
     /** Rewrite the values Chummer keeps beside the character (condition monitor boxes and thresholds). */
     private fun refreshCalculatedValues() {
         val cfg = settings ?: return
@@ -477,7 +486,7 @@ object QualityCatalog {
         }.sortedWith(compareBy({ it.category }, { it.name.lowercase() }))
 
     /** Bonus nodes that need something from the user. */
-    private val CHOICE_NODES = setOf(
+    internal val CHOICE_NODES = setOf(
         "selecttext", "selectskill", "selectweapon", "selectarmor", "selecttradition", "selectmentorspirit", "selectquality",
         "selectattributes", "hardwires", "selectrestricted",
     )
@@ -487,7 +496,7 @@ object QualityCatalog {
             .mapNotNull { it.name }.distinct().sortedBy { it.lowercase() }
 
     /** The list to choose from for the first choice node of a bonus, or empty when the user has to type it. */
-    private fun choicesFor(data: chummer.core.DataPack, bonus: Element?): List<String> {
+    internal fun choicesFor(data: chummer.core.DataPack, bonus: Element?): List<String> {
         val node = bonus?.children().orEmpty().firstOrNull { it.tagName.lowercase() in CHOICE_NODES } ?: return emptyList()
         return when (node.tagName.lowercase()) {
             "selectmentorspirit" -> names(data, "mentors.xml", "mentor")

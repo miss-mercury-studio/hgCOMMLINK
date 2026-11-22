@@ -37,6 +37,7 @@ class BonusHandlerFixtureTest {
     private object FakeObjects : BonusObjects {
         override fun addGear(sourceGuid: String, name: String, category: String, rating: Int, qty: Double, fullCost: Boolean, parentGuid: String?) = UUID.randomUUID().toString()
         override fun addMentorSpirit(name: String) = MentorRef(UUID.randomUUID().toString(), "")
+        override fun addPower(name: String) = PowerRef(name, "")
         override fun addContact(loyalty: Int, connection: Int, group: Boolean, readOnly: Boolean) = UUID.randomUUID().toString()
     }
 

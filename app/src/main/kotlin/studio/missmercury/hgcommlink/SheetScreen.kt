@@ -86,7 +86,7 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
                 // The Magic tab appears once the character has magic switched on (for example with the Magician quality).
                 val tabs = buildList {
                     add("Overview" to "STATS"); add("Skills" to "SKILL")
-                    if (sheet.magic != null) add("Magic" to "MAGIC")
+                    if (sheet.magic != null || sheet.powers != null) add("Magic" to "MAGIC")
                     add("Gear" to "GEAR"); add("Ware" to "WARE"); add("Life" to "LIFE"); add("Qualities" to "QUAL")
                 }
                 val current = if (tabs.any { it.first == tabName }) tabName else "Overview"
@@ -714,13 +714,17 @@ private val BUYABLE = setOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WI
 /** Tradition and spells of a character with magic. */
 @Composable
 private fun Magic(s: Sheet, vm: AppViewModel) {
-    val m = s.magic ?: return
     val creation = s.karmaLedger != null
+    // An adept has powers and no tradition; a mystic adept has both.
+    val m = s.magic?.takeIf { s.isMagician || s.powers == null } ?: chummer.core.engine.Sheet.MagicLines("", emptyList())
+    val showMagician = s.isMagician || s.powers == null
     var choosingTradition by remember { mutableStateOf(false) }
     var addingSpell by remember { mutableStateOf(false) }
+    var addingPower by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        item {
+        s.powers?.let { pp -> adeptPowerItems(pp, vm) { addingPower = true } }
+        if (showMagician) item {
             Section("Tradition") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(m.tradition.ifEmpty { "None chosen yet" }, Modifier.weight(1f), fontWeight = FontWeight.Bold)
@@ -728,12 +732,12 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
                 }
             }
         }
-        item {
+        if (showMagician) item {
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("// SPELLS", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
             }
         }
-        if (m.spells.isEmpty()) item { Text("No spells.", style = MaterialTheme.typography.bodySmall) }
+        if (showMagician && m.spells.isEmpty()) item { Text("No spells.", style = MaterialTheme.typography.bodySmall) }
         items(m.spells, key = { it.guid }) { sp ->
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -745,8 +749,9 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
             }
         }
     }
-    if (creation) PinnedAction("+ Add spell") { addingSpell = true }
+    if (creation && showMagician) PinnedAction("+ Add spell") { addingSpell = true }
     }
+    if (addingPower) AddPowerDialog(vm) { addingPower = false }
     if (choosingTradition) {
         val options = remember { vm.traditionOptions().map { PickItem(it.id, it.name, "Drain ${it.drain}") } }
         PickerSheet("Choose a tradition", options, { vm.setTradition(it) }) { choosingTradition = false }

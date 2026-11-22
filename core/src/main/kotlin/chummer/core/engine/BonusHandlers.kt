@@ -29,11 +29,16 @@ class BonusContext(
 /** A mentor spirit added to the character: its own GUID, and the id of the data entry it came from (Chummer uses that as the unique name). */
 class MentorRef(val guid: String, val id: String)
 
+/** The power a bonus selected: its name and the choice it carries (a skill, an attribute). */
+class PowerRef(val name: String, val extra: String)
+
 /** What a bonus can add to the character besides improvements. Each returns the new object's GUID, or null when it cannot be added. */
 interface BonusObjects {
     /** Gear named in a bonus; free unless [fullCost]. [parentGuid] is a gear item this one is added under. [sourceGuid] is the item that grants it. */
     fun addGear(sourceGuid: String, name: String, category: String, rating: Int, qty: Double, fullCost: Boolean, parentGuid: String?): String?
     fun addMentorSpirit(name: String): MentorRef?
+    /** An adept power added with no levels of its own (free levels follow); null when the character is not an adept or the power is unknown. */
+    fun addPower(name: String): PowerRef?
     fun addContact(loyalty: Int, connection: Int, group: Boolean, readOnly: Boolean): String?
 }
 
@@ -410,6 +415,20 @@ object BonusHandlers {
             out += improvement(ctx, "MentorSpirit", mentor.id, 0.0, mentor.guid)
         }
 
+        // Adept powers the item gives for free: the user picks one for each `selectpower` node (the choice lists them in order, "A, B").
+        // The power is added with no levels of its own, and an improvement gives it free levels (or free points when the node has pointsperlevel).
+        put("selectpowers") { node, ctx, _, out ->
+            val objects = ctx.objects ?: return@put
+            val picks = ctx.choice.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            node.children("selectpower").forEachIndexed { i, sel ->
+                val name = picks.getOrNull(i) ?: return@forEachIndexed
+                val power = objects.addPower(name) ?: return@forEachIndexed
+                val levels = intValue(sel.t("val"), ctx.rating) ?: 0.0
+                val freePoints = sel.t("pointsperlevel")?.isNotBlank() == true
+                out += improvement(ctx, if (freePoints) "AdeptPowerFreePoints" else "AdeptPowerFreeLevels", power.extra, 0.0, power.name, rating = levels)
+            }
+        }
+
         // A quality the user picks from those the node lists.
         put("selectquality") { node, ctx, unique, out ->
             if (ctx.choice.isEmpty() || node.children("quality").none { it.textContent.trim() == ctx.choice }) return@put
@@ -444,6 +463,33 @@ object BonusHandlers {
                 val name = if (sel.child("affectbase") != null) attribute + "Base" else attribute
                 out += improvement(ctx, "Attribute", unique, 0.0, name, min = n("min"), max = n("max"), augmented = n("val"), augMax = n("aug"))
             }
+        }
+
+        // Bonus dice or damage for a weapon category: the category (or skill) is named in the node or chosen by the user.
+        for ((tag, type) in listOf("weaponcategorydice" to "WeaponCategoryDice", "weaponcategorydv" to "WeaponCategoryDV")) put(tag) { node, ctx, unique, out ->
+            val skill = node.child("selectskill")
+            val category = node.child("selectcategory")
+            when {
+                skill != null -> if (ctx.choice.isNotEmpty()) out += improvement(ctx, type, unique, value(node.t("bonus"), ctx.rating) ?: 0.0, ctx.choice)
+                category != null -> if (ctx.choice.isNotEmpty()) out += improvement(ctx, type, unique, value(category.t("value")?.takeIf { it.isNotEmpty() } ?: node.t("bonus"), ctx.rating) ?: 0.0, ctx.choice)
+                node.child("name") != null -> out += improvement(ctx, type, unique, value(node.t("bonus"), ctx.rating) ?: 0.0, node.t("name").orEmpty())
+            }
+        }
+
+        // One attribute the user picks (the choice), with the node's minimum, maximum and bonuses.
+        put("selectattribute") { node, ctx, unique, out ->
+            if (ctx.choice.isEmpty()) return@put
+            fun n(tag: String) = value(node.t(tag), ctx.rating) ?: 0.0
+            val name = if (node.child("affectbase") != null) ctx.choice + "Base" else ctx.choice
+            out += improvement(ctx, "Attribute", unique, 0.0, name, min = n("min"), max = n("max"), augmented = n("val"), augMax = n("aug"))
+        }
+
+        // Walking speed: a distance and a percentage for a movement category (like sprint).
+        put("walkmultiplier") { node, ctx, unique, out ->
+            val category = node.t("category").orEmpty()
+            if (category.isEmpty()) return@put
+            node.t("val")?.takeIf { it.isNotEmpty() }?.let { t -> value(t, ctx.rating)?.takeIf { it != 0.0 }?.let { out += improvement(ctx, "WalkMultiplier", unique, it, category) } }
+            node.t("percent")?.takeIf { it.isNotEmpty() }?.let { t -> value(t, ctx.rating)?.takeIf { it != 0.0 }?.let { out += improvement(ctx, "WalkMultiplierPercent", unique, it, category) } }
         }
 
         // Older data spelled the metagenic limit node "metageneticlimit".

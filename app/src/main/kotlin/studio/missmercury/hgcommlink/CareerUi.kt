@@ -299,3 +299,85 @@ fun NuyenCard(l: chummer.core.engine.NuyenLedger, vm: AppViewModel) {
         }
     }
 }
+
+/** The adept's power points and powers as list items: a counter, one row per power with its levels, and a way to add more. */
+fun androidx.compose.foundation.lazy.LazyListScope.adeptPowerItems(pp: chummer.core.engine.PowerPoints, vm: AppViewModel, onAdd: () -> Unit) {
+    item {
+        val over = pp.used > pp.total + 0.001
+        TerminalCard("Adept powers", tag = "03", accent = if (over) CriticalRed else PhosphorGreen) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                TelemetryStrip(
+                    listOf("POINTS" to formatPoints(pp.total), "USED" to formatPoints(pp.used), "LEFT" to formatPoints(pp.left)),
+                    accent = if (over) CriticalRed else PhosphorGreen,
+                )
+                if (pp.powers.isEmpty()) Text("No powers yet.", style = MaterialTheme.typography.bodySmall, color = MutedSilver)
+                pp.powers.forEach { p ->
+                    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(p.name + if (p.extra.isNotBlank()) " (${p.extra})" else "", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                            Text(
+                                listOfNotNull(formatPoints(p.points) + " pts", if (p.freeLevels > 0) "${p.freeLevels} free level" + if (p.freeLevels > 1) "s" else "" else null).joinToString("  ·  "),
+                                style = MaterialTheme.typography.labelSmall, color = MutedSilver,
+                            )
+                        }
+                        if (p.levels) {
+                            StepButton("−", 44) { vm.changePowerLevel(p.guid, -1) }
+                            Text("${p.rating}", Modifier.widthIn(min = 22.dp), style = MaterialTheme.typography.titleMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            StepButton("+", 44) { vm.changePowerLevel(p.guid, 1) }
+                        }
+                        StepButton("×", 36, CriticalRed.copy(alpha = 0.85f)) { vm.removePower(p.guid) }
+                    }
+                }
+                TerminalButton("Add power", onAdd, Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+private fun formatPoints(v: Double) = if (v == Math.rint(v)) v.toLong().toString() else "%.2f".format(java.util.Locale.ROOT, v).trimEnd('0')
+
+/** Pick an adept power from the data; powers that ask for a skill, an attribute or text get a second step. */
+@Composable
+fun AddPowerDialog(vm: AppViewModel, onDismiss: () -> Unit) {
+    val options = remember { vm.powerOptions() }
+    val items = remember {
+        options.map { o ->
+            PickItem(
+                o.id, o.name,
+                listOfNotNull(
+                    formatPoints(o.pointsPerLevel) + if (o.levels) " pts per level" else " pts",
+                    if (o.maxLevels > 0) "max ${o.maxLevels}" else null, o.source.takeIf { it.isNotBlank() }?.let { it + " " + o.page },
+                    if (o.unsupported.isNotEmpty()) "some effects not applied yet" else null, if (o.needsChoice) "needs a choice" else null,
+                ).joinToString("  ·  "),
+                warn = o.unsupported.isNotEmpty(),
+            )
+        }
+    }
+    var choosing by remember { mutableStateOf<chummer.core.engine.PowerOption?>(null) }
+    var text by remember { mutableStateOf("") }
+    PickerSheet(
+        "Add power", items,
+        onPick = { id ->
+            val o = options.first { it.id == id }
+            if (o.needsChoice) { choosing = o; text = "" } else vm.addPower(id)
+        },
+        note = "Power points come from MAG. Prerequisites are not checked yet.",
+        keepOpenFor = { id -> options.first { it.id == id }.needsChoice },
+        onDismiss = onDismiss,
+    )
+    choosing?.takeIf { it.choices.isNotEmpty() }?.let { o ->
+        PickerSheet(o.name, o.choices.map { PickItem(it, it, "") }, onPick = { vm.addPower(o.id, it); choosing = null; onDismiss() }, note = "Choose one.", onDismiss = { choosing = null })
+    }
+    choosing?.takeIf { it.choices.isEmpty() }?.let { o ->
+        TerminalSheet(o.name, onDismiss = { choosing = null }) { close ->
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("This power asks for a name or a choice.", style = MaterialTheme.typography.bodySmall, color = MutedSilver)
+                TerminalField(text, { text = it }, "name, skill...")
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Add", { vm.addPower(o.id, text.trim()); choosing = null; onDismiss() }, Modifier.weight(1f), filled = true, enabled = text.isNotBlank())
+                }
+            }
+        }
+    }
+}

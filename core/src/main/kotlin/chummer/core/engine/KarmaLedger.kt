@@ -203,8 +203,10 @@ data class KarmaLedger(
             for ((tag, label) in listOf(
                 "foci" to "foci", "complexforms" to "complex forms", "aiprograms" to "programs",
                 "martialarts" to "martial arts", "initiationgrades" to "initiation", "critterpowers" to "critter powers",
-                "powers" to "adept powers", "metamagics" to "metamagics", "mentorspirits" to "mentor spirits",
+                "metamagics" to "metamagics", "mentorspirits" to "mentor spirits",
             )) if (c.root.child(tag)?.children().orEmpty().isNotEmpty()) notCounted += label
+            // A pure adept's powers are paid with the power points MAG gives; a mystic adept pays karma for power points (not counted yet).
+            if (c.root.text("adept")?.trim().equals("True", true) && c.root.text("magician")?.trim().equals("True", true) && c.root.child("powers")?.children().orEmpty().isNotEmpty()) notCounted += "mystic adept power points"
             val nuyenKarma = (c.root.text("nuyenbp")?.trim()?.toDoubleOrNull()?.toInt() ?: 0)
                 .coerceIn(0, if (settings.bool("unrestrictednuyen")) Int.MAX_VALUE else settings.int("nuyenmaxbp", 10))
 

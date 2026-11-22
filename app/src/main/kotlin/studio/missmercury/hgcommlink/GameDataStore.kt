@@ -80,6 +80,8 @@ class GameDataStore(private val context: Context) {
 
     fun pluginOptions(parentSourceId: String): List<chummer.core.engine.WareOption> = synchronized(this) { pack?.let { chummer.core.engine.WareCatalog.pluginsFor(it, parentSourceId) }.orEmpty() }
 
+    fun powerOptions(): List<chummer.core.engine.PowerOption> = synchronized(this) { pack?.let(chummer.core.engine.PowerCatalog::list).orEmpty() }
+
     fun gearOptions(): List<chummer.core.engine.GearOption> =
         synchronized(this) { pack?.let(chummer.core.engine.GearCatalog::list).orEmpty() }
 
