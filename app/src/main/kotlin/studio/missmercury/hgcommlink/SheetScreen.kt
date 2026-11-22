@@ -110,6 +110,12 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
     }
 }
 
+/** A small "remove" link under an item bought in creation (career uses undo from the log). */
+@Composable
+private fun RemoveLink(onClick: () -> Unit) {
+    Text("× remove", Modifier.clickable(onClick = onClick).padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = CriticalRed.copy(alpha = 0.85f))
+}
+
 /** Section tabs along the bottom edge, where the thumb rests; the chosen one in inverse video. */
 @Composable
 private fun BottomNav(tabs: List<Pair<String, String>>, current: String, onPick: (String) -> Unit) {
@@ -169,6 +175,7 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
     ) {
         CareerCard(s, vm)
         s.karmaLedger?.let { KarmaSection(it, s.review) }
+        s.creationBuy?.let { NuyenCard(it.ledger, vm) }
         if (s.review != null) FinishCard(s.review!!, vm)
 
         // The numbers needed in play, together: initiative, condition, armor.
@@ -557,6 +564,8 @@ private fun Small(text: String) {
 
 @Composable
 private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewModel) {
+    val canBuy = s.career != null || s.creationBuy != null
+    val creating = s.creationBuy != null
     var buying by remember { mutableStateOf<String?>(null) }
     var attaching by remember { mutableStateOf<Pair<String, String>?>(null) }
     var loading by remember { mutableStateOf<String?>(null) }
@@ -569,7 +578,8 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
                     set.items.forEach { a ->
                         Row2(a.name, a.value.let { v -> if (a.equipped) v else "$v (off)" })
                         Small(a.mods.joinToString(", "))
-                        if (s.career != null && a.guid.isNotEmpty()) Text("+ mod", Modifier.clickable { attaching = "mod" to a.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
+                        if (creating && a.guid.isNotEmpty()) RemoveLink { vm.removePurchase(a.guid) }
+                        if (canBuy && a.guid.isNotEmpty()) Text("+ mod", Modifier.clickable { attaching = "mod" to a.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
                     }
                 }
             }
@@ -584,8 +594,9 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
                     w.reach.takeIf { w.type.equals("Melee", true) && it.isNotBlank() }?.let { "reach $it" }, w.accuracy.takeIf { it.isNotBlank() }?.let { "acc $it" },
                     "RC ${w.rc}", w.conceal.takeIf { it != "0" }?.let { "conceal $it" }).filterNotNull().filter { it.isNotBlank() }.joinToString("  ·  "))
                 Small(w.accessories.groupingBy { it }.eachCount().entries.joinToString(", ") { (n, c) -> if (c > 1) "$n x$c" else n })
-                if (s.career != null && w.guid.isNotEmpty() && w.canLoad) Text("load ammo", Modifier.clickable { loading = w.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
-                if (s.career != null && w.guid.isNotEmpty() && w.allowAccessory) Text("+ accessory", Modifier.clickable { attaching = "accessory" to w.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
+                if (creating && w.guid.isNotEmpty() && w.removable) RemoveLink { vm.removePurchase(w.guid) }
+                if (canBuy && w.guid.isNotEmpty() && w.canLoad) Text("load ammo", Modifier.clickable { loading = w.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
+                if (canBuy && w.guid.isNotEmpty() && w.allowAccessory) Text("+ accessory", Modifier.clickable { attaching = "accessory" to w.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
             }
         }
         if (g.vehicles.isNotEmpty()) item { SubHeader("Vehicles") }
@@ -595,10 +606,11 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
             Column {
                 Row2(it.name + if (it.rating > 0) " (rating ${it.rating})" else "", if (it.quantity != "1") "x${it.quantity}" else "")
                 Small(listOf(it.category, it.children.joinToString(", ")).filter { x -> x.isNotBlank() }.joinToString("  ·  "))
+                if (creating && it.guid.isNotEmpty()) RemoveLink { vm.removePurchase(it.guid) }
             }
         }
     }
-    if (s.career != null) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (canBuy) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TerminalButton("Gear", { buying = "gear" }, Modifier.weight(1f))
         TerminalButton("Weapon", { buying = "weapon" }, Modifier.weight(1f))
         TerminalButton("Armor", { buying = "armor" }, Modifier.weight(1f))
@@ -614,6 +626,8 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
 
 @Composable
 private fun Ware(g: chummer.core.engine.SheetSections, essence: Double, s: Sheet, vm: AppViewModel) {
+    val canBuy = s.career != null || s.creationBuy != null
+    val pluginRoom = s.career?.pluginCapacity ?: s.creationBuy?.pluginCapacity
     var buying by remember { mutableStateOf<Boolean?>(null) }
     var plugging by remember { mutableStateOf<chummer.core.engine.SheetSections.WareLine?>(null) }
     Column(Modifier.fillMaxSize()) {
@@ -621,12 +635,12 @@ private fun Ware(g: chummer.core.engine.SheetSections, essence: Double, s: Sheet
         item { Row2("Essence", formatEssence(essence), bold = true) }
         val (bio, cyber) = g.ware.partition { it.isBioware }
         if (cyber.isNotEmpty()) item { SubHeader("Cyberware") }
-        items(cyber) { WareRow(it, 0, s.career?.pluginCapacity?.get(it.guid)) { plugging = it } }
+        items(cyber) { WareRow(it, 0, pluginRoom?.get(it.guid), if (s.creationBuy != null) ({ vm.removePurchase(it.guid) }) else null) { plugging = it } }
         if (bio.isNotEmpty()) item { SubHeader("Bioware") }
-        items(bio) { WareRow(it, 0, s.career?.pluginCapacity?.get(it.guid)) { plugging = it } }
+        items(bio) { WareRow(it, 0, pluginRoom?.get(it.guid), if (s.creationBuy != null) ({ vm.removePurchase(it.guid) }) else null) { plugging = it } }
         if (g.ware.isEmpty()) item { Text("No augmentations.") }
     }
-    if (s.career != null) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (canBuy) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TerminalButton("+ Cyberware", { buying = false }, Modifier.weight(1f))
         TerminalButton("+ Bioware", { buying = true }, Modifier.weight(1f))
     }
@@ -636,11 +650,12 @@ private fun Ware(g: chummer.core.engine.SheetSections, essence: Double, s: Sheet
 }
 
 @Composable
-private fun WareRow(w: chummer.core.engine.SheetSections.WareLine, depth: Int, capacityLeft: Double? = null, onPlug: () -> Unit = {}) {
+private fun WareRow(w: chummer.core.engine.SheetSections.WareLine, depth: Int, capacityLeft: Double? = null, onRemove: (() -> Unit)? = null, onPlug: () -> Unit = {}) {
     Column(Modifier.padding(start = (depth * 16).dp)) {
         Row2(w.name + if (w.rating > 0) " (rating ${w.rating})" else "", if (w.essence != 0.0) formatEssence(w.essence) else "", bold = depth == 0)
         Small(w.grade.takeIf { !it.equals("Standard", true) }.orEmpty())
         w.children.forEach { WareRow(it, depth + 1) }
+        if (onRemove != null && depth == 0) RemoveLink(onRemove)
         if (capacityLeft != null) Text("+ plug-in  (capacity left ${"%.0f".format(java.util.Locale.ROOT, capacityLeft)})", Modifier.clickable(onClick = onPlug).padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
     }
 }
@@ -672,6 +687,7 @@ private fun KarmaSection(l: chummer.core.engine.KarmaLedger, review: chummer.cor
         Row2("Attributes", (-l.attributes).toString())
         Row2("Skills", (-l.skills).toString())
         Row2("Qualities", (-l.qualities).toString())
+        if (l.nuyen != 0) Row2("Nuyen", (-l.nuyen).toString())
         Row2("  positive / negative", "${l.positiveQualities}/${l.qualityLimit}  ${l.negativeQualities}/${l.qualityLimit}")
         if (l.contacts != 0) Row2("Contacts", (-l.contacts).toString())
         review?.warnings?.forEach { Text("• $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }

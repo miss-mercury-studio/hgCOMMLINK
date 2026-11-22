@@ -271,11 +271,49 @@ class CareerAdvancement(
     /** Buy gear with nuyen: adds the item and writes a "Purchased Gear" entry. Returns its GUID, or null when it cannot be paid or priced. */
     fun buyGear(entryId: String, rating: Int? = null, qty: Double = 1.0, extra: String = "", now: LocalDateTime = LocalDateTime.now()): String? {
         val cost = gearCost(entryId, rating, qty) ?: return null
-        if (cost > log.nuyen + 0.004) return null
+        if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating)) return null
         val guid = GearEditor(file, data, settings).addGear(entryId, rating, qty, extra)
         val name = data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty()
-        log.add("Nuyen", -cost, "Purchased Gear $name", "AddGear", objectId = guid, qty = qty, now = now)
+        charge(cost, "Purchased Gear $name", "AddGear", guid, qty, now)
         return guid
+    }
+
+
+    // ---- creation: the same purchases are paid from the karma-to-nuyen budget instead of the career log
+
+    private val inCreation = root.text("created")?.trim() != "True"
+
+    /** Nuyen the character can still spend: what is left of the creation budget, or the career balance. */
+    private fun nuyenLeft(): Double = if (inCreation) NuyenLedger.of(file, settings, data).remaining else log.nuyen
+
+    /** Pay for a purchase. In career it is written to the log; in creation the budget is derived from what is carried, so only `<nuyen>` is kept up to date. */
+    private fun charge(cost: Double, reason: String, kind: String, guid: String, qty: Double, now: LocalDateTime) {
+        if (inCreation) NuyenLedger.sync(file, settings, data) else log.add("Nuyen", -cost, reason, kind, objectId = guid, qty = qty, now = now)
+    }
+
+    /** Creation only: an item whose availability is over the settings' limit cannot be bought (Chummer does not limit career purchases). */
+    private fun availabilityBlocked(entryId: String, rating: Int?, extra: Int = 0): Boolean {
+        if (!inCreation) return false
+        val avail = data[entryId]?.element?.child("avail")?.textContent.orEmpty()
+        val v = Availability.parse(avail, rating ?: 1) ?: return false
+        return v.number + extra > settings.int("availability", 12)
+    }
+
+    private fun gradeAvailability(entry: org.w3c.dom.Element, grade: String): Int {
+        val pack = data as? chummer.core.DataPack ?: return 0
+        val bio = entry.tagName == "bioware"
+        return CyberwareEditor.grades(pack, bio).firstOrNull { it.child("name")?.textContent?.trim() == grade }
+            ?.child("avail")?.textContent?.trim()?.removePrefix("+")?.toIntOrNull() ?: 0
+    }
+
+    /** Take a bought item out again while the character is in creation (career uses the log's undo). False when there is no such item, or in career. */
+    fun removePurchase(guid: String): Boolean {
+        if (!inCreation) return false
+        val aw = ArmorWeaponEditor(file, data)
+        val removed = GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
+            aw.removeAccessory(guid) || aw.removeArmorMod(guid) || CyberwareEditor(file, data).remove(guid)
+        if (removed) NuyenLedger.sync(file, settings, data)
+        return removed
     }
 
     // ---- armor and weapons
@@ -292,9 +330,9 @@ class CareerAdvancement(
         val editor = ArmorWeaponEditor(file, data)
         if (editor.armorProblem(entryId) != null) return null
         val cost = armorCost(entryId, rating) ?: return null
-        if (cost > log.nuyen + 0.004) return null
+        if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating)) return null
         val guid = editor.addArmor(entryId, rating)
-        log.add("Nuyen", -cost, "Purchased Armor " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddArmor", objectId = guid, now = now)
+        charge(cost, "Purchased Armor " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddArmor", guid, 0.0, now)
         return guid
     }
 
@@ -302,9 +340,9 @@ class CareerAdvancement(
         val editor = ArmorWeaponEditor(file, data)
         if (editor.weaponProblem(entryId) != null) return null
         val cost = weaponCost(entryId) ?: return null
-        if (cost > log.nuyen + 0.004) return null
+        if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, 0)) return null
         val guid = editor.addWeapon(entryId)
-        log.add("Nuyen", -cost, "Purchased Weapon " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddWeapon", objectId = guid, now = now)
+        charge(cost, "Purchased Weapon " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddWeapon", guid, 0.0, now)
         return guid
     }
 
@@ -322,9 +360,9 @@ class CareerAdvancement(
 
     fun buyAccessory(weaponGuid: String, entryId: String, mount: String? = null, rating: Int? = null, now: LocalDateTime = LocalDateTime.now()): String? {
         val cost = accessoryCost(weaponGuid, entryId, rating) ?: return null
-        if (cost > log.nuyen + 0.004) return null
+        if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating)) return null
         val guid = ArmorWeaponEditor(file, data).addAccessory(weaponGuid, entryId, mount, rating)
-        log.add("Nuyen", -cost, "Purchased Weapon Accessory " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddWeaponAccessory", objectId = guid, now = now)
+        charge(cost, "Purchased Weapon Accessory " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddWeaponAccessory", guid, 0.0, now)
         return guid
     }
 
@@ -336,9 +374,9 @@ class CareerAdvancement(
 
     fun buyArmorMod(armorGuid: String, entryId: String, rating: Int? = null, now: LocalDateTime = LocalDateTime.now()): String? {
         val cost = armorModCost(entryId, rating) ?: return null
-        if (cost > log.nuyen + 0.004) return null
+        if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating)) return null
         val guid = ArmorWeaponEditor(file, data).addArmorMod(armorGuid, entryId, rating)
-        log.add("Nuyen", -cost, "Purchased Armor Mod " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddArmorMod", objectId = guid, now = now)
+        charge(cost, "Purchased Armor Mod " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddArmorMod", guid, 0.0, now)
         return guid
     }
 
@@ -368,13 +406,13 @@ class CareerAdvancement(
         if (parent == null) { if (CyberwareEditor.problem(entry) != null) return null }
         else if (editor.plugProblem(parentGuid, entryId) != null) return null
         val cost = editor.cost(entryId, useGrade, rating) ?: return null
-        if (cost > log.nuyen + 0.004) return null
+        if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating ?: 1, gradeAvailability(entry, useGrade))) return null
         // A plug-in costs essence only when it adds to its parent's.
         val preview = if (parent != null && entry.child("addtoparentess") == null) 0.0 else editor.essence(entryId, useGrade, rating) ?: return null
         if (essenceNow() - preview < 0) return null
         val guid = editor.add(entryId, useGrade, rating, parentGuid = parentGuid)
         if (essenceNow() < -0.0001) { editor.remove(guid); return null }
-        log.add("Nuyen", -cost, "Purchased Cyberware " + entry.child("name")?.textContent?.trim().orEmpty(), "AddCyberware", objectId = guid, now = now)
+        charge(cost, "Purchased Cyberware " + entry.child("name")?.textContent?.trim().orEmpty(), "AddCyberware", guid, 0.0, now)
         return guid
     }
 
@@ -383,9 +421,9 @@ class CareerAdvancement(
         val editor = ArmorWeaponEditor(file, data)
         if (editor.armorGearProblem(armorGuid, entryId) != null) return null
         val cost = gearCost(entryId, rating, qty) ?: return null
-        if (cost > log.nuyen + 0.004) return null
+        if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating)) return null
         val guid = editor.addArmorGear(armorGuid, entryId, rating, qty)
-        log.add("Nuyen", -cost, "Purchased Gear " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddGear", objectId = guid, qty = qty, now = now)
+        charge(cost, "Purchased Gear " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddGear", guid, qty, now)
         return guid
     }
 

@@ -232,6 +232,22 @@ class CharacterEditor(
         return true
     }
 
+    /**
+     * Put one more karma point into nuyen ([delta] = 1) or take one back (-1) while the character is in creation; the budget
+     * follows the settings' karma-to-nuyen expression and `<nuyen>` is brought up to date. Stops at the settings' maximum.
+     */
+    fun changeNuyenBp(delta: Int): Boolean {
+        require(delta == 1 || delta == -1)
+        val cfg = settings ?: error("Settings are needed to change the nuyen budget")
+        val now = root.text("nuyenbp")?.trim()?.toDoubleOrNull()?.toInt() ?: 0
+        val max = if (cfg.bool("unrestrictednuyen")) Int.MAX_VALUE else cfg.int("nuyenmaxbp", 10)
+        val next = now + delta
+        if (next < 0 || next > max) return false
+        root.child("nuyenbp")?.textContent = next.toString()
+        NuyenLedger.sync(file, cfg, data)
+        return true
+    }
+
     /** Rewrite the values Chummer keeps beside the character (condition monitor boxes and thresholds). */
     private fun refreshCalculatedValues() {
         val cfg = settings ?: return

@@ -216,29 +216,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Nuyen price of gear for the open career character, or null when the price cannot be worked out. */
     fun gearCost(entryId: String, rating: Int?, qty: Double): Double? =
-        open?.takeIf { it.sheet?.isCareer == true }?.let { gameData.career(it.character).gearCost(entryId, rating, qty) }
+        open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).gearCost(entryId, rating, qty) }
 
     fun buyGear(entryId: String, rating: Int?, qty: Double) =
         editCareer("Gear bought", "Not enough nuyen") { adv, _ -> adv.buyGear(entryId, rating, qty) != null }
 
     fun armorOptions() = gameData.armorOptions()
     fun weaponOptions() = gameData.weaponOptions()
-    fun armorCost(id: String, rating: Int?) = open?.takeIf { it.sheet?.isCareer == true }?.let { gameData.career(it.character).armorCost(id, rating) }
-    fun weaponCost(id: String) = open?.takeIf { it.sheet?.isCareer == true }?.let { gameData.career(it.character).weaponCost(id) }
+    fun armorCost(id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).armorCost(id, rating) }
+    fun weaponCost(id: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).weaponCost(id) }
     fun buyArmor(id: String, rating: Int?) = editCareer("Armor bought", "Cannot buy that armor (nuyen, or it comes with parts that are not supported yet)") { adv, _ -> adv.buyArmor(id, rating) != null }
     fun buyWeapon(id: String) = editCareer("Weapon bought", "Cannot buy that weapon (nuyen, or it comes with accessories that are not supported yet)") { adv, _ -> adv.buyWeapon(id) != null }
 
     fun accessoryOptions() = gameData.accessoryOptions()
     fun armorModOptions() = gameData.armorModOptions()
-    fun accessoryCost(weaponGuid: String, id: String, rating: Int?) = open?.takeIf { it.sheet?.isCareer == true }?.let { gameData.career(it.character).accessoryCost(weaponGuid, id, rating) }
-    fun armorModCost(id: String, rating: Int?) = open?.takeIf { it.sheet?.isCareer == true }?.let { gameData.career(it.character).armorModCost(id, rating) }
+    fun accessoryCost(weaponGuid: String, id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).accessoryCost(weaponGuid, id, rating) }
+    fun armorModCost(id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).armorModCost(id, rating) }
     fun buyAccessory(weaponGuid: String, id: String, mount: String?, rating: Int?) = editCareer("Accessory bought", "Not enough nuyen") { adv, _ -> adv.buyAccessory(weaponGuid, id, mount, rating) != null }
     fun buyArmorMod(armorGuid: String, id: String, rating: Int?) = editCareer("Mod bought", "Not enough nuyen") { adv, _ -> adv.buyArmorMod(armorGuid, id, rating) != null }
 
     fun wareOptions() = gameData.wareOptions()
     fun wareGrades(bioware: Boolean): List<String> = open?.let { gameData.wareGrades(bioware, it.character) }.orEmpty()
-    fun wareCost(id: String, grade: String, rating: Int?) = open?.takeIf { it.sheet?.isCareer == true }?.let { gameData.career(it.character).wareCost(id, grade, rating) }
-    fun wareEssence(id: String, grade: String, rating: Int?) = open?.takeIf { it.sheet?.isCareer == true }?.let { gameData.career(it.character).wareEssence(id, grade, rating) }
+    fun wareCost(id: String, grade: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareCost(id, grade, rating) }
+    fun wareEssence(id: String, grade: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareEssence(id, grade, rating) }
     fun buyWare(id: String, grade: String, rating: Int?, parentGuid: String? = null) = editCareer("Installed", "Cannot install that (nuyen, essence or capacity)") { adv, _ -> adv.buyWare(id, grade, rating, parentGuid) != null }
     fun pluginOptions(parentSourceId: String) = gameData.pluginOptions(parentSourceId)
     fun loadAmmo(weaponGuid: String, ammoGuid: String) = editCareer("Ammo loaded", "Cannot load that (no empty clip, or wrong ammunition)") { adv, _ -> adv.loadAmmo(weaponGuid, ammoGuid) }
@@ -246,6 +246,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The newest log entry that can be undone, for the menu shortcut. */
     fun lastUndoable(): chummer.core.engine.ExpenseEntry? =
         open?.sheet?.career?.let { c -> c.expenses.firstOrNull { it.guid in c.undoable } }
+
+    /** One more karma point into nuyen (+1) or one back (-1), in creation. */
+    fun changeNuyenBp(delta: Int) = edit(null, blocked = if (delta > 0) "No more karma can go into nuyen" else "No karma in nuyen to take back") { it.changeNuyenBp(delta) }
+
+    /** Take a bought item out again, in creation (career uses undo). */
+    fun removePurchase(guid: String) = editCareer("Removed", "Cannot remove that here") { adv, _ -> adv.removePurchase(guid) }
 
     fun undoExpense(guid: String) = editCareer("Entry undone", "That entry cannot be undone") { adv, _ -> adv.log.undo(guid) }
 

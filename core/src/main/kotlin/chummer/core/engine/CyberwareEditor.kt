@@ -131,7 +131,7 @@ class CyberwareEditor(private val file: CharacterFile, private val data: GameDat
         fun flag(tag: String) = if (d(tag).equals("True", true)) "True" else "False"
         add("guid", guid); add("sourceid", entryId.lowercase()); add("name", d("name")); add("category", d("category"))
         add("limbslot", d("limbslot")); add("limbslotcount", d("limbslotcount").ifEmpty { "1" }); add("inheritattributes", "False")
-        add("ess", d("ess")); add("capacity", d("capacity")); add("avail", d("avail")); add("cost", d("cost")); add("weight", d("weight")); add("source", d("source")); add("page", d("page"))
+        add("ess", d("ess")); add("capacity", d("capacity")); add("avail", d("avail")); add("cost", if (asDefault) "0" else d("cost")); add("weight", d("weight")); add("source", d("source")); add("page", d("page"))
         add("parentid", if (asDefault) parentGuid else ""); add("hasmodularmount", d("hasmodularmount")); add("plugsintomodularmount", d("plugsintomodularmount")); add("blocksmounts", d("blocksmounts")); add("forced")
         add("rating", chosen.toString()); add("minagility", d("minagility").ifEmpty { "3" }); add("minstrength", d("minstrength").ifEmpty { "3" })
         add("minrating", d("minrating")); add("maxrating", if (d("rating").toIntOrNull() ?: 0 > 0) d("rating") else ""); add("ratinglabel", "String_Rating"); add("subsystems", d("subsystems"))

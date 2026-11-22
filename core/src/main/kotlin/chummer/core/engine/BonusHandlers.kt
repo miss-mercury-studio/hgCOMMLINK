@@ -130,6 +130,8 @@ object BonusHandlers {
         "attribute", "limit", "quality", "handling",
     )
 
+    private val LIVING_PERSONA = ArrayList<Pair<String, String>>()
+
     private val HAND: Map<String, Handler> = buildMap {
         for (n in NO_IMPROVEMENT) put(n) { _, _, _, _ -> }
 
@@ -306,6 +308,69 @@ object BonusHandlers {
             val skill = ctx.choice.ifEmpty { node.t("name").orEmpty() }
             if (skill.isEmpty() && node.child("selectskill") != null) return@put
             out += improvement(ctx, "WeaponSkillAccuracy", unique, value(node.t("value"), ctx.rating) ?: 0.0, skill)
+        }
+
+        // ---- nodes that ask the user to choose; the choice arrives in the context (the item's saved `extra`) ----
+
+        // A skill the user picks: its rating bonus, its maximum, and whether specialization effects are switched off.
+        put("selectskill") { node, ctx, unique, out ->
+            val skill = ctx.choice
+            if (skill.isEmpty()) return@put
+            val addToRating = node.t("applytorating").equals("True", true)
+            node.t("val")?.takeIf { it.isNotEmpty() }?.let { v ->
+                out += improvement(ctx, "Skill", unique, value(v, ctx.rating) ?: 0.0, skill, addToRating = addToRating)
+            }
+            if (node.t("disablespecializationeffects").equals("True", true)) out += improvement(ctx, "DisableSpecializationEffects", unique, 0.0, skill)
+            node.t("max")?.takeIf { it.isNotEmpty() }?.let { m ->
+                out += improvement(ctx, "Skill", unique, 0.0, skill, max = intValue(m, ctx.rating) ?: 0.0, addToRating = addToRating)
+            }
+        }
+
+        // A weapon or armor the user picks is kept as text.
+        for (n in listOf("selectweapon", "selectarmor")) put(n) { _, ctx, unique, out ->
+            if (ctx.choice.isNotEmpty()) out += improvement(ctx, "Text", unique, 0.0, ctx.choice)
+        }
+
+        put("selecttradition") { _, ctx, unique, out ->
+            if (ctx.choice.isNotEmpty()) out += improvement(ctx, "Tradition", unique, 0.0, ctx.choice)
+        }
+
+        // Another limb slot; `precedence` picks the unique name.
+        put("addlimb") { node, ctx, unique, out ->
+            out += improvement(ctx, "AddLimb", node.attr("precedence")?.let { "precedence$it" } ?: unique, value(node.t("val"), ctx.rating) ?: 0.0, node.t("limbslot").orEmpty())
+        }
+
+        // A skill hardwired into the character: the value from the node, the skill from the choice.
+        put("hardwires") { node, ctx, unique, out ->
+            val skill = ctx.choice
+            if (skill.isEmpty()) return@put
+            val exotic = skill.contains(" (")
+            out += improvement(ctx, "Hardwire", if (exotic) unique else skill, value(node.textContent, ctx.rating) ?: 0.0, skill)
+        }
+
+        put("cyberseeker") { node, ctx, unique, out ->
+            val attribute = node.textContent.trim()
+            if (attribute == "BOX" || attribute in setOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL", "EDG", "MAG", "RES", "DEP")) {
+                out += improvement(ctx, "Seeker", unique, 0.0, attribute, rating = 0.0)
+            }
+        }
+
+        // The living persona's matrix attributes: the improved name carries the signed bonus as text.
+        for ((tag, type) in listOf(
+            "devicerating" to "LivingPersonaDeviceRating", "programlimit" to "LivingPersonaProgramLimit", "attack" to "LivingPersonaAttack",
+            "sleaze" to "LivingPersonaSleaze", "dataprocessing" to "LivingPersonaDataProcessing", "firewall" to "LivingPersonaFirewall", "matrixcm" to "LivingPersonaMatrixCM",
+        )) LIVING_PERSONA += tag to type
+        put("livingpersona") { node, ctx, unique, out ->
+            for ((tag, type) in LIVING_PERSONA) {
+                var text = node.t(tag)?.takeIf { it.isNotEmpty() } ?: continue
+                Regex("""^FixedValues\((.*)\)$""").find(text)?.let { m ->
+                    val values = m.groupValues[1].split(',').map { it.trim() }
+                    text = values.getOrNull((ctx.rating - 1).coerceIn(0, values.size - 1)).orEmpty()
+                }
+                text = text.replace("Rating", ctx.rating.toString())
+                if ((text.toIntOrNull() ?: 0) > 0) text = "+$text"
+                out += improvement(ctx, type, unique, 0.0, text)
+            }
         }
 
         // Older data spelled the metagenic limit node "metageneticlimit".

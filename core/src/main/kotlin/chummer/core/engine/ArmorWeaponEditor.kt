@@ -53,7 +53,7 @@ class ArmorWeaponEditor(private val file: CharacterFile, private val data: GameD
         fun add(tag: String, text: String? = null) = g.appendChild(el(tag, text))
         add("sourceid", entryId.lowercase()); add("guid", guid); add("name", d("name")); add("category", d("category"))
         add("armor", d("armor")); add("armoroverride", d("armoroverride")); add("armorcapacity", d("armorcapacity")); add("avail", d("avail")); add("cost", d("cost"))
-        add("weight", d("weight")); add("source", d("source")); add("page", d("page")); add("armorname"); add("equipped", "False"); add("active", "False"); add("homenode", "False")
+        add("weight", d("weight")); add("source", d("source")); add("page", d("page")); add("armorname"); add("equipped", "True"); add("active", "False"); add("homenode", "False")
         matrixTail(g, ::d)
         add("matrixcmfilled", "0"); add("matrixcmbonus", "0"); add("wirelesson", "False"); add("canformpersona", d("canformpersona")); add("extra"); add("damage", "0")
         add("rating", chosen.toString()); add("maxrating", max.toString()); add("ratinglabel", "String_Rating"); add("stolen", "False"); add("encumbrance", "True")

@@ -31,7 +31,8 @@ object CharacterFinisher {
     fun plan(c: CharacterFile, settings: CharacterSettings, data: DataPack): Plan {
         val left = maxOf(KarmaLedger.of(c, settings, data).remaining, 0)
         val keep = minOf(left, settings.karmaCost["karmacarryover"] ?: 7)
-        val nuyen = c.root.text("nuyen")?.trim()?.toDoubleOrNull()?.toInt() ?: 0
+        // What is left of the creation budget after everything bought.
+        val nuyen = maxOf(NuyenLedger.of(c, settings, data).remaining, 0.0).toInt()
         val nuyenKeep = minOf(nuyen, nuyenCarryover(settings))
         val noLifestyle = c.root.child("lifestyles")?.children("lifestyle").orEmpty().isEmpty()
         return Plan(keep, left - keep, nuyenKeep, nuyen - nuyenKeep, noLifestyle)

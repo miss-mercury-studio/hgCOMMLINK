@@ -277,3 +277,26 @@ fun BuyWareDialog(bioware: Boolean, vm: AppViewModel, nuyen: String, essence: Do
         }
     }
 }
+
+/** The creation nuyen budget: karma put into nuyen, what the character carries, and what is left. */
+@Composable
+fun NuyenCard(l: chummer.core.engine.NuyenLedger, vm: AppViewModel) {
+    TerminalCard("Nuyen", tag = "02") {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TelemetryStrip(
+                listOf("BUDGET" to "¥" + formatNuyen(l.budget), "SPENT" to "¥" + formatNuyen(l.spent), "LEFT" to "¥" + formatNuyen(l.remaining)),
+                accent = if (l.remaining < 0) CriticalRed else PhosphorGreen,
+            )
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Karma into nuyen" + if (l.maxKarma >= 0) "  ${l.karmaBought}/${l.maxKarma}" else "  ${l.karmaBought}",
+                    Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
+                )
+                StepButton("−", 44) { vm.changeNuyenBp(-1) }
+                StepButton("+", 44) { vm.changeNuyenBp(1) }
+            }
+            if (l.unreadable.isNotEmpty()) Text("Prices not counted yet: " + l.unreadable.take(4).joinToString(), style = MaterialTheme.typography.labelSmall, color = DrainAmber)
+            Text("Lifestyle and vehicle costs are not in this total yet.", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+        }
+    }
+}

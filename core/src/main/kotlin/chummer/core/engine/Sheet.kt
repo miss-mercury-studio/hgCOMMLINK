@@ -49,7 +49,10 @@ data class Sheet(
     val career: CareerLines? = null,
     /** Ground, swim and fly movement as the printed sheet gives it; empty when the metatype has none ("Special"). */
     val movement: String = "",
+    /** The nuyen budget and plug-in room of a Karma-build character in creation, where gear is bought from karma-bought nuyen. */
+    val creationBuy: CreationBuy? = null,
 ) {
+    data class CreationBuy(val ledger: NuyenLedger, val pluginCapacity: Map<String, Double>)
     /**
      * Career spending: the karma price of the next step of each attribute, skill (by GUID) and skill group (null at the
      * maximum), the GUID of each active skill by name, and the expense log, newest first.
@@ -152,6 +155,7 @@ data class Sheet(
                     },
                 ) else null,
                 movement = Movement.of(c, data, set, attrs)?.full().orEmpty(),
+                creationBuy = if (!career && s.buildMethod == "Karma") CreationBuy(NuyenLedger.of(c, settings, data), CareerAdvancement(c, data, settings).pluginCapacity()) else null,
                 career = if (career) careerLines(c, data, settings, shown.map { it.name }) else null,
                 karmaLedger = if (!career && s.buildMethod == "Karma") KarmaLedger.of(c, settings, data) else null,
                 sections = SheetSections.read(c, WeaponEngine(c.root, set, str, d.limitPhysical).all(), essenceEngine),

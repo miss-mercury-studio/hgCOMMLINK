@@ -25,6 +25,8 @@ data class WeaponTotals(
     /** Accessories can be added, and ammunition loaded (guns that need it; not melee, unarmed or gear-linked weapons). */
     val allowAccessory: Boolean = false,
     val canLoad: Boolean = false,
+    /** A weapon the user bought, as opposed to one that comes with the character (Unarmed Attack) or another item. */
+    val removable: Boolean = false,
 )
 
 /**
@@ -108,6 +110,7 @@ class WeaponEngine(
             w.t("reach"), accuracy, signed(conceal), accessories.map { it.t("name") }, w.t("guid"),
             allowAccessory = w.t("allowaccessory").equals("True", true) && w.t("weapontype") != "gear" && w.t("included") != "True",
             canLoad = w.t("requireammo").equals("True", true) && w.t("type").equals("Ranged", true) && w.t("weapontype") != "gear" && w.t("ammo").let { it.isNotEmpty() && it != "0" },
+            removable = w.t("included") != "True" && w.t("weapontype") != "gear",
         )
     }
 

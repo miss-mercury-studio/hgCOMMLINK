@@ -137,7 +137,10 @@ class GearEditor(private val file: CharacterFile, private val data: GameData, pr
     fun addUseGear(u: Element, into: Element, parentId: String): String? {
         val name = u.child("name")?.textContent?.trim() ?: u.textContent.trim()
         val id = findGear(name, u.child("category")?.textContent?.trim().orEmpty()) ?: return null
-        return addGear(id, rating = u.child("rating")?.textContent?.trim()?.toIntOrNull(), into = into, parentId = parentId)
+        val guid = addGear(id, rating = u.child("rating")?.textContent?.trim()?.toIntOrNull(), into = into, parentId = parentId)
+        // A part that comes with the item is already paid for.
+        into.children("gear").lastOrNull { it.text("guid")?.trim() == guid }?.child("cost")?.textContent = "0"
+        return guid
     }
 
     /** Remove a gear item wherever it is installed (also inside armor, weapons or ware) and the improvements it granted. */

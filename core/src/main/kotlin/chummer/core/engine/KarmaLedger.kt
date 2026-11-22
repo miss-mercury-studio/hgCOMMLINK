@@ -36,8 +36,10 @@ data class KarmaLedger(
     val knowledgePoints: Int = 0,
     val knowledgePointsUsed: Int = 0,
     val spells: Int = 0,
+    /** Karma put into nuyen (at most the settings' maximum). */
+    val nuyen: Int = 0,
 ) {
-    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells
+    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen
     val remaining get() = budget - spent
     val knowledgePointsLeft get() = knowledgePoints - knowledgePointsUsed
 
@@ -203,11 +205,12 @@ data class KarmaLedger(
                 "martialarts" to "martial arts", "initiationgrades" to "initiation", "critterpowers" to "critter powers",
                 "powers" to "adept powers", "metamagics" to "metamagics", "mentorspirits" to "mentor spirits",
             )) if (c.root.child(tag)?.children().orEmpty().isNotEmpty()) notCounted += label
-            if ((c.root.text("nuyenbp")?.trim()?.toIntOrNull() ?: 0) != 0) notCounted += "nuyen bought with karma"
+            val nuyenKarma = (c.root.text("nuyenbp")?.trim()?.toDoubleOrNull()?.toInt() ?: 0)
+                .coerceIn(0, if (settings.bool("unrestrictednuyen")) Int.MAX_VALUE else settings.int("nuyenmaxbp", 10))
 
             return KarmaLedger(
                 budget, metatype, attributes, skills, qualities, contacts, notCounted, positive, negative,
-                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma,
+                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma,
             )
         }
     }
