@@ -228,6 +228,10 @@ object BonusHandlers {
             val name = node.t("id") ?: node.t("name") ?: return@put
             value(node.t("val"), ctx.rating)?.let { out += improvement(ctx, "SpellDicePool", uniqueFor(node, unique), it, name) }
         }
+        // A change to drain, for all spells or (with a `specific` attribute) one kind.
+        put("drainvalue") { node, ctx, unique, out ->
+            value(node.textContent.trim(), ctx.rating)?.let { out += improvement(ctx, "DrainValue", unique, it, node.getAttribute("specific")) }
+        }
         put("specificskill") { node, ctx, unique, out ->
             val addToRating = node.t("applytorating").equals("True", true)
             val condition = node.t("condition").orEmpty()

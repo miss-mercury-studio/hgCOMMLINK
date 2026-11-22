@@ -445,6 +445,13 @@ class CharacterEditor(
 
     private fun removeImprovementsOf(guid: String) {
         val list = root.child("improvements") ?: return
+        // A Mentor Spirit quality brought a mentor spirit with it (the marker improvement holds its GUID): the spirit and what it made go too.
+        val mentors = list.children("improvement").filter { it.text("sourcename")?.trim().equals(guid, true) && it.text("improvementttype")?.trim() == "MentorSpirit" }
+            .mapNotNull { it.text("improvedname")?.trim()?.takeIf { g -> g.isNotEmpty() } }
+        for (m in mentors) {
+            root.child("mentorspirits")?.children("mentorspirit")?.firstOrNull { it.text("guid")?.trim().equals(m, true) }?.let { it.parentNode.removeChild(it) }
+            for (i in list.children("improvement")) if (i.text("sourcename")?.trim().equals(m, true) && i.text("improvementsource")?.trim() == "MentorSpirit") list.removeChild(i)
+        }
         for (i in list.children("improvement")) {
             if (i.text("sourcename")?.trim().equals(guid, true)) list.removeChild(i)
         }

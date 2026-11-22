@@ -534,9 +534,10 @@ private fun QualityRow(q: Sheet.QualityLine, onRemove: () -> Unit) {
 @Composable
 private fun AddQualityDialog(vm: AppViewModel, onDismiss: () -> Unit) {
     val options = remember { vm.qualityOptions() }
+    val coster = remember { vm.careerQualityCoster() }
     val items = remember {
         options.map { o ->
-            val careerCost = vm.careerQualityCost(o.id)
+            val careerCost = coster(o.id)
             PickItem(
                 o.id, o.name,
                 listOfNotNull(o.category, if (careerCost != null) "costs $careerCost karma" else "${o.karma} karma", if (o.unsupported.isNotEmpty()) "some bonuses not applied yet: " + o.unsupported.joinToString() else null).joinToString("  ·  "),
@@ -730,11 +731,12 @@ private fun Life(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     }
     if (addingArt) {
         val options = remember { vm.martialArtOptions() }
+        val coster = remember { vm.martialArtCoster() }
         val known = g.martialArts.map { it.name }.toSet()
         PickerSheet(
             "Learn martial art",
             options.filter { it.name !in known }.map { o ->
-                PickItem(o.id, o.name, listOfNotNull(vm.martialArtCost(o.id)?.let { "$it karma" }, o.source.takeIf { it.isNotBlank() }?.let { it + " " + o.page }, if (o.unsupported.isNotEmpty()) "some effects not applied yet" else null).joinToString("  ·  "), warn = o.unsupported.isNotEmpty())
+                PickItem(o.id, o.name, listOfNotNull(coster(o.id)?.let { "$it karma" }, o.source.takeIf { it.isNotBlank() }?.let { it + " " + o.page }, if (o.unsupported.isNotEmpty()) "some effects not applied yet" else null).joinToString("  ·  "), warn = o.unsupported.isNotEmpty())
             },
             onPick = { vm.buyMartialArt(it) }, note = if (creating) "Costs karma; the karma card counts it." else "Costs karma now.", onDismiss = { addingArt = false },
         )
@@ -848,7 +850,8 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
         PickerSheet("Choose a tradition", options, { vm.setTradition(it) }) { choosingTradition = false }
     }
     if (addingSpell) {
-        val options = remember { vm.spellOptions().map { PickItem(it.id, it.name, listOf(it.category, "type ${it.type}", it.range, "drain ${it.dv}", vm.careerSpellCost(it.id)?.let { c -> "costs $c karma" }.orEmpty()).filter { x -> x.isNotBlank() }.joinToString("  ·  ")) } }
+        val spellCoster = remember { vm.careerSpellCoster() }
+        val options = remember { vm.spellOptions().map { PickItem(it.id, it.name, listOf(it.category, "type ${it.type}", it.range, "drain ${it.dv}", spellCoster(it.id)?.let { c -> "costs $c karma" }.orEmpty()).filter { x -> x.isNotBlank() }.joinToString("  ·  ")) } }
         PickerSheet("Add a spell", options, { vm.addSpell(it) }) { addingSpell = false }
     }
 }

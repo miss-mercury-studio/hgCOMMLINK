@@ -260,7 +260,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun martialArtOptions() = gameData.martialArtOptions()
     fun techniqueOptions(artName: String) = gameData.techniqueOptions(artName)
-    fun martialArtCost(id: String) = open?.let { gameData.career(it.character).martialArtCost(id) }
+    fun martialArtCost(id: String) = martialArtCoster()(id)
+    fun martialArtCoster(): (String) -> Int? {
+        val current = open ?: return { null }
+        val adv = gameData.career(current.character)
+        return { adv.martialArtCost(it) }
+    }
     fun techniqueCost(artGuid: String) = open?.let { gameData.career(it.character).techniqueCost(artGuid) }
     fun buyMartialArt(id: String) = editCareer("Martial art learned", "Cannot learn that (karma, or already known)") { adv, _ -> adv.buyMartialArt(id) != null }
     fun buyTechnique(artGuid: String, id: String) = editCareer("Technique learned", "Cannot learn that (karma, or already known)") { adv, _ -> adv.buyTechnique(artGuid, id) != null }
@@ -273,7 +278,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun undoExpense(guid: String) = editCareer("Entry undone", "That entry cannot be undone") { adv, _ -> adv.log.undo(guid) }
 
     /** Karma price of a quality for the open career character, or null in creation. */
-    fun careerQualityCost(entryId: String): Int? = open?.takeIf { it.sheet?.isCareer == true }?.let { gameData.career(it.character).qualityCost(entryId) }
+    fun careerQualityCost(entryId: String): Int? = careerQualityCoster()(entryId)
+
+    /** One career helper for a whole list of qualities: building it reads the settings, which is far too slow to do for each of hundreds of entries. */
+    fun careerQualityCoster(): (String) -> Int? {
+        val current = open?.takeIf { it.sheet?.isCareer == true } ?: return { null }
+        val adv = gameData.career(current.character)
+        return { adv.qualityCost(it) }
+    }
 
     fun finishPlan() = open?.let { gameData.finishPlan(it.character) }
 
@@ -305,7 +317,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun addSpell(entryId: String) =
         if (open?.sheet?.isCareer == true) editCareer("Learned spell", "Not enough karma for that spell") { adv, _ -> adv.addSpell(entryId) != null }
         else edit("Added spell") { it.addSpell(entryId); true }
-    fun careerSpellCost(entryId: String): Int? = open?.takeIf { it.sheet?.isCareer == true }?.let { gameData.career(it.character).spellCost(entryId) }
+    fun careerSpellCost(entryId: String): Int? = careerSpellCoster()(entryId)
+    fun careerSpellCoster(): (String) -> Int? {
+        val current = open?.takeIf { it.sheet?.isCareer == true } ?: return { null }
+        val adv = gameData.career(current.character)
+        return { adv.spellCost(it) }
+    }
     fun removeSpell(guid: String) = edit("Removed spell") { it.removeItem(guid) }
 
     fun complexFormOptions() = gameData.complexFormOptions()

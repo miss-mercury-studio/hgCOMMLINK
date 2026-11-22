@@ -21,7 +21,7 @@ class MentorTest {
     fun aMentorSpiritsChoicesAreAppliedAndCanBeChanged() {
         val c = CharacterIo.readFile(File(ref, "Viper_career.chum5"))
         val id = data.byId.entries.first { it.value.file == "qualities.xml" && it.value.name == "Mentor Spirit" }.key
-        CharacterEditor(c, data, settings = null).addQuality(id, extra = "Dolphin")
+        val quality = CharacterEditor(c, data, settings = null).addQuality(id, extra = "Dolphin")
         val ed = MentorEditor(c, data)
         val dolphin = ed.mentors().single()
         assertEquals("Dolphin", dolphin.name)
@@ -45,5 +45,9 @@ class MentorTest {
         // The stored layout keeps the chosen bonus in choice1.
         val m = c.root.child("mentorspirits")!!.children("mentorspirit").single()
         assertEquals("specificskill", m.child("choice1")!!.children().single().tagName)
+        // Taking the quality away takes the spirit and everything it made.
+        assertTrue(CharacterEditor(c, data, settings = null).removeItem(quality))
+        assertTrue(ed.mentors().isEmpty())
+        assertTrue(Improvement.parseAll(c.root).none { it.source == "MentorSpirit" })
     }
 }
