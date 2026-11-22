@@ -343,6 +343,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun addSpirit(entryId: String) = editCareer("Spirit added", "Cannot add that spirit (force)") { adv, _ -> adv.spirits().add(entryId, "", services = 0) != null }
     fun updateSpirit(guid: String, name: String, level: Int, tasks: Int, bound: Boolean) = editCareer("Spirit changed", "Cannot change the spirit that way (force, or bound limit)") { adv, _ -> adv.spirits().update(guid, name, level, tasks, bound) }
     fun removeSpirit(guid: String) = editCareer("Spirit removed", "Nothing changed") { adv, _ -> adv.spirits().remove(guid) }
+    fun critterPowerOptions() = open?.let { gameData.career(it.character).critterPowers().options() }.orEmpty()
+    fun addCritterPower(id: String, rating: Int) = if (open?.sheet?.isCareer == true) editCareer("Critter power bought", "Cannot add that (karma, rating, or already known)") { adv, _ -> adv.addCritterPower(id, rating) != null } else editCareer("Critter power added", "Cannot add that (rating, or already known)") { adv, _ -> adv.critterPowers().add(id, rating) != null }
+    fun removeCritterPower(guid: String) = editCareer("Critter power removed", "Nothing changed") { adv, _ -> adv.critterPowers().remove(guid) }
     fun spriteOptions() = open?.let { gameData.career(it.character).sprites().options() }.orEmpty()
     fun addSprite(entryId: String, name: String) = editCareer("Sprite added", "Cannot add that sprite (limit, or level)") { adv, _ -> adv.sprites().add(entryId, name) != null }
     fun removeSprite(guid: String) = editCareer("Sprite removed", "Nothing changed") { adv, _ -> adv.sprites().remove(guid) }

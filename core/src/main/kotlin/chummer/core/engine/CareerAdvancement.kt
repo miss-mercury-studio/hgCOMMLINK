@@ -317,6 +317,20 @@ class CareerAdvancement(
         return guid
     }
 
+    // ---- critter powers
+
+    fun critterPowers() = CritterPowerEditor(file, data)
+
+    /** Buy a critter power with its karma price (Chummer's career dialog). Null when it cannot be had or paid. */
+    fun addCritterPower(entryId: String, rating: Int = 0, extra: String = "", now: LocalDateTime = LocalDateTime.now()): String? {
+        val entry = data[entryId]?.element ?: return null
+        val cost = entry.child("karma")?.textContent?.trim()?.toIntOrNull() ?: 0
+        if (cost > log.karma) return null
+        val guid = critterPowers().add(entryId, rating, extra) ?: return null
+        log.add("Karma", -cost.toDouble(), "Purchased Critter Power " + entry.child("name")?.textContent?.trim().orEmpty(), "AddCritterPower", objectId = guid, now = now)
+        return guid
+    }
+
     // ---- complex forms
 
     /** The karma price of learning a complex form (Chummer's `ComplexFormKarmaCost`). */

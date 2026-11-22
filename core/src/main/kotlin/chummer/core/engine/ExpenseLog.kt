@@ -106,7 +106,7 @@ class ExpenseLog(
 
     /** Which entries can be undone by [undo]: manual ones, and skill and attribute improvements. */
     fun canUndo(entry: ExpenseEntry): Boolean = when {
-        entry.isKarma -> entry.undoKind in setOf("ManualAdd", "ManualSubtract", "ImproveAttribute", "ImproveSkill", "AddSkill", "AddSpecialization", "AddQuality", "AddSpell", "AddMartialArt", "AddMartialArtTechnique", "AddComplexForm", "ImproveInitiateGrade", "AddMetamagic", "AddEnhancement") && entry.reason != "Starting Karma"
+        entry.isKarma -> entry.undoKind in setOf("ManualAdd", "ManualSubtract", "ImproveAttribute", "ImproveSkill", "AddSkill", "AddSpecialization", "AddQuality", "AddSpell", "AddMartialArt", "AddMartialArtTechnique", "AddComplexForm", "ImproveInitiateGrade", "AddMetamagic", "AddEnhancement", "AddCritterPower") && entry.reason != "Starting Karma"
         else -> entry.undoKind in setOf("ManualAdd", "ManualSubtract", "AddGear", "AddArmor", "AddWeapon", "AddWeaponAccessory", "AddArmorMod", "AddCyberware") && entry.reason != "Starting Nuyen"
     }
 
@@ -148,6 +148,10 @@ class ExpenseLog(
         if (entry.isKarma && entry.undoKind == "AddMartialArtTechnique") {
             val d = data ?: return false
             if (!MartialArtEditor(file, d).removeTechnique(entry.objectId)) return false
+        }
+        if (entry.isKarma && entry.undoKind == "AddCritterPower") {
+            val d = data ?: return false
+            if (!CritterPowerEditor(file, d).remove(entry.objectId)) return false
         }
         if (entry.isKarma && entry.undoKind == "AddEnhancement") {
             val d = data ?: return false

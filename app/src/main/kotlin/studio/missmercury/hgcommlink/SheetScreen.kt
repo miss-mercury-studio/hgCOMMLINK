@@ -698,6 +698,8 @@ private fun Life(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     val canBuy = s.career != null || s.creationBuy != null
     val creating = s.creationBuy != null
     var addingArt by remember { mutableStateOf(false) }
+    var addingCritter by remember { mutableStateOf(false) }
+    var ratingFor by remember { mutableStateOf<chummer.core.engine.CritterPowerOption?>(null) }
     var addingTechnique by remember { mutableStateOf<chummer.core.engine.SheetSections.MartialArtLine?>(null) }
     Column(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -711,6 +713,21 @@ private fun Life(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         if (g.lifestyles.isNotEmpty()) item { SubHeader("Lifestyle") }
         items(g.lifestyles) { l ->
             Column { Row2(l.name, "${l.type}  ¥${l.monthly}/mo"); Small(l.notes) }
+        }
+        s.critterPowers?.let { cp ->
+            item { SubHeader("Critter powers") }
+            if (cp.isEmpty()) item { Text("No critter powers.", style = MaterialTheme.typography.bodySmall) }
+            items(cp.size) { i ->
+                val p = cp[i]
+                Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(p.name + if (p.extra.isNotBlank()) " (${p.extra})" else "", fontWeight = FontWeight.Bold)
+                        Small(listOf(p.category, if (p.karma > 0) "${p.karma} karma" else "").filter { it.isNotBlank() }.joinToString("  ·  "))
+                    }
+                    if (creating) StepButton("×", 36) { vm.removeCritterPower(p.guid) }
+                }
+            }
+            item { TerminalButton("+ Critter power", { addingCritter = true }, Modifier.fillMaxWidth().padding(vertical = 6.dp)) }
         }
         if (g.martialArts.isNotEmpty()) item { SubHeader("Martial arts") }
         items(g.martialArts) { art ->
@@ -728,6 +745,26 @@ private fun Life(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         }
     }
     if (canBuy) PinnedAction("+ Martial art") { addingArt = true }
+    }
+    if (addingCritter) {
+        val options = remember { vm.critterPowerOptions() }
+        PickerSheet(
+            "Add a critter power",
+            options.map { PickItem(it.id, it.name, listOf(if (it.karma > 0) "${it.karma} karma" else "free", it.type.takeIf { t -> t.isNotBlank() }?.let { t -> "type $t" }, it.range.takeIf { r -> r.isNotBlank() }, it.duration.takeIf { d -> d.isNotBlank() }?.let { d -> "duration $d" }, if (it.unsupported.isNotEmpty()) "some effects not applied yet" else null).filterNotNull().joinToString("  ·  "), it.category, warn = it.unsupported.isNotEmpty()) },
+            { id -> val o = options.first { it.id == id }; if (o.maxRating > 0) ratingFor = o else vm.addCritterPower(id, 0) },
+            note = if (s.isCareer) "Costs karma." else "Counts against your karma.",
+        ) { addingCritter = false }
+    }
+    ratingFor?.let { o ->
+        var rating by remember(o.id) { mutableStateOf(1) }
+        TerminalSheet(o.name, onDismiss = { ratingFor = null }) { close ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Rating $rating of ${o.maxRating}", Modifier.weight(1f))
+                StepButton("-", 44) { if (rating > 1) rating-- }
+                StepButton("+", 44) { if (rating < o.maxRating) rating++ }
+            }
+            TerminalButton("Add", { vm.addCritterPower(o.id, rating); close(); addingCritter = false }, Modifier.fillMaxWidth().padding(vertical = 12.dp), filled = true)
+        }
     }
     if (addingArt) {
         val options = remember { vm.martialArtOptions() }

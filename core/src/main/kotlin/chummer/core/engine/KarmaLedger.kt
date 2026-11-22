@@ -43,8 +43,9 @@ data class KarmaLedger(
     val complexForms: Int = 0,
     val foci: Int = 0,
     val initiation: Int = 0,
+    val critterPowers: Int = 0,
 ) {
-    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen + martialArts + complexForms + foci + initiation
+    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen + martialArts + complexForms + foci + initiation + critterPowers
     val remaining get() = budget - spent
     val knowledgePointsLeft get() = knowledgePoints - knowledgePointsUsed
 
@@ -286,7 +287,7 @@ data class KarmaLedger(
 
             for ((tag, label) in listOf(
                 "stackedfoci" to "stacked foci", "aiprograms" to "programs",
-                "critterpowers" to "critter powers",
+                
                 "mentorspirits" to "mentor spirits",
             )) if (c.root.child(tag)?.children().orEmpty().isNotEmpty()) notCounted += label
             var martialArts = 0
@@ -319,12 +320,13 @@ data class KarmaLedger(
                 InitiationEditor.gradeCost(n, yes(g, "res"), yes(g, "group"), yes(g, "ordeal"), yes(g, "schooling"), settings) +
                     maxOf(metamagicRows.count { it.text("grade")?.trim()?.toIntOrNull() == n } - 1, 0) * k("karmametamagic", 15)
             }
+            val critterPowers = c.root.child("critterpowers")?.children("critterpower").orEmpty().sumOf { it.text("karma")?.trim()?.toIntOrNull() ?: 0 }
             val nuyenKarma = (c.root.text("nuyenbp")?.trim()?.toDoubleOrNull()?.toInt() ?: 0)
                 .coerceIn(0, if (settings.bool("unrestrictednuyen")) Int.MAX_VALUE else settings.int("nuyenmaxbp", 10))
 
             return KarmaLedger(
                 budget, metatype, attributes, skills, qualities, contacts, notCounted, positive, negative,
-                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma, martialArts, complexForms, foci, initiation,
+                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma, martialArts, complexForms, foci, initiation, critterPowers,
             )
         }
     }
