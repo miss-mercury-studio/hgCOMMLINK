@@ -136,6 +136,96 @@ class CharacterEditor(
         return true
     }
 
+    /**
+     * Buy or give back one step of a skill group with karma. Raising a group raises every member skill by one, so it stops
+     * when a member would pass the creation maximum; giving back needs a karma step in the group.
+     */
+    fun changeSkillGroup(name: String, delta: Int): Boolean {
+        require(delta == 1 || delta == -1)
+        val rules = (settings ?: error("Settings are needed to change skill groups")).toRuleSettings()
+        val groups = root.child("newskills")?.child("groups") ?: return false
+        val row = groups.children("group").firstOrNull { it.text("name")?.trim() == name } ?: return false
+        val karma = row.text("karma")?.trim()?.toIntOrNull() ?: 0
+        if (delta < 0 && karma <= 0) return false
+        if (delta > 0) {
+            val members = root.child("newskills")!!.child("skills")!!.children("skill").filter {
+                data[it.text("suid")?.trim().orEmpty()]?.element?.child("skillgroup")?.textContent?.trim() == name
+            }
+            val highest = members.maxOfOrNull { m -> (m.text("base")?.trim()?.toIntOrNull() ?: 0) + (m.text("karma")?.trim()?.toIntOrNull() ?: 0) + karma } ?: karma
+            if (highest + 1 > rules.maxSkillRatingCreate) return false
+        }
+        row.child("karma")!!.textContent = (karma + delta).toString()
+        return true
+    }
+
+    private fun knowledgeRow(guid: String): Element? =
+        root.child("newskills")?.child("knoskills")?.children("skill")?.firstOrNull { it.text("guid")?.trim().equals(guid, true) }
+
+    /**
+     * Add a knowledge skill or language from the game data at rating 0. [type] is the kind the user picked (Academic,
+     * Interest, Language, Professional or Street); it defaults to the data's category. A native language costs nothing.
+     * Returns the new skill's GUID.
+     */
+    fun addKnowledgeSkill(entryId: String, type: String? = null, native: Boolean = false): String {
+        val entry = data[entryId]?.element ?: error("No knowledge skill with id $entryId in the game data")
+        val guid = UUID.randomUUID().toString()
+        val kind = type ?: entry.child("category")?.textContent?.trim().orEmpty()
+        val skill = element("skill")
+        fun add(tag: String, text: String? = null) = skill.appendChild(element(tag, text))
+        add("guid", guid)
+        add("suid", entryId.lowercase())
+        add("isknowledge", "True")
+        add("skillcategory", kind)
+        add("requiresgroundmovement", "False")
+        add("requiresswimmovement", "False")
+        add("requiresflymovement", "False")
+        add("karma", "0")
+        add("base", "0")
+        add("notes")
+        add("notesColor", "Chocolate")
+        add("name", entry.child("name")?.textContent?.trim())
+        add("buywithkarma", "False")
+        add("type", kind)
+        add("isnativelanguage", if (native) "True" else "False")
+        val newSkills = root.child("newskills") ?: error("The character has no skills section")
+        val list = newSkills.child("knoskills") ?: element("knoskills").also { newSkills.appendChild(it) }
+        list.appendChild(skill)
+        return guid
+    }
+
+    /**
+     * Buy ([delta] = 1) or give back (-1) a rating of a knowledge skill. Buying uses the free knowledge points first and
+     * then karma, unless [withKarma] is true. Giving back takes karma before points. Fails at the creation maximum, for a
+     * native language, or with nothing to give back.
+     */
+    fun changeKnowledgeSkill(guid: String, delta: Int, withKarma: Boolean = false): Boolean {
+        require(delta == 1 || delta == -1)
+        val cfg = settings ?: error("Settings are needed to change knowledge skills")
+        val row = knowledgeRow(guid) ?: return false
+        if (row.text("isnativelanguage")?.trim() == "True") return false
+        val base = row.text("base")?.trim()?.toIntOrNull() ?: 0
+        val karma = row.text("karma")?.trim()?.toIntOrNull() ?: 0
+        if (delta > 0) {
+            if (base + karma >= cfg.toRuleSettings().maxKnowledgeSkillRatingCreate) return false
+            val pointsLeft = KarmaLedger.of(file, cfg, data).knowledgePointsLeft
+            if (!withKarma && pointsLeft > 0) row.child("base")!!.textContent = (base + 1).toString()
+            else row.child("karma")!!.textContent = (karma + 1).toString()
+        } else {
+            when {
+                karma > 0 -> row.child("karma")!!.textContent = (karma - 1).toString()
+                base > 0 -> row.child("base")!!.textContent = (base - 1).toString()
+                else -> return false
+            }
+        }
+        return true
+    }
+
+    fun removeKnowledgeSkill(guid: String): Boolean {
+        val row = knowledgeRow(guid) ?: return false
+        row.parentNode.removeChild(row)
+        return true
+    }
+
     /** Rewrite the values Chummer keeps beside the character (condition monitor boxes and thresholds). */
     private fun refreshCalculatedValues() {
         val cfg = settings ?: return
@@ -236,5 +326,15 @@ object QualityCatalog {
                 needsText = "selecttext" in bonusNodes,
                 unsupported = bonusNodes.filter { !BonusHandlers.knows(it) },
             )
+        }.sortedWith(compareBy({ it.category }, { it.name.lowercase() }))
+}
+
+/** A knowledge skill or language that can be added. */
+data class KnowledgeOption(val id: String, val name: String, val category: String)
+
+object KnowledgeCatalog {
+    fun list(data: chummer.core.DataPack): List<KnowledgeOption> =
+        data.byId.entries.filter { it.value.file == "skills.xml" && (it.value.element.parentNode as? Element)?.tagName == "knowledgeskills" }.map { (id, e) ->
+            KnowledgeOption(id, e.element.child("name")?.textContent?.trim().orEmpty(), e.element.child("category")?.textContent?.trim().orEmpty())
         }.sortedWith(compareBy({ it.category }, { it.name.lowercase() }))
 }

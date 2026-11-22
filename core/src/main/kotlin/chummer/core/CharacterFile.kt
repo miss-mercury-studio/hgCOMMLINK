@@ -129,11 +129,11 @@ class CharacterFile(val doc: Document) {
     data class SkillRow(
         val name: String, val suid: String, val category: String, val base: Int, val karma: Int,
         val isKnowledge: Boolean, val type: String, val isNativeLanguage: Boolean,
-        val specializations: List<String>,
+        val specializations: List<String>, val guid: String = "",
     )
 
     private fun parseSkill(e: Element) = SkillRow(
-        name = e.text("name").orEmpty().trim(), suid = e.text("suid").orEmpty().trim(),
+        guid = e.text("guid").orEmpty().trim(), name = e.text("name").orEmpty().trim(), suid = e.text("suid").orEmpty().trim(),
         category = e.text("skillcategory").orEmpty().trim(), base = e.int("base"), karma = e.int("karma"),
         isKnowledge = e.text("isknowledge")?.trim().equals("True", true), type = e.text("type").orEmpty().trim(),
         isNativeLanguage = e.text("isnativelanguage")?.trim().equals("True", true),

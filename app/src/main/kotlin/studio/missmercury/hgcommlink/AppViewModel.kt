@@ -165,6 +165,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun qualityOptions() = gameData.qualityOptions()
+    fun knowledgeOptions() = gameData.knowledgeOptions()
+
+    /** Buy (+1) or give back (-1) a step of a skill group with karma, in creation. */
+    fun changeSkillGroup(name: String, delta: Int) =
+        edit(null, blocked = if (delta > 0) "$name is at the creation maximum" else "No karma step in $name to give back") { it.changeSkillGroup(name, delta) }
+
+    /** Buy (+1, free points first, then karma) or give back (-1) a rating of a knowledge skill, in creation. */
+    fun changeKnowledge(guid: String, delta: Int) =
+        edit(null, blocked = if (delta > 0) "At the creation maximum" else "Nothing to give back") { it.changeKnowledgeSkill(guid, delta) }
+
+    fun addKnowledge(entryId: String, native: Boolean) = edit("Added skill") { it.addKnowledgeSkill(entryId, native = native); true }
+    fun removeKnowledge(guid: String) = edit("Removed skill") { it.removeKnowledgeSkill(guid) }
 
     /** The profiles and metatypes the new character dialog offers. Slow the first time (loads the game data). */
     suspend fun newCharacterOptions(): GameDataStore.NewCharacterOptions = io {

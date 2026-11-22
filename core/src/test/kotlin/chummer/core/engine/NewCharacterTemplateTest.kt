@@ -78,7 +78,8 @@ class NewCharacterTemplateTest {
         append('<').append(e.tagName).append('>')
         val kids = e.children()
         if (kids.isEmpty()) {
-            val random = e.tagName == "guid" || e.tagName == "parentid" || (e.tagName == "id" && parent == "group")
+            // Note colours are a display setting of the Chummer session that saved the file, so they differ between files.
+            val random = e.tagName == "guid" || e.tagName == "parentid" || e.tagName == "notesColor" || (e.tagName == "id" && parent == "group")
             append(if (random) "*" else e.textContent.trim().replace(Regex("\\s+"), " "))
         } else kids.forEach { append(canonNoGuids(it, e.tagName)) }
         append("</").append(e.tagName).append('>')
@@ -309,5 +310,53 @@ class NewCharacterTemplateTest {
         assertEquals(listOf(4, 4, 0), listOf(l.knowledgePoints, l.knowledgePointsUsed, l.knowledgePointsLeft))
         assertEquals(emptyList<String>(), l.problems)
         assertEquals(emptyList<String>(), l.notCounted)
+    }
+
+    /** Rebuilding Chummer's New_Skills character from New_Empty with the editor gives the same file (apart from random ids). */
+    @Test
+    fun buildingTheSkillsFileFromTheEmptyOneMatchesChummer() {
+        val settings = settingsForTemplates()
+        val want = load("New_Skills.chum5")
+        val resolved = chummer.core.data.CustomDataLocator(listOf(File(src, "Chummer/customdata"))).resolve(settings.customData)
+        val data = DataPack.load(File(src, "Chummer/data"), resolved.dirs)
+        val ork = data.byId.entries.first { it.value.file == "metatypes.xml" && it.value.element.tagName == "metatype" && it.value.element.child("name")?.textContent?.trim() == "Ork" }
+        // The file's own settings hash is used, since it cannot be calculated here.
+        val c = NewCharacter.createKarma(
+            data, settings,
+            NewCharacterRequest(metatypeId = ork.key, settingsHash = want.root.text("settingshashcode")!!.trim().toInt(), customDataNames = resolved.dirs.map { it.name }),
+        )
+        val editor = CharacterEditor(c, data, translations::get, settings)
+        fun knowledge(name: String) = data.byId.entries.first {
+            it.value.file == "skills.xml" && (it.value.element.parentNode as? Element)?.tagName == "knowledgeskills" &&
+                it.value.element.child("name")?.textContent?.trim() == name
+        }.key
+        assertTrue(editor.changeSkillGroup("Firearms", 1))
+        assertTrue(editor.changeSkill("Heavy Weapons", 1))
+        val blackMarkets = editor.addKnowledgeSkill(knowledge("Black Markets"), type = "Professional")
+        assertTrue(editor.changeKnowledgeSkill(blackMarkets, 1, withKarma = true))
+        editor.addKnowledgeSkill(knowledge("English"), native = true)
+        val gangs = editor.addKnowledgeSkill(knowledge("Street Gangs: Seattle"))
+        repeat(2) { assertTrue(editor.changeKnowledgeSkill(gangs, 1)) }
+        val turkish = editor.addKnowledgeSkill(knowledge("Turkish"))
+        repeat(2) { assertTrue(editor.changeKnowledgeSkill(turkish, 1)) }
+        val a = canonNoGuids(want.root)
+        val b = canonNoGuids(c.root)
+        if (a != b) {
+            val at = a.zip(b).indexOfFirst { it.first != it.second }.let { if (it < 0) minOf(a.length, b.length) else it }
+            println("SKILLS DIFF at $at:")
+            println("  Chummer: ${a.substring(maxOf(0, at - 150), minOf(a.length, at + 300))}")
+            println("  ours:    ${b.substring(maxOf(0, at - 150), minOf(b.length, at + 300))}")
+        }
+        assertEquals(a, b)
+
+        // The free points are used up, so the next knowledge rating costs karma; a native language cannot be raised.
+        val before = KarmaLedger.of(c, settings, data).knowledge
+        assertTrue(editor.changeKnowledgeSkill(turkish, 1))
+        assertEquals(before + 3 * 1, KarmaLedger.of(c, settings, data).knowledge)
+        val english = editor.addKnowledgeSkill(knowledge("English"), native = true)
+        assertTrue(!editor.changeKnowledgeSkill(english, 1))
+        // Group steps can be given back once, and not below zero.
+        assertTrue(editor.changeSkillGroup("Firearms", -1))
+        assertTrue(!editor.changeSkillGroup("Firearms", -1))
     }
 }

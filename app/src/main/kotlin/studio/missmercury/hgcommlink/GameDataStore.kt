@@ -59,6 +59,10 @@ class GameDataStore(private val context: Context) {
     }
 
     /** Qualities that can be added, as far as the current game data goes. Needs the data loaded (open a character first). */
+    /** Knowledge skills and languages that can be added. */
+    fun knowledgeOptions(): List<chummer.core.engine.KnowledgeOption> =
+        synchronized(this) { pack?.let(chummer.core.engine.KnowledgeCatalog::list).orEmpty() }
+
     fun qualityOptions(): List<QualityOption> = synchronized(this) { pack?.let(QualityCatalog::list).orEmpty() }
 
     fun editor(c: CharacterFile) =

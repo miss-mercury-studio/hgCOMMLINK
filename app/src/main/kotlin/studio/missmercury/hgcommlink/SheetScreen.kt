@@ -239,6 +239,7 @@ private fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
 @Composable
 private fun Skills(s: Sheet, vm: AppViewModel) {
     var query by rememberSaveable { mutableStateOf("") }
+    var addingKnowledge by remember { mutableStateOf(false) }
     val q = query.trim()
     fun matches(r: SkillResult) = q.isEmpty() || r.name.contains(q, ignoreCase = true)
     val buy = if (s.karmaLedger != null) vm else null
@@ -249,18 +250,93 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             )
         }
+        if (buy != null && q.isEmpty() && s.skillGroups.isNotEmpty()) {
+            item { SubHeader("Skill groups") }
+            items(s.skillGroups, key = { "g-" + it.name }) { g ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(g.name, Modifier.weight(1f))
+                    StepButton("−", 36) { vm.changeSkillGroup(g.name, -1) }
+                    Text("${g.karma}", Modifier.width(24.dp), textAlign = TextAlign.Center)
+                    StepButton("+", 36) { vm.changeSkillGroup(g.name, 1) }
+                }
+            }
+        }
         // Skills the character has come first; the rest are listed after, as Chummer does.
         val (rated, unrated) = s.activeSkills.filter(::matches).partition { it.rating > 0 }
         if (rated.isNotEmpty()) item { SubHeader("Active skills") }
         items(rated, key = { "a-" + it.name }) { SkillRow(it, buy) }
         if (unrated.isNotEmpty()) item { SubHeader(if (rated.isEmpty()) "Active skills" else "Unrated") }
         items(unrated, key = { "u-" + it.name }) { SkillRow(it, buy) }
-        val knowledge = s.knowledgeSkills.filter(::matches)
-        if (knowledge.isNotEmpty()) {
-            item { SubHeader("Knowledge and languages") }
-            items(knowledge.sortedByDescending { it.rating }, key = { "k-" + it.name }) { SkillRow(it, null) }
+        val knowledge = s.knowledge.filter { q.isEmpty() || it.name.contains(q, ignoreCase = true) }
+        if (knowledge.isNotEmpty() || buy != null) {
+            item {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Knowledge and languages", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                    s.karmaLedger?.let { Text("free points ${it.knowledgePointsLeft} of ${it.knowledgePoints}", style = MaterialTheme.typography.labelSmall) }
+                    if (buy != null) TextButton(onClick = { addingKnowledge = true }) { Text("Add") }
+                }
+            }
+            items(knowledge, key = { "k-" + it.guid.ifEmpty { it.name } }) { k -> KnowledgeRow(k, buy) }
         }
     }
+    if (addingKnowledge) AddKnowledgeDialog(vm) { addingKnowledge = false }
+}
+
+@Composable
+private fun KnowledgeRow(k: Sheet.KnowledgeLine, buy: AppViewModel?) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(k.name)
+            Text(
+                listOfNotNull(k.type, if (k.native) "native" else "${k.points} points, ${k.karma} karma").joinToString("  ·  "),
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (buy != null && !k.native) {
+            StepButton("−", 36) { buy.changeKnowledge(k.guid, -1) }
+            Text("${k.points + k.karma}", Modifier.width(20.dp), textAlign = TextAlign.Center)
+            StepButton("+", 36) { buy.changeKnowledge(k.guid, 1) }
+        } else {
+            Text(if (k.native) "N" else "${k.points + k.karma}", Modifier.padding(horizontal = 12.dp))
+        }
+        if (buy != null) StepButton("×", 36) { buy.removeKnowledge(k.guid) }
+        Text(if (k.native) "N" else "${k.pool}", Modifier.width(36.dp), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.End)
+    }
+}
+
+/** Pick a knowledge skill or language from the game data (typing your own name comes later). */
+@Composable
+private fun AddKnowledgeDialog(vm: AppViewModel, onDismiss: () -> Unit) {
+    val options = remember { vm.knowledgeOptions() }
+    var query by remember { mutableStateOf("") }
+    var native by remember { mutableStateOf(false) }
+    val shown = remember(query) {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) options else options.filter { it.name.lowercase().contains(q) }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add knowledge skill") },
+        text = {
+            Column {
+                OutlinedTextField(query, { query = it }, label = { Text("Search") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(Modifier.fillMaxWidth().clickable { native = !native }, verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.Checkbox(checked = native, onCheckedChange = { native = it })
+                    Text("Native language (free; for a language)")
+                }
+                LazyColumn(Modifier.weight(1f, fill = false)) {
+                    items(shown, key = { it.id }) { o ->
+                        Column(Modifier.fillMaxWidth().clickable { vm.addKnowledge(o.id, native && o.category == "Language"); onDismiss() }.padding(vertical = 6.dp)) {
+                            Text(o.name)
+                            Text(o.category, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }
 
 @Composable

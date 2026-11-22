@@ -34,11 +34,19 @@ data class Sheet(
     val pools: List<Pair<String, Int>>,
     val activeSkills: List<SkillResult>,
     val knowledgeSkills: List<SkillResult>,
+    /** Skill groups with the karma put into them, and knowledge skills and languages with their purchases. */
+    val skillGroups: List<GroupLine>,
+    val knowledge: List<KnowledgeLine>,
     val qualities: List<QualityLine>,
     val sections: SheetSections,
     /** Karma spent and remaining; only for a Karma-build character still in creation. */
     val karmaLedger: KarmaLedger?,
 ) {
+    data class GroupLine(val name: String, val karma: Int)
+    data class KnowledgeLine(
+        val guid: String, val name: String, val type: String, val points: Int, val karma: Int,
+        val native: Boolean, val rating: Int, val pool: Int,
+    )
     data class AttributeLine(val name: String, val total: Int, val maximum: Int)
     data class Limits(val physical: Int, val mental: Int, val social: Int, val astral: Int)
     data class ArmorLines(val general: Int, val encumbrance: Int, val byType: List<Pair<String, Int>>)
@@ -101,6 +109,11 @@ data class Sheet(
                     "Direct spell, physical" to (res["directphysicalresist"] ?: 0),
                 ),
                 activeSkills = active, knowledgeSkills = knowledge,
+                skillGroups = c.skillGroups().map { (n, v) -> GroupLine(n, v.second) }.sortedBy { it.name },
+                knowledge = c.skills().filter { it.isKnowledge }.map { row ->
+                    val r = skills.firstOrNull { it.first.name == row.name && it.first.isKnowledge }?.second
+                    KnowledgeLine(row.guid, row.name, row.type.ifEmpty { row.category }, row.base, row.karma, row.isNativeLanguage, r?.rating ?: 0, r?.pool ?: 0)
+                }.sortedBy { it.name.lowercase() },
                 qualities = qualities(c),
                 karmaLedger = if (!career && s.buildMethod == "Karma") KarmaLedger.of(c, settings, data) else null,
                 sections = SheetSections.read(c, WeaponEngine(c.root, set, str, d.limitPhysical).all(), essenceEngine),
