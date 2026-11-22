@@ -42,9 +42,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.FloatingActionButtonDefaults
+import studio.missmercury.hgcommlink.ui.*
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -58,6 +58,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.withStyle
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -71,10 +73,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handleIncoming(intent)
         setContent {
-            val dark = isSystemInDarkTheme()
-            val ctx = LocalContext.current
-            MaterialTheme(colorScheme = if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)) {
-                App(vm)
+            HgTheme {
+                androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
+                    GridBackdrop()
+                    App(vm)
+                    ScanlineOverlay()
+                    // Shown once per launch; kept across rotation.
+                    var booted by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+                    if (!booted) BootScreen { booted = true }
+                }
             }
         }
     }
@@ -122,15 +129,17 @@ private fun App(vm: AppViewModel) {
     BackHandler(enabled = open != null) { vm.close() }
 
     Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = Quicksilver,
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             if (open == null) {
                 var menu by remember { mutableStateOf(false) }
                 TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
                     title = {
                         Column {
-                            Text("Characters")
-                            Text(vm.storageLabel, style = MaterialTheme.typography.bodySmall)
+                            AppTitle("CHARACTERS")
+                            Text(vm.storageLabel, style = MaterialTheme.typography.labelSmall)
                         }
                     },
                     actions = {
@@ -148,11 +157,12 @@ private fun App(vm: AppViewModel) {
             } else {
                 var confirm by remember { mutableStateOf(false) }
                 TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
                     title = {
                         val summary = open.character.summary()
                         Column {
-                            Text(summary.alias.ifBlank { summary.name.ifBlank { open.file.name } })
-                            if (summary.alias.isNotBlank() && summary.name.isNotBlank()) Text(summary.name, style = MaterialTheme.typography.bodySmall)
+                            AppTitle(summary.alias.ifBlank { summary.name.ifBlank { open.file.name } })
+                            if (summary.alias.isNotBlank() && summary.name.isNotBlank()) Text(summary.name, style = MaterialTheme.typography.labelSmall)
                         }
                     },
                     navigationIcon = {
@@ -178,7 +188,7 @@ private fun App(vm: AppViewModel) {
         },
         floatingActionButton = {
             if (open == null) {
-                FloatingActionButton(onClick = { importPicker.launch(arrayOf("*/*")) }) { Icon(Icons.Default.Add, "Import character") }
+                FloatingActionButton(onClick = { importPicker.launch(arrayOf("*/*")) }, shape = CardShape) { Icon(Icons.Default.Add, "Import character") }
             }
         },
     ) { padding ->
@@ -192,35 +202,52 @@ private fun App(vm: AppViewModel) {
 @Composable
 private fun CharacterList(vm: AppViewModel) {
     when {
-        vm.loading && vm.entries.isEmpty() -> Text("Loading...", Modifier.padding(24.dp))
+        vm.loading && vm.entries.isEmpty() -> TerminalLine("SCANNING_STORAGE", Modifier.padding(24.dp))
         vm.entries.isEmpty() -> Text(
             "No characters in ${vm.storageLabel} yet.\n\nTap + to import a .chum5 file, or open one from another app (Files, email, chat).",
             Modifier.padding(24.dp),
         )
         else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(vm.entries, key = { it.file.id }) { entry ->
-                Card(Modifier.fillMaxWidth().clickable(enabled = entry.summary != null) { vm.openFile(entry.file) }) {
-                    Column(Modifier.padding(16.dp)) {
-                        val s = entry.summary
-                        if (s == null) {
-                            Text(entry.file.name, fontWeight = FontWeight.Bold)
-                            Text("Could not read: ${entry.error}", color = MaterialTheme.colorScheme.error)
-                        } else {
-                            Text(s.name.ifBlank { entry.file.name }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            if (s.alias.isNotBlank()) Text("\"${s.alias}\"")
-                            Text(listOf(s.metatype, if (s.isCareer) "Career" else "Creation", s.buildMethod).filter { it.isNotBlank() }.joinToString(" - "))
-                            Text(
-                                // A character in creation stores no karma (the amount left is calculated), so only careers show it here.
-                                listOfNotNull(s.karma.takeIf { s.isCareer && it.isNotBlank() }?.let { "Karma $it" }, s.nuyen.takeIf { s.isCareer && it.isNotBlank() }?.let { "¥$it" })
-                                    .joinToString("   "),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+                val s = entry.summary
+                TerminalCard(
+                    title = if (s == null) entry.file.name else s.name.ifBlank { entry.file.name },
+                    trailing = s?.let { if (it.isCareer) "CAREER" else "CREATION" },
+                    accent = if (s == null) CriticalRed else if (s.isCareer) PhosphorGreen else DrainAmber,
+                    modifier = Modifier.clickable(enabled = s != null) { vm.openFile(entry.file) },
+                ) {
+                    if (s == null) {
+                        Text("Could not read: ${entry.error}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        if (s.alias.isNotBlank()) Text("\"${s.alias}\"", style = MaterialTheme.typography.bodyLarge)
+                        Text(listOf(s.metatype, s.buildMethod).filter { it.isNotBlank() }.joinToString("  ·  "), style = MaterialTheme.typography.labelMedium)
+                        // A character in creation stores no karma (the amount left is calculated), so only careers show it here.
+                        val money = listOfNotNull(s.karma.takeIf { s.isCareer && it.isNotBlank() }?.let { "KARMA" to it }, s.nuyen.takeIf { s.isCareer && it.isNotBlank() }?.let { "NUYEN" to "¥$it" })
+                        if (money.isNotEmpty()) TelemetryStrip(money)
                     }
                 }
             }
         }
     }
+}
+
+/** The top bar as a shell prompt: hg@commlink:~/viper$ with a blinking cursor. */
+@Composable
+private fun AppTitle(text: String) {
+    val blink by androidx.compose.animation.core.rememberInfiniteTransition(label = "prompt").animateFloat(
+        0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(550), androidx.compose.animation.core.RepeatMode.Reverse), label = "prompt",
+    )
+    Text(
+        androidx.compose.ui.text.buildAnnotatedString {
+            withStyle(androidx.compose.ui.text.SpanStyle(color = PhosphorGreen)) { append("hg@commlink") }
+            withStyle(androidx.compose.ui.text.SpanStyle(color = MutedSilver)) { append(":") }
+            withStyle(androidx.compose.ui.text.SpanStyle(color = AstralMagenta)) { append("~/" + text.lowercase().replace(' ', '_')) }
+            withStyle(androidx.compose.ui.text.SpanStyle(color = MutedSilver)) { append("$ ") }
+            withStyle(androidx.compose.ui.text.SpanStyle(color = PhosphorGreen.copy(alpha = if (blink > 0.5f) 1f else 0f))) { append("█") }
+        },
+        style = MaterialTheme.typography.titleMedium.copy(shadow = androidx.compose.ui.graphics.Shadow(PhosphorGreen.copy(alpha = 0.45f), blurRadius = 16f)),
+        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+    )
 }
 
 /** Start a new Karma-build character: a name, a metatype, and (if there are several) a settings profile. */
