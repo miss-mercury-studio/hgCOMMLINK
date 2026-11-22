@@ -56,6 +56,25 @@ class LifestyleVehicleCostTest {
     }
 
     @Test
+    fun onceAdjustmentsAreSharedOutOverTheLifestylesCostliestFirst() {
+        val first = viper().root.child("lifestyles")!!.children("lifestyle").first()
+        val dear = first.cloneNode(true) as org.w3c.dom.Element
+        dear.child("cost")!!.textContent = (first.text("cost")!!.trim().toDouble() * 2).toString()
+        fun once(value: Double) = Improvement("LifestyleCost", "Quality", "", "x", "u", value, 0.0, 0.0, 0.0, 0.0, 0.0, false, true, false, "once")
+        val both = listOf(first, dear)
+        val adjustments = listOf(once(-20.0), once(-10.0))
+        val plainFirst = NuyenLedger.lifestyleTotal(first)
+        val plainDear = NuyenLedger.lifestyleTotal(dear)
+        // The bigger discount goes to the costlier lifestyle, and each lifestyle gets one.
+        assertEquals(plainDear * 0.8, NuyenLedger.lifestyleTotal(dear, adjustments, emptySet(), both), 0.01)
+        assertEquals(plainFirst * 0.9, NuyenLedger.lifestyleTotal(first, adjustments, emptySet(), both), 0.01)
+        // With one discount only the costliest gets it, and without the list of lifestyles nothing is applied.
+        assertEquals(plainFirst, NuyenLedger.lifestyleTotal(first, listOf(once(-20.0)), emptySet(), both), 0.01)
+        assertEquals(plainDear * 0.8, NuyenLedger.lifestyleTotal(dear, listOf(once(-20.0)), emptySet(), both), 0.01)
+        assertEquals(plainFirst, NuyenLedger.lifestyleTotal(first, adjustments), 0.01)
+    }
+
+    @Test
     fun improvementsAdjustTheMonthlyCost() {
         val life = viper().root.child("lifestyles")!!.children("lifestyle").first()
         val plain = NuyenLedger.lifestyleTotal(life)

@@ -76,7 +76,7 @@ internal fun availabilityProblems(c: CharacterFile, settings: CharacterSettings,
     val pack = data as? chummer.core.DataPack
     fun check(e: org.w3c.dom.Element, extra: Int = 0) {
         val rating = e.text("rating")?.trim()?.toIntOrNull() ?: 0
-        val v = Availability.parse(e.text("avail").orEmpty(), rating) ?: return
+        val v = Availability.parse(e.text("avail").orEmpty(), rating, e.text("minrating")?.trim()?.toIntOrNull() ?: 0) ?: return
         if (v.number + extra > limit) out += "${e.text("name")?.trim()} has availability ${v.number + extra} (limit $limit)"
     }
     for (g in c.root.child("gears")?.children("gear").orEmpty()) check(g)

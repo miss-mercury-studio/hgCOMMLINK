@@ -111,7 +111,7 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
             var spent = 0.0
             val imps = Improvement.parseAll(c.root)
             val dependents = c.root.child("qualities")?.children("quality").orEmpty().filter { it.text("name")?.contains("Dependent") == true }.mapNotNull { it.text("guid")?.trim()?.lowercase() }.toSet()
-            for (l in c.root.child("lifestyles")?.children("lifestyle").orEmpty()) spent += lifestyleTotal(l, imps, dependents)
+            for (l in c.root.child("lifestyles")?.children("lifestyle").orEmpty()) spent += lifestyleTotal(l, imps, dependents, c.root.child("lifestyles")?.children("lifestyle").orEmpty())
             for (v in c.root.child("vehicles")?.children("vehicle").orEmpty()) spent += vehicle(v)
             for (g in c.root.child("gears")?.children("gear").orEmpty()) spent += gear(g)
             for (w in c.root.child("weapons")?.children("weapon").orEmpty()) spent += weapon(w)
@@ -126,7 +126,7 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
          * roommates, split with roommates, the cost adjustments of improvements (dependents first, then the metatype, then the rest; "once" adjustments that Chummer
          * spreads over several lifestyles are not applied), outings and services, the percentage, contracts, then times the months bought.
          */
-        fun lifestyleTotal(l: Element, improvements: List<Improvement> = emptyList(), dependentQualityGuids: Set<String> = emptySet()): Double {
+        fun lifestyleTotal(l: Element, improvements: List<Improvement> = emptyList(), dependentQualityGuids: Set<String> = emptySet(), lifestyles: List<Element> = emptyList()): Double {
             fun d(tag: String) = l.text(tag)?.trim()?.toDoubleOrNull() ?: 0.0
             if (l.text("trustfund")?.trim() == "True") return 0.0
             val quals = l.child("lifestylequalities")?.children("lifestylequality").orEmpty().filter { it.text("lifestylequalitysource")?.trim() != "BuiltIn" }
@@ -154,13 +154,37 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
             // Adjustments from the character (metatype, dependents, augmentations...), for this lifestyle or any.
             val base = l.text("baselifestyle")?.trim().orEmpty()
             val standard = l.text("type")?.trim().let { it.isNullOrEmpty() || it == "Standard" }
+            // "Once" adjustments (a single discount or markup shared out over the character's lifestyles): within each unique group the values are sorted
+            // from the lowest, and the lifestyles from the costliest, so the biggest discount lands on the costliest lifestyle. Chummer's `CostPreSplit` order.
+            val onceAdjust = ArrayList<Improvement>()
+            val onceAll = improvements.filter {
+                it.enabled && (it.type == "LifestyleCost" || (standard && it.type == "BasicLifestyleCost")) && it.condition == "once" && (it.improvedName.isEmpty() || it.improvedName == base)
+            }
+            if (onceAll.isNotEmpty() && lifestyles.isNotEmpty()) {
+                val generic = onceAll.filter { it.improvedName.isEmpty() }.groupBy { it.uniqueName }
+                val specific = onceAll.filter { it.improvedName.isNotEmpty() }.groupBy { it.uniqueName }
+                fun baseOf(e: Element) = e.text("baselifestyle")?.trim().orEmpty()
+                val pool = if (generic.isNotEmpty()) lifestyles else lifestyles.filter { baseOf(it) == base }
+                val plain = improvements.filter { it.condition != "once" }
+                fun monthly(e: Element): Double {
+                    val total = lifestyleTotal(e, plain, dependentQualityGuids) / (e.text("months")?.trim()?.toDoubleOrNull()?.takeIf { it > 0 } ?: 1.0)
+                    return when (e.text("increment")?.trim()) { "Day" -> total * 4.34812 / 7; "Week" -> total * 4.34812; else -> total }
+                }
+                val ranked = pool.sortedByDescending { monthly(it) }
+                var myIndex = ranked.indexOfFirst { it === l }
+                if (myIndex >= 0) {
+                    for (group in generic.values) if (group.size > myIndex) onceAdjust += group.sortedBy { it.value }[myIndex]
+                    if (generic.isNotEmpty()) myIndex = ranked.takeWhile { it !== l }.count { baseOf(it) == base }
+                    for (group in specific.values) if (group.size > myIndex) onceAdjust += group.sortedBy { it.value }[myIndex]
+                }
+            }
             val adjust = improvements.filter {
                 it.enabled && (it.type == "LifestyleCost" || (standard && it.type == "BasicLifestyleCost")) && it.condition != "once" && (it.improvedName.isEmpty() || it.improvedName == base)
             }
             var dependents = 0.0
             var metatype = 0.0
             var other = 1.0
-            for (i in adjust) when {
+            for (i in adjust + onceAdjust) when {
                 i.source == "Quality" && i.sourceName.lowercase() in dependentQualityGuids -> dependents += i.value
                 i.source == "Heritage" || i.source == "Metatype" || i.source == "Metavariant" -> metatype += i.value
                 else -> other *= 1.0 + i.value / 100.0
@@ -194,12 +218,12 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
 object Availability {
     data class Value(val number: Int, val flag: Char?)
 
-    fun parse(text: String, rating: Int = 0): Value? {
+    fun parse(text: String, rating: Int = 0, minRating: Int = 0): Value? {
         val t = text.trim()
         if (t.isEmpty()) return Value(0, null)
         val flag = t.last().takeIf { it == 'R' || it == 'F' }
         val body = if (flag != null) t.dropLast(1).trim() else t
-        val n = CyberwareEditor.formula(body.removePrefix("+"), rating) ?: return null
+        val n = CyberwareEditor.formula(body.removePrefix("+"), rating, minRating) ?: return null
         return Value(Math.round(n).toInt(), flag)
     }
 }

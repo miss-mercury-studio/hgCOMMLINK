@@ -23,6 +23,7 @@ data class InitiationSection(
     val extraMetamagicCost: Int,
     /** Arts taken (free). */
     val arts: List<MetamagicLine> = emptyList(),
+    val enhancements: List<MetamagicLine> = emptyList(), val gradeSpells: List<MetamagicLine> = emptyList(), val enhancementCost: Int = 2,
 )
 
 /**
@@ -77,6 +78,8 @@ class InitiationEditor(private val file: CharacterFile, private val data: GameDa
         if (grades().any { (it.text("grade")?.trim()?.toIntOrNull() ?: 0) > n && (it.text("res")?.trim().equals("True", true)) == isRes }) return false
         for (m in metamagicElements().filter { it.text("grade")?.trim()?.toIntOrNull() == n }) removeMetamagic(m.text("guid").orEmpty())
         for (a in artElements().filter { it.text("grade")?.trim()?.toIntOrNull() == n }) removeArt(a.text("guid").orEmpty())
+        for (e in enhancementElements().filter { it.text("grade")?.trim()?.toIntOrNull() == n }) removeEnhancement(e.text("guid").orEmpty())
+        for (s in gradeSpellElements(n)) CharacterEditor(file, data, settings = settings).removeItem(s.text("guid").orEmpty())
         g.parentNode.removeChild(g)
         root.child(if (isRes) "submersiongrade" else "initiategrade")?.textContent = (n - 1).toString()
         return true
@@ -94,7 +97,7 @@ class InitiationEditor(private val file: CharacterFile, private val data: GameDa
     fun extraMetamagicCost() = settings.karmaCost["karmametamagic"] ?: 15
 
     /** True when a metamagic added to [grade] now costs karma: it is not the first of that grade. */
-    fun costsKarma(grade: Int) = metamagicElements().any { it.text("grade")?.trim()?.toIntOrNull() == grade }
+    fun costsKarma(grade: Int) = metamagicElements().any { it.text("grade")?.trim()?.toIntOrNull() == grade } || gradeSpellElements(grade).isNotEmpty()
 
     private fun sourceFile() = if (technomancer) "echoes.xml" else "metamagic.xml"
     private fun tag() = if (technomancer) "echo" else "metamagic"
@@ -109,6 +112,7 @@ class InitiationEditor(private val file: CharacterFile, private val data: GameDa
         fun one(e: Element): Boolean = when (e.tagName) {
             "art" -> hasArt(e.textContent.trim())
             "quality" -> hasQuality(e.textContent.trim())
+            "power" -> hasPower(e.textContent.trim())
             "metamagic" -> e.textContent.trim() in known()
             "initiategrade" -> grade() >= (e.textContent.trim().toIntOrNull() ?: 0)
             "tradition" -> root.child("tradition")?.text("name")?.trim() == e.textContent.trim()
@@ -235,5 +239,92 @@ class InitiationEditor(private val file: CharacterFile, private val data: GameDa
         return true
     }
 
-    fun section() = InitiationSection(technomancer, grade(), maxGrade(), nextCost(), metamagics(), extraMetamagicCost(), arts())
+    // ---- enhancements (Street Grimoire power enhancements): kept with the adept power they belong to, or on the character when there is none
+
+    private fun enhancementElements(): List<Element> =
+        root.child("enhancements")?.children("enhancement").orEmpty() +
+            root.child("powers")?.children("power").orEmpty().flatMap { it.child("enhancements")?.children("enhancement").orEmpty() }
+
+    fun enhancements(): List<MetamagicLine> = enhancementElements().map {
+        MetamagicLine(it.text("guid").orEmpty().trim(), it.text("name").orEmpty().trim(), it.text("grade")?.trim()?.toIntOrNull() ?: 0, false)
+    }
+
+    fun enhancementPrice() = settings.karmaCost["karmaenhancement"] ?: 2
+
+    private fun hasPower(name: String) = root.child("powers")?.children("power").orEmpty().any { it.text("name")?.trim() == name }
+
+    /** The enhancements on offer; their `required` blocks may also ask for a power. */
+    fun enhancementOptions(): List<MetamagicOption> {
+        val pack = data as? DataPack ?: return emptyList()
+        val have = enhancementElements().map { it.text("name")?.trim().orEmpty() }.toSet()
+        return pack.byId.entries.filter { it.value.file == "powers.xml" && it.value.element.tagName == "enhancement" }.mapNotNull { (id, e) ->
+            val name = e.element.text("name")?.trim().orEmpty()
+            if (name in have) null else MetamagicOption(id, name, e.element.text("source")?.trim().orEmpty(), e.element.text("page")?.trim().orEmpty(), met(e.element.child("required")))
+        }.sortedBy { it.name.lowercase() }
+    }
+
+    fun addEnhancement(entryId: String, grade: Int = grade()): String? {
+        val entry = data[entryId]?.element ?: return null
+        if (entry.tagName != "enhancement" || grade < 1 || grade > grade()) return null
+        val name = entry.child("name")?.textContent?.trim().orEmpty()
+        if (enhancementElements().any { it.text("name")?.trim() == name } || met(entry.child("required")).isNotEmpty()) return null
+        val doc = file.doc
+        fun el(t: String, text: String? = null) = doc.createElement(t).also { if (!text.isNullOrEmpty()) it.textContent = text }
+        val guid = UUID.randomUUID().toString()
+        val e = el("enhancement")
+        for ((t, v) in listOf("sourceid" to entryId.lowercase(), "guid" to guid, "name" to name, "source" to entry.child("source")?.textContent?.trim().orEmpty(), "page" to entry.child("page")?.textContent?.trim().orEmpty(), "grade" to grade.toString()))
+            e.appendChild(el(t, v))
+        e.appendChild(el("bonus")); e.appendChild(el("improvementsource", "Initiation")); e.appendChild(el("notes")); e.appendChild(el("notesColor", "Black"))
+        val powerName = entry.child("power")?.textContent?.trim().orEmpty()
+        val power = root.child("powers")?.children("power").orEmpty().firstOrNull { it.text("name")?.trim() == powerName && powerName.isNotEmpty() }
+        val list = if (power != null) (power.child("enhancements") ?: el("enhancements").also { power.appendChild(it) })
+        else (root.child("enhancements") ?: el("enhancements").also { root.appendChild(it) })
+        list.appendChild(e)
+        entry.child("bonus")?.takeIf { it.children().isNotEmpty() }?.let { bonus ->
+            val result = BonusHandlers.apply(bonus, BonusContext("Initiation", guid, 1, "", name, objects = EditorObjects(file, data)))
+            val imps = root.child("improvements") ?: el("improvements").also { root.appendChild(it) }
+            for (imp in result.improvements) imps.appendChild(ImprovementWriter.toElement(doc, imp))
+        }
+        return guid
+    }
+
+    fun removeEnhancement(guid: String): Boolean {
+        val e = enhancementElements().firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: return false
+        root.child("improvements")?.children("improvement")?.filter { it.text("sourcename")?.trim().equals(guid, true) }?.forEach { it.parentNode.removeChild(it) }
+        e.parentNode.removeChild(e)
+        return true
+    }
+
+    // ---- enchantments and rituals taken at a grade: ordinary spells that remember the grade
+
+    private fun gradeSpellElements(n: Int? = null) = root.child("spells")?.children("spell").orEmpty().filter {
+        val g = it.text("grade")?.trim()?.toIntOrNull() ?: 0
+        if (n == null) g > 0 else g == n
+    }
+
+    fun gradeSpells(): List<MetamagicLine> = gradeSpellElements().map {
+        MetamagicLine(it.text("guid").orEmpty().trim(), it.text("name").orEmpty().trim(), it.text("grade")?.trim()?.toIntOrNull() ?: 0, false)
+    }
+
+    /** Spells of [category] ("Enchantments" or "Rituals") the character does not know yet. */
+    fun gradeSpellOptions(category: String): List<MetamagicOption> {
+        val pack = data as? DataPack ?: return emptyList()
+        val have = root.child("spells")?.children("spell").orEmpty().map { it.text("name")?.trim().orEmpty() }.toSet()
+        return pack.byId.entries.filter { it.value.file == "spells.xml" && it.value.element.tagName == "spell" && it.value.element.text("category")?.trim() == category }.mapNotNull { (id, e) ->
+            val name = e.element.text("name")?.trim().orEmpty()
+            if (name in have) null else MetamagicOption(id, name, e.element.text("source")?.trim().orEmpty(), e.element.text("page")?.trim().orEmpty(), "")
+        }.sortedBy { it.name.lowercase() }
+    }
+
+    /** Add the spell and mark it with [grade]. */
+    fun addGradeSpell(entryId: String, grade: Int = grade()): String? {
+        if (grade < 1 || grade > grade()) return null
+        val entry = data[entryId]?.element ?: return null
+        if (entry.tagName != "spell") return null
+        val guid = CharacterEditor(file, data, settings = settings).addSpell(entryId)
+        root.child("spells")?.children("spell")?.firstOrNull { it.text("guid")?.trim() == guid }?.child("grade")?.textContent = grade.toString()
+        return guid
+    }
+
+    fun section() = InitiationSection(technomancer, grade(), maxGrade(), nextCost(), metamagics(), extraMetamagicCost(), arts(), enhancements(), gradeSpells(), enhancementPrice())
 }

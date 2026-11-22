@@ -316,6 +316,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun artOptions() = open?.let { gameData.career(it.character).initiation().artOptions() }.orEmpty()
     fun addArt(id: String) = editCareer("Art added", "Cannot add that art") { adv, _ -> adv.initiation().addArt(id) != null }
     fun removeArt(guid: String) = editCareer("Art removed", "Nothing changed") { adv, _ -> adv.initiation().removeArt(guid) }
+    fun enhancementOptions() = open?.let { gameData.career(it.character).initiation().enhancementOptions() }.orEmpty()
+    fun gradeSpellOptions(category: String) = open?.let { gameData.career(it.character).initiation().gradeSpellOptions(category) }.orEmpty()
+    fun addEnhancement(id: String) = editCareer("Enhancement added", "Cannot add that (karma, or its requirements)") { adv, _ -> adv.addEnhancement(id) != null }
+    fun addGradeSpell(id: String) = editCareer("Spell added", "Not enough karma") { adv, _ -> adv.addGradeSpell(id) != null }
     fun spriteOptions() = open?.let { gameData.career(it.character).sprites().options() }.orEmpty()
     fun addSprite(entryId: String, name: String) = editCareer("Sprite added", "Cannot add that sprite (limit, or level)") { adv, _ -> adv.sprites().add(entryId, name) != null }
     fun removeSprite(guid: String) = editCareer("Sprite removed", "Nothing changed") { adv, _ -> adv.sprites().remove(guid) }

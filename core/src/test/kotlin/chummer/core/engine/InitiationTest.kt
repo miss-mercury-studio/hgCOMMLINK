@@ -140,4 +140,56 @@ class InitiationTest {
         assertTrue(adv.log.undo(adv.log.entries().last().guid))
         assertTrue(ed.arts().isEmpty())
     }
+
+    @Test
+    fun enhancementsCostTwoKarmaAndLiveOnTheCharacterWithoutThePower() {
+        val c = career("Magician")
+        val adv = CareerAdvancement(c, data, settings)
+        adv.log.manualKarma(100, "Reward")
+        adv.initiate()
+        val ed = adv.initiation()
+        val options = ed.enhancementOptions()
+        assertTrue(options.isNotEmpty())
+        // One that needs a power or quality the character lacks is refused and says what it needs.
+        val needy = options.first { it.unmet.isNotEmpty() }
+        assertNull(adv.addEnhancement(needy.id))
+        val free = options.firstOrNull { it.unmet.isEmpty() }
+        if (free != null) {
+            val karma = adv.log.karma
+            val guid = adv.addEnhancement(free.id)!!
+            assertEquals(karma - 2, adv.log.karma)
+            val e = c.root.child("enhancements")!!.children("enhancement").single()
+            assertEquals(listOf("sourceid", "guid", "name", "source", "page", "grade", "bonus", "improvementsource", "notes", "notesColor"), e.children().map { it.tagName })
+            assertEquals(guid, e.text("guid")); assertEquals("Initiation", e.text("improvementsource"))
+            assertTrue(adv.log.undo(adv.log.entries().last().guid))
+            assertEquals(karma, adv.log.karma)
+            assertTrue(ed.enhancements().isEmpty())
+        }
+    }
+
+    @Test
+    fun anEnchantmentIsFreeWhenItIsTheFirstThingOfAGrade() {
+        val c = career("Magician")
+        val adv = CareerAdvancement(c, data, settings)
+        adv.log.manualKarma(100, "Reward")
+        adv.initiate()
+        val ed = adv.initiation()
+        val options = ed.gradeSpellOptions("Enchantments")
+        assertTrue(options.size >= 2)
+        val karma = adv.log.karma
+        val first = adv.addGradeSpell(options[0].id)!!
+        assertEquals(karma, adv.log.karma)
+        assertEquals("1", c.root.child("spells")!!.children("spell").single { it.text("guid") == first }.text("grade"))
+        // The next one at that grade costs the spell price, and a metamagic now costs karma too.
+        assertTrue(ed.costsKarma(1))
+        val second = adv.addGradeSpell(options[1].id)!!
+        assertEquals(karma - 5, adv.log.karma)
+        assertTrue(adv.log.undo(adv.log.entries().last().guid))
+        assertEquals(karma, adv.log.karma)
+        assertEquals(listOf(first), ed.gradeSpells().map { it.guid })
+        assertTrue(second.isNotEmpty())
+        // Taking the grade back takes the spell with it.
+        assertTrue(adv.log.undo(adv.log.entries().last().guid))
+        assertTrue(ed.gradeSpells().isEmpty())
+    }
 }

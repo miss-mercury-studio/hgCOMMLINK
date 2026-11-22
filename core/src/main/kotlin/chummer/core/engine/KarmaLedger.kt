@@ -313,7 +313,8 @@ data class KarmaLedger(
             val gradeRows = c.root.child("initiationgrades")?.children("initiationgrade").orEmpty()
             fun yes(e: org.w3c.dom.Element, t: String) = e.text(t)?.trim().equals("True", true)
             val metamagicRows = c.root.child("metamagics")?.children("metamagic").orEmpty()
-            val initiation = gradeRows.sumOf { g ->
+            val enhancementKarma = (c.root.child("enhancements")?.children("enhancement").orEmpty().size + c.root.child("powers")?.children("power").orEmpty().sumOf { it.child("enhancements")?.children("enhancement").orEmpty().size }) * 2
+            val initiation = enhancementKarma + gradeRows.sumOf { g ->
                 val n = g.text("grade")?.trim()?.toIntOrNull() ?: 0
                 InitiationEditor.gradeCost(n, yes(g, "res"), yes(g, "group"), yes(g, "ordeal"), yes(g, "schooling"), settings) +
                     maxOf(metamagicRows.count { it.text("grade")?.trim()?.toIntOrNull() == n } - 1, 0) * k("karmametamagic", 15)

@@ -418,7 +418,7 @@ fun ArmorGearDialog(armorGuid: String, room: Double, vm: AppViewModel, nuyen: St
 }
 
 /** Initiation (or submersion) as list items: the grade, what the next one costs, and the metamagics (echoes) taken. */
-fun androidx.compose.foundation.lazy.LazyListScope.initiationItems(section: chummer.core.engine.InitiationSection, vm: AppViewModel, onInitiate: () -> Unit, onMetamagic: () -> Unit, onArt: () -> Unit = {}) {
+fun androidx.compose.foundation.lazy.LazyListScope.initiationItems(section: chummer.core.engine.InitiationSection, vm: AppViewModel, onInitiate: () -> Unit, onMetamagic: () -> Unit, onArt: () -> Unit = {}, onMore: (String) -> Unit = {}) {
     val word = if (section.technomancer) "Submersion" else "Initiation"
     val thing = if (section.technomancer) "echo" else "metamagic"
     item {
@@ -451,11 +451,20 @@ fun androidx.compose.foundation.lazy.LazyListScope.initiationItems(section: chum
             }
         }
     }
+    if (section.enhancements.isNotEmpty()) {
+        item { Text("Enhancements", style = MaterialTheme.typography.labelMedium, color = MutedSilver, modifier = Modifier.padding(top = 6.dp)) }
+        items(section.enhancements.size) { i -> Text(section.enhancements[i].name + "  ·  grade ${section.enhancements[i].grade}", Modifier.heightIn(min = 36.dp)) }
+    }
     item {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TerminalButton(if (section.grade >= section.maxGrade) "Grade limit" else "+ Grade", { if (section.grade < section.maxGrade) onInitiate() }, Modifier.weight(1f), enabled = section.grade < section.maxGrade)
             TerminalButton("+ ${thing.replaceFirstChar { it.uppercase() }}", onMetamagic, Modifier.weight(1f), enabled = section.grade > 0)
             if (!section.technomancer) TerminalButton("+ Art", onArt, Modifier.weight(1f), enabled = section.grade > 0)
+        }
+        if (!section.technomancer) Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TerminalButton("+ Enhance", { onMore("enhancement") }, Modifier.weight(1f), enabled = section.grade > 0)
+            TerminalButton("+ Enchant", { onMore("Enchantments") }, Modifier.weight(1f), enabled = section.grade > 0)
+            TerminalButton("+ Ritual", { onMore("Rituals") }, Modifier.weight(1f), enabled = section.grade > 0)
         }
     }
 }
@@ -499,4 +508,19 @@ fun ArtPicker(vm: AppViewModel, onDismiss: () -> Unit) {
     val options = remember { vm.artOptions() }
     val items = options.map { PickItem(it.id, it.name, listOf(it.source, it.unmet).filter { x -> x.isNotBlank() }.joinToString("  ·  "), warn = it.unmet.isNotEmpty()) }
     PickerSheet("Add an art", items, { id -> if (options.firstOrNull { it.id == id }?.unmet.isNullOrEmpty()) vm.addArt(id) }, keepOpenFor = { id -> options.firstOrNull { it.id == id }?.unmet?.isNotEmpty() == true }, note = "Arts cost nothing.", onDismiss = onDismiss)
+}
+
+/** Enhancements (2 karma each), or enchantments and rituals at the latest grade (free when it is the first thing of the grade). */
+@Composable
+fun GradeItemPicker(kind: String, section: chummer.core.engine.InitiationSection, vm: AppViewModel, onDismiss: () -> Unit) {
+    val options = remember(kind) { if (kind == "enhancement") vm.enhancementOptions() else vm.gradeSpellOptions(kind) }
+    val items = options.map { PickItem(it.id, it.name, listOf(it.source, it.unmet).filter { x -> x.isNotBlank() }.joinToString("  ·  "), warn = it.unmet.isNotEmpty()) }
+    val note = if (kind == "enhancement") "An enhancement costs ${section.enhancementCost} karma."
+    else if (section.metamagics.any { it.grade == section.grade } || section.gradeSpells.any { it.grade == section.grade }) "Something already came with grade ${section.grade}, so this costs the spell price."
+    else "The first thing taken with grade ${section.grade} is free."
+    PickerSheet(
+        if (kind == "enhancement") "Add an enhancement" else "Add " + (if (kind == "Rituals") "a ritual" else "an enchantment"), items,
+        { id -> if (options.firstOrNull { it.id == id }?.unmet.isNullOrEmpty()) { if (kind == "enhancement") vm.addEnhancement(id) else vm.addGradeSpell(id) } },
+        keepOpenFor = { id -> options.firstOrNull { it.id == id }?.unmet?.isNotEmpty() == true }, note = note, onDismiss = onDismiss,
+    )
 }

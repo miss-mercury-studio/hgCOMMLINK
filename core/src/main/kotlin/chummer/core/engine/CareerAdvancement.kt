@@ -238,7 +238,7 @@ class CareerAdvancement(
     /** The karma price of learning a spell or ritual (preparations are not told apart yet). Null for an unknown id. */
     fun spellCost(entryId: String): Int? {
         val entry = data[entryId]?.element ?: return null
-        val category = if (entry.child("category")?.textContent?.trim() == "Rituals") "Rituals" else "Spells"
+        val category = entry.child("category")?.textContent?.trim().let { if (it == "Rituals" || it == "Enchantments") it else "Spells" }
         val set = improvements
         var v = k("karmaspell", 5).toDouble()
         fun applies(i: Improvement) = i.enabled && (i.improvedName == category || i.improvedName.isEmpty())
@@ -288,6 +288,27 @@ class CareerAdvancement(
         if (cost > log.karma) return null
         val guid = ed.addMetamagic(entryId, grade) ?: return null
         if (cost > 0) log.add("Karma", -cost.toDouble(), (if (ed.technomancer) "Echo " else "Metamagic ") + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddMetamagic", objectId = guid, now = now)
+        return guid
+    }
+
+    /** Add an enhancement (Street Grimoire) to the latest grade for the enhancement price (2 karma). */
+    fun addEnhancement(entryId: String, now: LocalDateTime = LocalDateTime.now()): String? {
+        val ed = initiation()
+        val cost = ed.enhancementPrice()
+        if (cost > log.karma) return null
+        val guid = ed.addEnhancement(entryId) ?: return null
+        log.add("Karma", -cost.toDouble(), "Enhancement " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddEnhancement", objectId = guid, now = now)
+        return guid
+    }
+
+    /** Add an enchantment or ritual at the latest grade: free when nothing else came with that grade yet, else the spell price. */
+    fun addGradeSpell(entryId: String, now: LocalDateTime = LocalDateTime.now()): String? {
+        val ed = initiation()
+        val grade = ed.grade()
+        val cost = if (ed.costsKarma(grade)) (spellCost(entryId) ?: return null) else 0
+        if (cost > log.karma) return null
+        val guid = ed.addGradeSpell(entryId, grade) ?: return null
+        if (cost > 0) log.add("Karma", -cost.toDouble(), "Learned Spell " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddSpell", objectId = guid, now = now)
         return guid
     }
 
@@ -345,7 +366,8 @@ class CareerAdvancement(
     private fun availabilityBlocked(entryId: String, rating: Int?, extra: Int = 0): Boolean {
         if (!inCreation) return false
         val avail = data[entryId]?.element?.child("avail")?.textContent.orEmpty()
-        val v = Availability.parse(avail, rating ?: 1) ?: return false
+        val min = data[entryId]?.element?.child("minrating")?.textContent?.trim()?.toIntOrNull() ?: 0
+        val v = Availability.parse(avail, rating ?: 1, min) ?: return false
         return v.number + extra > settings.int("availability", 12)
     }
 
