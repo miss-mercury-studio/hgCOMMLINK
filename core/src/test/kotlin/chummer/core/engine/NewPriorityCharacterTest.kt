@@ -63,4 +63,69 @@ class NewPriorityCharacterTest {
         val failed = runCatching { NewCharacter.createPriority(data, settings, NewCharacterRequest(name = "T", metatypeId = troll), PriorityChoice("E", "A", "B", "C", "D", "Magician", true)) }
         assertTrue(failed.isFailure)
     }
+
+    @Test
+    fun theTalentGivesFreeSkillsAndSpells() {
+        val table = PriorityTable(data)
+        val talent = table.talents("B").first { it.value == "Magician" }
+        assertEquals(2, talent.pickCount); assertEquals(4, talent.pickValue)
+        val choices = table.skillChoices(talent)
+        assertTrue(choices.toString(), "Spellcasting" in choices && "Counterspelling" in choices && "Pistols" !in choices)
+        val choice = PriorityChoice("E", "A", "B", "C", "D", "Magician", true, talentSkills = listOf("Spellcasting", "Counterspelling"))
+        val c = NewCharacter.createPriority(data, settings, NewCharacterRequest(name = "T", metatypeId = human()), choice)
+        // Chummer keeps the free ratings as improvements from the Heritage source, and the free spell count as `spelllimit`.
+        val free = c.root.child("improvements")!!.children("improvement").filter { it.text("improvementsource") == "Heritage" }
+        assertEquals(setOf("Spellcasting", "Counterspelling"), free.map { it.text("improvedname") }.toSet())
+        assertTrue(free.all { it.text("improvementttype") == "SkillBase" && it.text("val") == "4" })
+        assertEquals("7", c.root.text("spelllimit"))
+        // Seven spells are free; the eighth costs karma.
+        val editor = CharacterEditor(c, data, settings = settings)
+        val spells = data.byId.entries.filter { it.value.file == "spells.xml" && it.value.element.tagName == "spell" }.map { it.key }
+        repeat(7) { editor.addSpell(spells[it]) }
+        assertEquals(25, KarmaLedger.of(c, settings, data).remaining)
+        editor.addSpell(spells[7])
+        assertEquals(20, KarmaLedger.of(c, settings, data).remaining)
+        // Skills the talent does not offer, or too many, are refused.
+        assertTrue(runCatching { NewCharacter.createPriority(data, settings, NewCharacterRequest(name = "T", metatypeId = human()), PriorityChoice("E", "A", "B", "C", "D", "Magician", true, talentSkills = listOf("Pistols"))) }.isFailure)
+        assertTrue(runCatching { NewCharacter.createPriority(data, settings, NewCharacterRequest(name = "T", metatypeId = human()), PriorityChoice("E", "A", "B", "C", "D", "Magician", true, talentSkills = listOf("Spellcasting", "Counterspelling", "Assensing"))) }.isFailure)
+    }
+
+    @Test
+    fun anAspectedMagicianPicksASkillGroup() {
+        val table = PriorityTable(data)
+        val talent = table.talents("B").first { it.value == "Aspected Magician" }
+        assertTrue(talent.picksGroups)
+        assertEquals(1, talent.pickCount)
+        val groups = table.skillChoices(talent)
+        assertTrue(groups.toString(), groups.isNotEmpty())
+        val c = NewCharacter.createPriority(data, settings, NewCharacterRequest(name = "T", metatypeId = human()), PriorityChoice("E", "A", "B", "C", "D", "Aspected Magician", true, talentSkills = listOf(groups.first())))
+        val imp = c.root.child("improvements")!!.children("improvement").single { it.text("improvementsource") == "Heritage" }
+        assertEquals("SkillGroupBase", imp.text("improvementttype"))
+        assertEquals(groups.first(), imp.text("improvedname"))
+    }
+
+    @Test
+    fun aSumToTenCharacterCanBeFinished() {
+        // Heritage D (1), attributes A (4), skills B (3), resources C (2), talent E (0): ten in all.
+        val choice = PriorityChoice("D", "A", "E", "B", "C", "Mundane", true)
+        val c = NewCharacter.createPriority(data, settings, NewCharacterRequest(name = "T", metatypeId = human()), choice)
+        val editor = CharacterEditor(c, data, settings = settings)
+        editor.changeAttribute("BOD", 1)
+        // Unspent points are only warnings; nothing stops finishing.
+        val review = CreationReview.of(c, settings, data)
+        assertTrue(review.problems.toString(), review.canFinish)
+        assertTrue(review.warnings.any { it.contains("attribute points unspent") })
+        val plan = CharacterFinisher.plan(c, settings, data)
+        assertEquals(7, plan.karmaKept) // 25 karma, only the carry-over stays
+        assertEquals(18, plan.karmaLost)
+        assertEquals(200, plan.nuyenKept) // the carry-over of the resources budget
+        assertTrue(CharacterFinisher.finish(c, settings, data, startingNuyen = 80).isEmpty())
+        assertEquals("True", c.root.text("created"))
+        assertEquals("7", c.root.text("karma"))
+        assertEquals("280", c.root.text("nuyen"))
+        // After finishing, the sheet is a career sheet and the points no longer matter.
+        val sheet = Sheet.build(c, data, settings)
+        assertTrue(sheet.isCareer)
+        assertEquals(null, sheet.points)
+    }
 }

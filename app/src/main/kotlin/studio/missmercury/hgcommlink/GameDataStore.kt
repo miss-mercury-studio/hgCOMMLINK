@@ -144,6 +144,7 @@ class GameDataStore(private val context: Context) {
 
     /** The talents a priority letter offers (value and name), and whether a metatype is offered at a heritage letter. */
     fun priorityTalents(letter: String): List<chummer.core.engine.TalentOption> = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).talents(letter) }.orEmpty() }
+    fun talentSkillChoices(talent: chummer.core.engine.TalentOption): List<String> = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).skillChoices(talent) }.orEmpty() }
     fun heritageOffered(letter: String, metatype: String, variant: String): Boolean = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).heritage(letter, metatype, variant) != null } ?: true }
 
     private fun keyOf(dirs: List<CustomDataDir>): String = dirs.joinToString("|") { d ->

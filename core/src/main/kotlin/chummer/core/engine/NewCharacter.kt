@@ -33,6 +33,8 @@ class PriorityChoice(
     /** The talent's `value` in `priorities.xml` (`Mundane`, `Magician`, `Adept`, `Technomancer`...). */
     val talent: String,
     val sumToTen: Boolean,
+    /** The skills (or skill groups) picked for the talent's free ratings; see [PriorityTable.skillChoices]. */
+    val talentSkills: List<String> = emptyList(),
 ) {
     val letters get() = listOf(heritage, attributes, talentLetter, skills, resources)
 
@@ -221,7 +223,8 @@ object NewCharacter {
         val talent = table.talents(choice.talentLetter).firstOrNull { it.value == choice.talent }
             ?: error("${choice.talent} is not offered at priority ${choice.talentLetter}")
         set("metatypebp", karma.toString())
-        set("special", special.toString()); set("totalspecial", special.toString())
+        val specialTotal = special + talent.specialPoints
+        set("special", specialTotal.toString()); set("totalspecial", specialTotal.toString())
         set("totalattributes", table.attributes(choice.attributes).toString())
         root.child("newskills")!!.child("skillptsmax")!!.textContent = table.skills(choice.skills).toString()
         root.child("newskills")!!.child("skillgrpsmax")!!.textContent = table.skillGroups(choice.skills).toString()
@@ -238,6 +241,17 @@ object NewCharacter {
             row.child("totalvalue")!!.textContent = minimum.toString()
         }
         raiseMinimum("MAG", talent.magic); raiseMinimum("RES", talent.resonance); raiseMinimum("DEP", talent.depth)
+        // Free spells and complex forms (Chummer keeps the spell count in `spelllimit`), and the free ratings in the chosen skills.
+        set("spelllimit", talent.spells.toString()); set("cfplimit", talent.complexForms.toString())
+        val choices = table.skillChoices(talent)
+        require(choice.talentSkills.size <= talent.pickCount) { "${talent.value} gives ${talent.pickCount} free skills" }
+        require(choice.talentSkills.distinct().size == choice.talentSkills.size && choice.talentSkills.all { it in choices }) { "A chosen skill is not offered for ${talent.value}" }
+        val improvements = root.child("improvements")!!
+        if (talent.pickValue != 0) for (name in choice.talentSkills) {
+            improvements.appendChild(ImprovementWriter.toElement(doc, Improvement(
+                if (talent.picksGroups) "SkillGroupBase" else "SkillBase", "Heritage", name, "", "", talent.pickValue.toDouble(), 0.0, 0.0, 0.0, 0.0, 1.0, false, true, false, "",
+            )))
+        }
         val editor = CharacterEditor(character, data, settings = settings)
         for (name in talent.qualities) {
             val id = data.byId.entries.firstOrNull { it.value.file == "qualities.xml" && it.value.element.tagName == "quality" && it.value.element.child("name")?.textContent?.trim() == name }?.key ?: continue

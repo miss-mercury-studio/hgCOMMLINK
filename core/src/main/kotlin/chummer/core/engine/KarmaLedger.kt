@@ -188,7 +188,9 @@ data class KarmaLedger(
             // Spells, rituals and preparations. Free spells (from improvements) cover spells first, then rituals, then preparations.
             val spellRows = c.root.child("spells")?.children("spell").orEmpty()
             var spellKarma = 0
-            if (spellRows.isNotEmpty()) {
+            var mysticAdeptKarma = 0
+            val mysticAdept = c.root.text("adept")?.trim().equals("True", true) && c.root.text("magician")?.trim().equals("True", true)
+            if (spellRows.isNotEmpty() || mysticAdept) {
                 fun price(category: String): Int {
                     var v = k("karmaspell", 5).toDouble()
                     val forCategory = { i: Improvement -> i.enabled && (i.improvedName == category || i.improvedName.isEmpty()) }
@@ -203,11 +205,38 @@ data class KarmaLedger(
                 var spells = own.count { !flag(it, "alchemical") && it.text("category")?.trim() != "Rituals" }
                 var rituals = own.count { !flag(it, "alchemical") && it.text("category")?.trim() == "Rituals" }
                 var preps = own.count { flag(it, "alchemical") }
-                repeat(maxOf(0, standardRound(set.valueOf("FreeSpells")))) {
+                // Touch-only spells (range T) can use the free spells that are only for them.
+                var touchOnly = own.count { !flag(it, "alchemical") && it.text("category")?.trim() != "Rituals" && it.text("range")?.trim() in setOf("T", "T (A)") }
+                // Free spells: the count the talent gives (stored as `spelllimit`), spell limit and free spell improvements, and the
+                // ones that depend on an attribute or skill (FreeSpellsATT, FreeSpellsSkill), halved when the improvement says so.
+                val granted = c.root.text("spelllimit")?.trim()?.toIntOrNull() ?: 0
+                var limitMod = standardRound(set.valueOf("SpellLimit") + set.valueOf("FreeSpells"))
+                var touchOnlyMod = 0
+                fun half(v: Int, i: Improvement) = if (i.uniqueName.contains("half")) (v + (if (v >= 0) 1 else 0)) / 2 else v
+                for (i in set.all.filter { it.enabled && it.type == "FreeSpellsATT" }) {
+                    val v = half(results[i.improvedName]?.totalValue ?: 0, i)
+                    if (i.uniqueName.contains("touchonly")) touchOnlyMod += v else limitMod += v
+                }
+                for (i in set.all.filter { it.enabled && it.type == "FreeSpellsSkill" }) {
+                    val row = c.skills().firstOrNull { !it.isKnowledge && (it.name == i.improvedName || data?.get(it.suid)?.element?.child("name")?.textContent?.trim() == i.improvedName) } ?: continue
+                    val v = half(row.base + row.karma, i)
+                    if (i.uniqueName.contains("touchonly")) touchOnlyMod += v else limitMod += v
+                }
+                spells -= touchOnly - maxOf(0, touchOnly - touchOnlyMod)
+                // A mystic adept's power points bought with karma use up free spells when the settings let priority spells count as power points.
+                var powerPointKarma = 0
+                if (mysticAdept) {
+                    var bought = c.root.text("magsplitadept")?.trim()?.toIntOrNull() ?: 0
+                    if (bought > 0) {
+                        if (settings.bool("priorityspellsasadeptpowers")) { spells += minOf(granted, bought); bought = maxOf(0, bought - granted) }
+                        powerPointKarma = bought * k("karmamysticadeptpowerpoint", 5)
+                    }
+                }
+                repeat(maxOf(0, granted + limitMod)) {
                     if (spells > 0) spells-- else if (rituals > 0) rituals-- else if (preps > 0) preps--
                 }
-                spellKarma = spells * price("Spells") + rituals * price("Rituals") + preps * price("Preparations")
-                if (listOf("FreeSpellsATT", "FreeSpellsSkill", "SpellLimit").any { set.all.any { i -> i.enabled && i.type == it } }) notCounted += "free spell rules"
+                mysticAdeptKarma = powerPointKarma
+                spellKarma = spells * price("Spells") + rituals * price("Rituals") + preps * price("Preparations") + mysticAdeptKarma
             }
 
             for ((tag, label) in listOf(
@@ -215,8 +244,6 @@ data class KarmaLedger(
                 "martialarts" to "martial arts", "initiationgrades" to "initiation", "critterpowers" to "critter powers",
                 "metamagics" to "metamagics", "mentorspirits" to "mentor spirits",
             )) if (c.root.child(tag)?.children().orEmpty().isNotEmpty()) notCounted += label
-            // A pure adept's powers are paid with the power points MAG gives; a mystic adept pays karma for power points (not counted yet).
-            if (c.root.text("adept")?.trim().equals("True", true) && c.root.text("magician")?.trim().equals("True", true) && c.root.child("powers")?.children().orEmpty().isNotEmpty()) notCounted += "mystic adept power points"
             val nuyenKarma = (c.root.text("nuyenbp")?.trim()?.toDoubleOrNull()?.toInt() ?: 0)
                 .coerceIn(0, if (settings.bool("unrestrictednuyen")) Int.MAX_VALUE else settings.int("nuyenmaxbp", 10))
 

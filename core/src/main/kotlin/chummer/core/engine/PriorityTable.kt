@@ -11,7 +11,17 @@ import org.w3c.dom.Element
 data class TalentOption(
     val value: String, val name: String, val magic: Int, val resonance: Int, val depth: Int, val spells: Int, val complexForms: Int,
     val skillQty: Int, val skillVal: Int, val skillType: String, val qualities: List<String>,
-)
+    /** An XPath filter over the skills for `skillType` xpath, the names listed for `specific`, the groups listed for `grouped`. */
+    val skillXPath: String = "", val skillNames: List<String> = emptyList(),
+    val skillGroupQty: Int = 0, val skillGroupVal: Int = 0, val skillGroupNames: List<String> = emptyList(),
+    /** Extra special attribute points the talent gives. */
+    val specialPoints: Int = 0,
+) {
+    /** How many skills (or skill groups) the user picks, and what each is worth for free. */
+    val pickCount get() = if (skillQty > 0) skillQty else skillGroupQty
+    val pickValue get() = if (skillQty > 0) skillVal else skillGroupVal
+    val picksGroups get() = skillQty <= 0 && skillGroupQty > 0
+}
 
 /** The free allotments one set of priority letters gives a character. */
 data class PriorityAllotment(
@@ -67,8 +77,38 @@ class PriorityTable(private val data: DataPack) {
                 t.text("value")?.trim().orEmpty(), t.text("name")?.trim().orEmpty(), int(t, "magic"), int(t, "resonance"), int(t, "depth"), int(t, "spells"), int(t, "cfp"),
                 int(t, "skillqty"), int(t, "skillval"), t.text("skilltype")?.trim().orEmpty(),
                 t.child("qualities")?.children("quality").orEmpty().map { it.textContent.trim() },
-            )
+                skillXPath = t.child("skilltype")?.getAttribute("xpath").orEmpty(),
+                skillNames = t.child("skillchoices")?.children("skill").orEmpty().map { it.textContent.trim() },
+                skillGroupQty = int(t, "skillgroupqty"), skillGroupVal = int(t, "skillgroupval"),
+                skillGroupNames = t.child("skillgroupchoices")?.children("skillgroup").orEmpty().map { it.textContent.trim() },
+                specialPoints = int(t, "specialattribpoints"),
+            ).let { o -> if (o.skillType.isEmpty() && t.child("skillgrouptype") != null) o.copy(skillType = t.child("skillgrouptype")!!.textContent.trim()) else o }
         }
+    }
+
+    /**
+     * The skills (or skill groups) the user can pick for a talent's free ratings, by name: magical skills, resonance skills, the
+     * listed ones, or those an XPath filter over the skill data accepts (Chummer's `SelectMetatypePriority`).
+     */
+    fun skillChoices(talent: TalentOption): List<String> {
+        if (talent.pickCount <= 0) return emptyList()
+        if (talent.picksGroups) return talent.skillGroupNames
+        val skills = data.byId.values.filter { it.file == "skills.xml" && it.element.tagName == "skill" && (it.element.parentNode as? Element)?.tagName == "skills" }.map { it.element }
+        fun cat(e: Element) = e.text("category")?.trim().orEmpty()
+        fun group(e: Element) = e.text("skillgroup")?.trim().orEmpty()
+        val matrix = { e: Element -> group(e) == "Cracking" || group(e) == "Electronics" }
+        val picked = when (talent.skillType.lowercase()) {
+            "magic" -> skills.filter { cat(it) == "Magical Active" || cat(it) == "Pseudo-Magical Active" }
+            "resonance" -> skills.filter { cat(it) == "Resonance Active" || matrix(it) }
+            "matrix" -> skills.filter(matrix)
+            "specific" -> skills.filter { it.text("name")?.trim() in talent.skillNames }
+            "xpath" -> {
+                val xp = javax.xml.xpath.XPathFactory.newInstance().newXPath()
+                skills.filter { runCatching { xp.evaluate(talent.skillXPath, it, javax.xml.xpath.XPathConstants.BOOLEAN) as Boolean }.getOrDefault(false) }
+            }
+            else -> skills
+        }
+        return picked.mapNotNull { it.text("name")?.trim() }.distinct().sorted()
     }
 
     /** Points a letter is worth in the Sum-to-Ten build (A 4, B 3, C 2, D 1, E 0). */

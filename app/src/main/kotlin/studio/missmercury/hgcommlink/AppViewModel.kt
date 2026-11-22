@@ -319,6 +319,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun priorityTalents(letter: String) = gameData.priorityTalents(letter)
+    fun talentSkillChoices(talent: chummer.core.engine.TalentOption) = gameData.talentSkillChoices(talent)
     fun heritageOffered(letter: String, metatype: String, variant: String) = gameData.heritageOffered(letter, metatype, variant)
 
     fun createCharacter(profile: chummer.core.data.CharacterSettings, name: String, alias: String, metatypeId: String, variantId: String? = null, priorities: chummer.core.engine.PriorityChoice? = null) {

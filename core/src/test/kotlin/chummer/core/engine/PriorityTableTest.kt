@@ -85,10 +85,10 @@ class PriorityTableTest {
 
     companion object {
         /**
-         * 6 of the 26 creation fixtures match Chummer's remaining karma exactly (Apex Predator among them). The others lack things
-         * not built yet (free spells from the talent, mentor spirits, foci, martial arts, complex forms) or depend on the profile
+         * 10 of the 26 creation fixtures match Chummer's remaining karma exactly (Apex Predator among them). The others lack things
+         * not built yet (mentor spirits, foci, martial arts, complex forms, the exact rule for qualities beyond the limit) or depend on the profile
          * `default.xml` they were saved with, which is not shipped (whether qualities beyond the limit earn or cost anything).
          */
-        const val KNOWN_DIFFERENCES = 20
+        const val KNOWN_DIFFERENCES = 16
     }
 }

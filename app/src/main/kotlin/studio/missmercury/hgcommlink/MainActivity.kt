@@ -289,6 +289,8 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
     var skillsLetter by remember { mutableStateOf("C") }
     var resources by remember { mutableStateOf("D") }
     var talent by remember { mutableStateOf<String?>(null) }
+    var talentSkills by remember { mutableStateOf(listOf<String>()) }
+    var pickingSkill by remember { mutableStateOf<Int?>(null) }
 
     TerminalSheet("New character", onDismiss, tall = true) { close ->
         when {
@@ -319,11 +321,30 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
                         val letters = listOf("A", "B", "C", "D", "E").map { it to it }
                         ChoiceChips("Metatype priority", letters, heritage, { heritage = it })
                         ChoiceChips("Attributes priority", letters, attributes, { attributes = it })
-                        ChoiceChips("Magic or resonance priority", letters, talentLetter, { talentLetter = it; talent = null })
+                        ChoiceChips("Magic or resonance priority", letters, talentLetter, { talentLetter = it; talent = null; talentSkills = emptyList() })
                         ChoiceChips("Skills priority", letters, skillsLetter, { skillsLetter = it })
                         ChoiceChips("Resources priority", letters, resources, { resources = it })
                         val talents = vm.priorityTalents(talentLetter)
-                        if (talents.isNotEmpty()) ChoiceChips("Talent", talents.map { it.value to it.value }, talent ?: talents.first().value, { talent = it })
+                        if (talents.isNotEmpty()) ChoiceChips("Talent", talents.map { it.value to it.value }, talent ?: talents.first().value, { talent = it; talentSkills = emptyList() })
+                        // The talent's free skills or skill groups: one button for each, opening a list.
+                        val chosenTalent = talents.firstOrNull { it.value == (talent ?: talents.first().value) }
+                        if (chosenTalent != null && chosenTalent.pickCount > 0) {
+                            Text(
+                                "Free ${if (chosenTalent.picksGroups) "skill groups" else "skills"} at rating ${chosenTalent.pickValue}",
+                                style = MaterialTheme.typography.labelSmall, color = MutedSilver,
+                            )
+                            repeat(chosenTalent.pickCount) { slot ->
+                                TerminalButton(talentSkills.getOrNull(slot) ?: "Choose…", { pickingSkill = slot }, Modifier.fillMaxWidth())
+                            }
+                            pickingSkill?.let { slot ->
+                                val offered = vm.talentSkillChoices(chosenTalent).filter { it !in talentSkills || it == talentSkills.getOrNull(slot) }
+                                PickerSheet(
+                                    if (chosenTalent.picksGroups) "Skill group" else "Skill", offered.map { PickItem(it, it, "") },
+                                    onPick = { picked -> talentSkills = (talentSkills.toMutableList().also { while (it.size <= slot) it.add("") }.also { it[slot] = picked }); pickingSkill = null },
+                                    onDismiss = { pickingSkill = null },
+                                )
+                            }
+                        }
                     }
                     Text(
                         if (points) (if (method == "SumtoTen") "Sum-to-Ten: the letters must be worth 10 in all (A 4, B 3, C 2, D 1, E 0). Attribute and skill points are spent on the sheet."
@@ -345,9 +366,11 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
                     val points = method == "Priority" || method == "SumtoTen"
                     val meta = options.metatypes.firstOrNull { it.id == chosenMetatype }
                     val talentValue = talent ?: vm.priorityTalents(talentLetter).firstOrNull()?.value.orEmpty()
-                    val choice = if (points) PriorityChoice(heritage, attributes, talentLetter, skillsLetter, resources, talentValue, method == "SumtoTen") else null
+                    val chosenTalent = vm.priorityTalents(talentLetter).firstOrNull { it.value == talentValue }
+                    val picks = talentSkills.filter { it.isNotEmpty() }
+                    val choice = if (points) PriorityChoice(heritage, attributes, talentLetter, skillsLetter, resources, talentValue, method == "SumtoTen", picks) else null
                     val variantName = meta?.variants?.firstOrNull { it.first == variant }?.second.orEmpty()
-                    val ok = choice == null || (choice.problem() == null && talentValue.isNotEmpty() && vm.heritageOffered(heritage, meta?.name.orEmpty(), variantName))
+                    val ok = choice == null || (choice.problem() == null && talentValue.isNotEmpty() && picks.size == (chosenTalent?.pickCount ?: 0) && vm.heritageOffered(heritage, meta?.name.orEmpty(), variantName))
                     TerminalButton("Create", {
                         val id = metatype ?: options.metatypes.firstOrNull { it.name == "Human" }?.id ?: options.metatypes.first().id
                         vm.createCharacter(options.profiles[chosenProfile], name.trim(), alias.trim(), id, variant, choice)
