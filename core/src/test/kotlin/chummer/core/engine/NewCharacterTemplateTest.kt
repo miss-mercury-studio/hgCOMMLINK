@@ -436,4 +436,24 @@ class NewCharacterTemplateTest {
         assertEquals(0, KarmaLedger.of(c, settings, data).spells)
         assertEquals(canonNoGuids(load("Mag_Empty.chum5").root), canonNoGuids(c.root))
     }
+
+    @Test
+    fun creationReviewFlagsAMagicianWithoutATraditionAndExtraKarma() {
+        val settings = settingsForTemplates()
+        val data = DataPack.load(File(src, "Chummer/data"))
+        val c = load("New_Empty.chum5")
+        // 700 karma left and only 7 carry over: a warning, but nothing that stops finishing.
+        val empty = CreationReview.of(c, settings, data)
+        assertEquals(emptyList<String>(), empty.problems)
+        assertTrue(empty.canFinish)
+        assertTrue(empty.warnings.single().startsWith("700 karma left but only 7 carry over"))
+
+        // A magician needs a tradition.
+        val mag = load("Mag_Empty.chum5")
+        assertEquals(emptyList<String>(), CreationReview.of(mag, settings, data).problems)
+        mag.root.child("tradition")!!.child("name")!!.textContent = ""
+        val noTradition = CreationReview.of(mag, settings, data)
+        assertEquals(listOf("No magic tradition has been chosen"), noTradition.problems)
+        assertTrue(!noTradition.canFinish)
+    }
 }

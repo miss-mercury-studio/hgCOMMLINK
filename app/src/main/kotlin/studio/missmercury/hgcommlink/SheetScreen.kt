@@ -112,7 +112,7 @@ private fun Header(s: Sheet, warning: String?) {
                 Text("Karma ${s.karma}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             }
         }
-        s.karmaLedger?.problems?.forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+        s.review?.problems?.forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
         if (warning != null) {
             // One line until tapped, so a long explanation does not push the sheet down.
             Text(
@@ -132,7 +132,7 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        s.karmaLedger?.let { KarmaSection(it) }
+        s.karmaLedger?.let { KarmaSection(it, s.review) }
 
         // The numbers needed in play, together: initiative, condition, armor.
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
@@ -571,18 +571,23 @@ private fun Life(g: chummer.core.engine.SheetSections) {
 
 /** Where the karma of a character in creation has gone. */
 @Composable
-private fun KarmaSection(l: chummer.core.engine.KarmaLedger) {
-    Section("Karma", collapsible = true, startExpanded = false, summary = "${l.remaining} of ${l.budget}") {
+private fun KarmaSection(l: chummer.core.engine.KarmaLedger, review: chummer.core.engine.CreationReview?) {
+    Section("Karma", collapsible = true, startExpanded = false, summary = "${l.remaining} of ${l.budget}" + if (review?.warnings?.isNotEmpty() == true) " ⚠" else "") {
         Row2("Metatype", (-l.metatype).toString())
         Row2("Attributes", (-l.attributes).toString())
         Row2("Skills", (-l.skills).toString())
         Row2("Qualities", (-l.qualities).toString())
         Row2("  positive / negative", "${l.positiveQualities}/${l.qualityLimit}  ${l.negativeQualities}/${l.qualityLimit}")
         if (l.contacts != 0) Row2("Contacts", (-l.contacts).toString())
-        if (l.notCounted.isNotEmpty()) {
+        review?.warnings?.forEach { Text("• $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+        if (review != null) {
             Text(
-                "Not counted yet: ${l.notCounted.joinToString()}. The remaining karma is higher than Chummer would show.",
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error,
+                if (review.canFinish) "Nothing stops finishing, as far as the checks ported so far go." else "Not ready to finish.",
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Text(
+                "Chummer's other creation checks are not ported yet: ${review.notChecked.joinToString()}.",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

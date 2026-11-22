@@ -43,6 +43,8 @@ data class Sheet(
     val karmaLedger: KarmaLedger?,
     /** The magic section, present when the character has magic switched on. */
     val magic: MagicLines?,
+    /** What stops this character from being finished, for a Karma-build character in creation. */
+    val review: CreationReview?,
 ) {
     data class SpellLine(val guid: String, val name: String, val category: String, val type: String, val range: String, val duration: String, val dv: String, val descriptors: String)
     data class MagicLines(val tradition: String, val spells: List<SpellLine>)
@@ -119,6 +121,7 @@ data class Sheet(
                     KnowledgeLine(row.guid, row.name, row.type.ifEmpty { row.category }, row.base, row.karma, row.isNativeLanguage, r?.rating ?: 0, r?.pool ?: 0)
                 }.sortedBy { it.name.lowercase() },
                 qualities = qualities(c),
+                review = if (!career && s.buildMethod == "Karma") CreationReview.of(c, settings, data) else null,
                 magic = if (flag(c, "magenabled")) MagicLines(
                     c.root.child("tradition")?.text("name")?.trim().orEmpty(),
                     c.root.child("spells")?.children("spell").orEmpty().map {
