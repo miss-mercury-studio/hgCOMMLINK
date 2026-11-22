@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -144,13 +146,12 @@ private fun App(vm: AppViewModel) {
                     },
                     actions = {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "More") }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text("Choose a shared folder") }, onClick = { menu = false; folderPicker.launch(null) })
+                        TerminalMenu(menu, { menu = false }) {
+                            TerminalMenuItem("Choose a shared folder", onClick = { menu = false; folderPicker.launch(null) })
                             if (vm.isSharedFolder) {
-                                DropdownMenuItem(text = { Text("Use app storage") }, onClick = { menu = false; vm.useAppFolder() })
+                                TerminalMenuItem("Use app storage", onClick = { menu = false; vm.useAppFolder() })
                             }
-                            DropdownMenuItem(text = { Text("New character") }, onClick = { menu = false; showNew = true })
-                            DropdownMenuItem(text = { Text("Refresh") }, onClick = { menu = false; vm.refresh() })
+                            TerminalMenuItem("Refresh", onClick = { menu = false; vm.refresh() })
                         }
                     },
                 )
@@ -169,26 +170,33 @@ private fun App(vm: AppViewModel) {
                         IconButton(onClick = vm::close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                     },
                     actions = {
-                        IconButton(onClick = {
-                            vm.shareIntent(open.file)?.let { ctx.startActivity(Intent.createChooser(it, "Share ${open.file.name}")) }
-                        }) { Icon(Icons.Default.Share, "Share") }
-                        IconButton(onClick = { confirm = true }) { Icon(Icons.Default.Delete, "Delete") }
+                        // Share and delete live in a menu: delete next to share was an easy mis-tap.
+                        var sheetMenu by remember { mutableStateOf(false) }
+                        IconButton(onClick = { sheetMenu = true }) { Icon(Icons.Default.MoreVert, "More") }
+                        TerminalMenu(sheetMenu, { sheetMenu = false }) {
+                            TerminalMenuItem("Share", onClick = {
+                                sheetMenu = false
+                                vm.shareIntent(open.file)?.let { ctx.startActivity(Intent.createChooser(it, "Share ${open.file.name}")) }
+                            })
+                            TerminalMenuItem("Delete…", danger = true, onClick = { sheetMenu = false; confirm = true })
+                        }
                     },
                 )
                 if (confirm) {
-                    AlertDialog(
-                        onDismissRequest = { confirm = false },
-                        title = { Text("Delete character?") },
-                        text = { Text("${open.file.name} will be removed from ${vm.storageLabel}. This cannot be undone.") },
-                        confirmButton = { TextButton(onClick = { confirm = false; vm.delete(open.file) }) { Text("Delete") } },
-                        dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+                    ConfirmSheet(
+                        "Delete character?", "${open.file.name} will be removed from ${vm.storageLabel}. This cannot be undone.",
+                        "Delete", onConfirm = { vm.delete(open.file) }, onDismiss = { confirm = false }, danger = true,
                     )
                 }
             }
         },
-        floatingActionButton = {
+        bottomBar = {
+            // The two things done most on this screen, under the thumb.
             if (open == null) {
-                FloatingActionButton(onClick = { importPicker.launch(arrayOf("*/*")) }, shape = CardShape) { Icon(Icons.Default.Add, "Import character") }
+                Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("New", { showNew = true }, Modifier.weight(1f), filled = true)
+                    TerminalButton("Import", { importPicker.launch(arrayOf("*/*")) }, Modifier.weight(1f))
+                }
             }
         },
     ) { padding ->
@@ -250,7 +258,7 @@ private fun AppTitle(text: String) {
     )
 }
 
-/** Start a new Karma-build character: a name, a metatype, and (if there are several) a settings profile. */
+/** Start a new Karma-build character: a name, a metatype, and (if there are several) a settings profile. A tall sheet; Create sits at the bottom. */
 @Composable
 private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
     val options = produceState<GameDataStore.NewCharacterOptions?>(null) {
@@ -262,68 +270,43 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
     var variant by remember { mutableStateOf<String?>(null) }
     var profile by remember { mutableStateOf<Int?>(null) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("New character") },
-        text = {
-            if (options == null) {
-                Text("Loading game data. This takes several seconds the first time.")
-            } else if (options.profiles.isEmpty()) {
-                Text("No settings profile with the Karma build method was found. Put your profile's .xml file in your characters folder.")
-            } else {
+    TerminalSheet("New character", onDismiss, tall = true) { close ->
+        when {
+            options == null -> TerminalLine("LOADING_GAME_DATA", Modifier.padding(vertical = 20.dp))
+            options.profiles.isEmpty() -> Text(
+                "No settings profile with the Karma build method was found. Put your profile's .xml file in your characters folder.",
+                Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.error,
+            )
+            else -> {
                 val chosenProfile = profile ?: 0
                 val chosenMetatype = metatype ?: options.metatypes.firstOrNull { it.name == "Human" }?.id
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(alias, { alias = it }, label = { Text("Street name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Text("Metatype", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 12.dp))
-                    options.metatypes.forEach { m ->
-                        Row(Modifier.fillMaxWidth().clickable { metatype = m.id; variant = null }, verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = m.id == chosenMetatype, onClick = { metatype = m.id; variant = null })
-                            Text(m.name)
-                        }
-                    }
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    TerminalField(name, { name = it }, "name")
+                    TerminalField(alias, { alias = it }, "street name")
+                    ChoiceChips("Metatype", options.metatypes.map { it.id to it.name }, chosenMetatype, { metatype = it; variant = null })
                     val variants = options.metatypes.firstOrNull { it.id == chosenMetatype }?.variants.orEmpty()
                     if (variants.isNotEmpty()) {
-                        Text("Variant", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 12.dp))
-                        Row(Modifier.fillMaxWidth().clickable { variant = null }, verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = variant == null, onClick = { variant = null })
-                            Text("None")
-                        }
-                        variants.forEach { (id, label) ->
-                            Row(Modifier.fillMaxWidth().clickable { variant = id }, verticalAlignment = Alignment.CenterVertically) {
-                                RadioButton(selected = variant == id, onClick = { variant = id })
-                                Text(label)
-                            }
-                        }
+                        ChoiceChips("Variant", listOf("" to "None") + variants.map { (id, label) -> id to label }, variant ?: "", { variant = it.ifEmpty { null } })
                     }
                     if (options.profiles.size > 1) {
-                        Text("Settings profile", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 12.dp))
-                        options.profiles.forEachIndexed { i, p ->
-                            Row(Modifier.fillMaxWidth().clickable { profile = i }, verticalAlignment = Alignment.CenterVertically) {
-                                RadioButton(selected = i == chosenProfile, onClick = { profile = i })
-                                Text(p.name)
-                            }
-                        }
+                        ChoiceChips("Settings profile", options.profiles.mapIndexed { i, p -> i.toString() to p.name }, chosenProfile.toString(), { profile = it.toInt() })
                     } else {
-                        Text("Settings: ${options.profiles[0].name}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 12.dp))
+                        Text("Settings: ${options.profiles[0].name}", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
                     }
                     Text(
-                        "Karma build. Attributes and skills start at the metatype minimum; buying with karma comes next.",
-                        style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp),
+                        "Karma build. Attributes and skills start at the metatype minimum; buy up with karma on the sheet.",
+                        style = MaterialTheme.typography.labelSmall, color = MutedSilver,
                     )
                 }
+                Row(Modifier.padding(top = 10.dp).imePadding(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Create", {
+                        val id = metatype ?: options.metatypes.firstOrNull { it.name == "Human" }?.id ?: options.metatypes.first().id
+                        vm.createCharacter(options.profiles[chosenProfile], name.trim(), alias.trim(), id, variant)
+                        close()
+                    }, Modifier.weight(1f), filled = true)
+                }
             }
-        },
-        confirmButton = {
-            val ready = options != null && options.profiles.isNotEmpty()
-            TextButton(enabled = ready, onClick = {
-                val o = options!!
-                val id = metatype ?: o.metatypes.firstOrNull { it.name == "Human" }?.id ?: o.metatypes.first().id
-                vm.createCharacter(o.profiles[profile ?: 0], name.trim(), alias.trim(), id, variant)
-                onDismiss()
-            }) { Text("Create") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+        }
+    }
 }

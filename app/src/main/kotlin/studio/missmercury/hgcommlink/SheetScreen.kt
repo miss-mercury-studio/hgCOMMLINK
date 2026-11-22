@@ -36,6 +36,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Box
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -76,38 +82,50 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
             )
             else -> {
                 Header(sheet, open.warning)
-                                // The Magic tab appears once the character has magic switched on (for example with the Magician quality).
+                // The Magic tab appears once the character has magic switched on (for example with the Magician quality).
                 val tabs = buildList {
-                    add("Overview"); add("Skills")
-                    if (sheet.magic != null) add("Magic")
-                    add("Gear"); add("Ware"); add("Life"); add("Qualities")
+                    add("Overview" to "STATS"); add("Skills" to "SKILL")
+                    if (sheet.magic != null) add("Magic" to "MAGIC")
+                    add("Gear" to "GEAR"); add("Ware" to "WARE"); add("Life" to "LIFE"); add("Qualities" to "QUAL")
                 }
-                val current = if (tabName in tabs) tabName else "Overview"
-                // Tabs as a menu line; the chosen one in inverse video, like a selected item in a text-mode menu.
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    tabs.forEach { t ->
-                        val on = t == current
-                        Text(
-                            if (on) " ${t.uppercase()} " else "[${t.uppercase()}]",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (on) Obsidian else MutedSilver,
-                            modifier = Modifier.background(if (on) PhosphorGreen else androidx.compose.ui.graphics.Color.Transparent)
-                                .clickable { tabName = t }.heightIn(min = 36.dp).padding(horizontal = 6.dp, vertical = 8.dp),
-                        )
+                val current = if (tabs.any { it.first == tabName }) tabName else "Overview"
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    when (current) {
+                        "Overview" -> Overview(sheet, vm)
+                        "Skills" -> Skills(sheet, vm)
+                        "Magic" -> Magic(sheet, vm)
+                        "Gear" -> Gear(sheet.sections)
+                        "Ware" -> Ware(sheet.sections, sheet.essence)
+                        "Life" -> Life(sheet.sections)
+                        else -> Qualities(sheet, vm)
                     }
                 }
-                when (current) {
-                    "Overview" -> Overview(sheet, vm)
-                    "Skills" -> Skills(sheet, vm)
-                    "Magic" -> Magic(sheet, vm)
-                    "Gear" -> Gear(sheet.sections)
-                    "Ware" -> Ware(sheet.sections, sheet.essence)
-                    "Life" -> Life(sheet.sections)
-                    else -> Qualities(sheet, vm)
-                }
+                BottomNav(tabs, current) { tabName = it }
             }
         }
     }
+}
+
+/** Section tabs along the bottom edge, where the thumb rests; the chosen one in inverse video. */
+@Composable
+private fun BottomNav(tabs: List<Pair<String, String>>, current: String, onPick: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth().background(MercurySlate).border(1.dp, TerminalGrid)) {
+        tabs.forEach { (key, label) ->
+            val on = key == current
+            Box(
+                Modifier.weight(1f).heightIn(min = 52.dp).background(if (on) PhosphorGreen else Color.Transparent).clickable { onPick(key) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, color = if (on) Obsidian else MutedSilver)
+            }
+        }
+    }
+}
+
+/** A button pinned under a scrolling list, within thumb reach, instead of the first row of the list. */
+@Composable
+private fun PinnedAction(label: String, onClick: () -> Unit) {
+    TerminalButton(label, onClick, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp))
 }
 
 @Composable
@@ -215,16 +233,25 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
     }
 }
 
-/** One attribute in creation: its name, the value, and buttons to buy or give back a point. */
+/** One attribute in creation: a cell with the value large between a minus and a plus, the name and its maximum under it. */
 @Composable
 private fun AttributeTile(a: Sheet.AttributeLine, buyable: Boolean, vm: AppViewModel, modifier: Modifier = Modifier) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text(a.name, Modifier.width(44.dp), style = MaterialTheme.typography.labelLarge, color = MutedSilver)
-        if (buyable) StepButton("−") { vm.changeAttribute(a.name, -1) } else Spacer(Modifier.size(40.dp))
-        Text(a.total.toString(), Modifier.width(32.dp), style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMono), textAlign = TextAlign.Center)
-        if (buyable) StepButton("+") { vm.changeAttribute(a.name, 1) } else Spacer(Modifier.size(40.dp))
+    Row(modifier.background(SlateHigh).border(1.dp, TerminalGrid), verticalAlignment = Alignment.CenterVertically) {
+        if (buyable) StepButton("−", 48) { vm.changeAttribute(a.name, -1) } else Spacer(Modifier.size(48.dp))
+        Column(Modifier.weight(1f).padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                a.total.toString(), style = MaterialTheme.typography.titleLarge.copy(fontFamily = JetBrainsMono),
+                color = if (buyable) PhosphorGreen else Quicksilver,
+            )
+            Text(
+                a.name + if (a.maximum > 0) " /${a.maximum}" else "",
+                style = MaterialTheme.typography.labelSmall, color = MutedSilver, maxLines = 1,
+            )
+        }
+        if (buyable) StepButton("+", 48) { vm.changeAttribute(a.name, 1) } else Spacer(Modifier.size(48.dp))
     }
 }
+
 
 private fun formatEssence(e: Double) = String.format(java.util.Locale.ROOT, "%.2f", e)
 
@@ -254,104 +281,119 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
     val q = query.trim()
     fun matches(r: SkillResult) = q.isEmpty() || r.name.contains(q, ignoreCase = true)
     val buy = if (s.karmaLedger != null) vm else null
-    LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-        item {
-            OutlinedTextField(
-                query, { query = it }, label = { Text("Search skills") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            )
-        }
-        // Skill groups: folded away until wanted, since there are eleven of them.
-        if (buy != null && q.isEmpty() && s.skillGroups.isNotEmpty()) {
-            item {
-                val bought = s.skillGroups.count { it.karma > 0 }
-                CollapsibleHeader("Skill groups", groupsOpen, { groupsOpen = !groupsOpen }, summary = if (bought > 0) "$bought bought" else null)
-            }
-            if (groupsOpen) items(s.skillGroups, key = { "g-" + it.name }) { g ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(g.name, Modifier.weight(1f))
-                    StepButton("−", 36) { vm.changeSkillGroup(g.name, -1) }
-                    Text("${g.karma}", Modifier.width(24.dp), textAlign = TextAlign.Center)
-                    StepButton("+", 36) { vm.changeSkillGroup(g.name, 1) }
+    Column(Modifier.fillMaxSize()) {
+        TerminalField(query, { query = it }, "search skills", Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+            // Skill groups: folded away until wanted, since there are eleven of them.
+            if (buy != null && q.isEmpty() && s.skillGroups.isNotEmpty()) {
+                item {
+                    val bought = s.skillGroups.count { it.karma > 0 }
+                    CollapsibleHeader("Skill groups", groupsOpen, { groupsOpen = !groupsOpen }, summary = if (bought > 0) "$bought bought" else null)
+                }
+                if (groupsOpen) items(s.skillGroups, key = { "g-" + it.name }) { g ->
+                    Column {
+                        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(g.name, Modifier.weight(1f), color = if (g.karma > 0) Quicksilver else MutedSilver)
+                            StepButton("−", 44) { vm.changeSkillGroup(g.name, -1) }
+                            Text("${g.karma}", Modifier.width(24.dp), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                            StepButton("+", 44) { vm.changeSkillGroup(g.name, 1) }
+                        }
+                        Hairline(color = TerminalGrid.copy(alpha = 0.6f))
+                    }
                 }
             }
-        }
-        // Knowledge skills and languages come before the long list of active skills.
-        val knowledge = s.knowledge.filter { q.isEmpty() || it.name.contains(q, ignoreCase = true) }
-        if (knowledge.isNotEmpty() || buy != null) {
-            item {
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("// KNOWLEDGE", maxLines = 1, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                    s.karmaLedger?.let { Text("free ${it.knowledgePointsLeft}/${it.knowledgePoints}", maxLines = 1, style = MaterialTheme.typography.labelSmall) }
-                    if (buy != null) TextButton(onClick = { addingKnowledge = true }) { Text("Add") }
+            // Knowledge skills and languages come before the long list of active skills, in one panel.
+            val knowledge = s.knowledge.filter { q.isEmpty() || it.name.contains(q, ignoreCase = true) }
+            if (knowledge.isNotEmpty() || (buy != null && q.isEmpty())) item(key = "knowledge") {
+                val l = s.karmaLedger
+                TerminalCard(
+                    "Knowledge", Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    trailing = l?.let { "FREE ${it.knowledgePointsLeft}/${it.knowledgePoints}" },
+                    accent = if (l != null && l.knowledgePointsLeft < 0) CriticalRed else PhosphorGreen,
+                ) {
+                    if (knowledge.isEmpty()) Text("None yet. Add one with the button below.", style = MaterialTheme.typography.bodySmall, color = MutedSilver)
+                    // Languages first, then the other kinds, each under its own small label.
+                    knowledge.groupBy { it.type.ifBlank { "Other" } }.toList()
+                        .sortedWith(compareBy({ it.first != "Language" }, { it.first })).forEach { (type, list) ->
+                            Text(type.uppercase(), style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+                            list.forEach { KnowledgeRow(it, buy) }
+                        }
                 }
             }
-            items(knowledge, key = { "k-" + it.guid.ifEmpty { it.name } }) { k -> KnowledgeRow(k, buy) }
+            // Skills the character has come first; the rest are listed after, as Chummer does.
+            val (rated, unrated) = s.activeSkills.filter(::matches).partition { it.rating > 0 }
+            if (rated.isNotEmpty()) item { SubHeader("Active skills") }
+            items(rated, key = { "a-" + it.name }) { SkillRow(it, buy) }
+            if (unrated.isNotEmpty()) item { SubHeader(if (rated.isEmpty()) "Active skills" else "Unrated") }
+            items(unrated, key = { "u-" + it.name }) { SkillRow(it, buy) }
         }
-        // Skills the character has come first; the rest are listed after, as Chummer does.
-        val (rated, unrated) = s.activeSkills.filter(::matches).partition { it.rating > 0 }
-        if (rated.isNotEmpty()) item { SubHeader("Active skills") }
-        items(rated, key = { "a-" + it.name }) { SkillRow(it, buy) }
-        if (unrated.isNotEmpty()) item { SubHeader(if (rated.isEmpty()) "Active skills" else "Unrated") }
-        items(unrated, key = { "u-" + it.name }) { SkillRow(it, buy) }
+        if (buy != null) PinnedAction("+ Knowledge skill") { addingKnowledge = true }
     }
-    if (addingKnowledge) AddKnowledgeDialog(vm) { addingKnowledge = false }
+    if (addingKnowledge) AddKnowledgeSheet(vm) { addingKnowledge = false }
+}
+
+/** The dice pool in a small box at the end of a row: lit when there is a rating behind it. */
+@Composable
+private fun PoolBox(text: String, lit: Boolean) {
+    Box(
+        Modifier.padding(start = 6.dp).size(width = 48.dp, height = 38.dp).background(SlateHigh)
+            .border(1.dp, if (lit) PhosphorGreen.copy(alpha = 0.55f) else TerminalGrid),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text, style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMono, shadow = if (lit) androidx.compose.ui.graphics.Shadow(PhosphorGreen.copy(alpha = 0.4f), blurRadius = 10f) else null),
+            color = if (lit) PhosphorGreen else MutedSilver,
+        )
+    }
+}
+
+/** A rating as a row of small squares, filled up to the rating. */
+@Composable
+private fun Pips(rating: Int, max: Int) {
+    val n = maxOf(rating, minOf(max, 12)).coerceAtLeast(1)
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+        repeat(n) { i -> Box(Modifier.size(6.dp).background(if (i < rating) PhosphorGreen else TerminalGrid)) }
+    }
 }
 
 @Composable
 private fun KnowledgeRow(k: Sheet.KnowledgeLine, buy: AppViewModel?) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (buy != null) StepButton("×", 36, CriticalRed.copy(alpha = 0.85f)) { buy.removeKnowledge(k.guid) }
         Column(Modifier.weight(1f)) {
             Text(k.name)
-            Text(
-                listOfNotNull(k.type, if (k.native) "native" else "${k.points} points, ${k.karma} karma").joinToString("  ·  "),
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (k.native) Tag("native", PhosphorGreen)
+            else Text("${k.points} pts · ${k.karma} karma", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
         }
         if (buy != null && !k.native) {
-            StepButton("−", 36) { buy.changeKnowledge(k.guid, -1) }
-            Text("${k.points + k.karma}", Modifier.width(20.dp), textAlign = TextAlign.Center)
-            StepButton("+", 36) { buy.changeKnowledge(k.guid, 1) }
-        } else {
-            Text(if (k.native) "N" else "${k.points + k.karma}", Modifier.padding(horizontal = 12.dp))
+            StepButton("−", 44) { buy.changeKnowledge(k.guid, -1) }
+            Text("${k.points + k.karma}", Modifier.width(22.dp), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+            StepButton("+", 44) { buy.changeKnowledge(k.guid, 1) }
+        } else if (!k.native) {
+            Text("${k.points + k.karma}", Modifier.padding(horizontal = 8.dp), style = MaterialTheme.typography.titleMedium)
         }
-        if (buy != null) StepButton("×", 36) { buy.removeKnowledge(k.guid) }
-        Text(if (k.native) "N" else "${k.pool}", Modifier.width(36.dp), style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMono), color = PhosphorGreen, textAlign = TextAlign.End)
+        PoolBox(if (k.native) "N" else "${k.pool}", lit = true)
     }
 }
 
 /** Pick a knowledge skill or language from the game data (typing your own name comes later). */
 @Composable
-private fun AddKnowledgeDialog(vm: AppViewModel, onDismiss: () -> Unit) {
-    val options = remember { vm.knowledgeOptions() }
-    var query by remember { mutableStateOf("") }
+private fun AddKnowledgeSheet(vm: AppViewModel, onDismiss: () -> Unit) {
+    val items = remember { vm.knowledgeOptions().map { PickItem(it.id, it.name, it.category, it.category) } }
     var native by remember { mutableStateOf(false) }
-    val shown = remember(query) {
-        val q = query.trim().lowercase()
-        if (q.isEmpty()) options else options.filter { it.name.lowercase().contains(q) }
-    }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add knowledge skill") },
-        text = {
-            Column {
-                OutlinedTextField(query, { query = it }, label = { Text("Search") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Row(Modifier.fillMaxWidth().clickable { native = !native }, verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.Checkbox(checked = native, onCheckedChange = { native = it })
-                    Text("Native language (free; for a language)")
-                }
-                LazyColumn(Modifier.weight(1f, fill = false)) {
-                    items(shown, key = { it.id }) { o ->
-                        Column(Modifier.fillMaxWidth().clickable { vm.addKnowledge(o.id, native && o.category == "Language"); onDismiss() }.padding(vertical = 6.dp)) {
-                            Text(o.name)
-                            Text(o.category, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
+    PickerSheet(
+        "Add knowledge skill", items, onPick = { id -> vm.addKnowledge(id, native && items.first { it.id == id }.group == "Language") },
+        header = {
+            Row(
+                Modifier.fillMaxWidth().clickable { native = !native }.heightIn(min = 48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(if (native) "[■]" else "[ ]", style = MaterialTheme.typography.labelLarge, color = PhosphorGreen)
+                Text("  NATIVE LANGUAGE", style = MaterialTheme.typography.labelMedium, color = if (native) PhosphorGreen else Quicksilver)
+                Text("  free, for a language", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
             }
         },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        onDismiss = onDismiss,
     )
 }
 
@@ -362,34 +404,35 @@ private fun SubHeader(text: String) {
 
 @Composable
 private fun SkillRow(r: SkillResult, buy: AppViewModel?) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(r.name)
-            Text(
-                listOf(r.attribute, if (r.rating == 0 && r.canDefault) "default" else if (r.rating == 0) "cannot default" else "")
-                    .filter { it.isNotBlank() }.joinToString("  "),
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    val unrated = r.rating == 0
+    Column {
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(r.name, color = if (unrated) MutedSilver else Quicksilver, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(r.attribute, style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+                    if (!unrated) Pips(r.rating, r.ratingMaximum)
+                    else Text(if (r.canDefault) "default" else "no default", style = MaterialTheme.typography.labelSmall, color = if (r.canDefault) MutedSilver else DrainAmber)
+                }
+            }
+            if (buy != null) {
+                StepButton("−", 44) { buy.changeSkill(r.name, -1) }
+                Text("${r.rating}", Modifier.width(22.dp), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                StepButton("+", 44) { buy.changeSkill(r.name, 1) }
+            }
+            PoolBox(if (unrated && !r.canDefault) "–" else "${r.pool}", lit = !unrated)
         }
-        if (buy != null) {
-            StepButton("−", 36) { buy.changeSkill(r.name, -1) }
-            Text("${r.rating}", Modifier.width(20.dp), textAlign = TextAlign.Center)
-            StepButton("+", 36) { buy.changeSkill(r.name, 1) }
-        } else {
-            Text("${r.rating}", Modifier.padding(horizontal = 12.dp))
-        }
-        Text("${r.pool}", Modifier.width(36.dp), style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMono), color = PhosphorGreen, textAlign = TextAlign.End)
+        Hairline(color = TerminalGrid.copy(alpha = 0.6f))
     }
 }
+
 
 @Composable
 private fun Qualities(s: Sheet, vm: AppViewModel) {
     var adding by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<Sheet.QualityLine?>(null) }
-    LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        item {
-            TerminalButton("+ Add quality", { adding = true }, Modifier.fillMaxWidth())
-        }
+    Column(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val positive = s.qualities.filter { it.positive }
         val negative = s.qualities.filter { !it.positive }
         s.karmaLedger?.let { l -> item { Text("Positive ${l.positiveQualities}/${l.qualityLimit} karma    Negative ${l.negativeQualities}/${l.qualityLimit} karma", style = MaterialTheme.typography.bodySmall) } }
@@ -398,14 +441,13 @@ private fun Qualities(s: Sheet, vm: AppViewModel) {
         item { SubHeader("Negative") }
         items(negative, key = { it.guid }) { QualityRow(it) { removing = it } }
     }
+    PinnedAction("+ Add quality") { adding = true }
+    }
     if (adding) AddQualityDialog(vm, onDismiss = { adding = false })
     removing?.let { q ->
-        AlertDialog(
-            onDismissRequest = { removing = null },
-            title = { Text("Remove ${q.name}?") },
-            text = { Text("The improvements it gave this character are removed too. A copy of the file is kept in the app's backups folder.") },
-            confirmButton = { TextButton(onClick = { removing = null; vm.removeQuality(q.guid) }) { Text("Remove") } },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
+        ConfirmSheet(
+            "Remove ${q.name}?", "The improvements it gave this character are removed too. A copy of the file is kept in the app's backups folder.",
+            "Remove", onConfirm = { vm.removeQuality(q.guid) }, onDismiss = { removing = null }, danger = true,
         )
     }
 }
@@ -413,8 +455,8 @@ private fun Qualities(s: Sheet, vm: AppViewModel) {
 @Composable
 private fun QualityRow(q: Sheet.QualityLine, onRemove: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(if (q.extra.isBlank()) q.name else "${q.name} (${q.extra})", Modifier.weight(1f))
-        IconButton(onClick = onRemove) { Icon(Icons.Default.Delete, "Remove ${q.name}") }
+        Text(if (q.extra.isBlank()) q.name else "${q.name} (${q.extra})", Modifier.weight(1f).padding(vertical = 8.dp))
+        StepButton("×", 44, CriticalRed.copy(alpha = 0.85f), onRemove)
     }
 }
 
@@ -422,54 +464,41 @@ private fun QualityRow(q: Sheet.QualityLine, onRemove: () -> Unit) {
 @Composable
 private fun AddQualityDialog(vm: AppViewModel, onDismiss: () -> Unit) {
     val options = remember { vm.qualityOptions() }
-    var query by remember { mutableStateOf("") }
+    val items = remember {
+        options.map { o ->
+            PickItem(
+                o.id, o.name,
+                listOfNotNull(o.category, "${o.karma} karma", if (o.unsupported.isNotEmpty()) "some bonuses not applied yet: " + o.unsupported.joinToString() else null).joinToString("  ·  "),
+                o.category, warn = o.unsupported.isNotEmpty(),
+            )
+        }
+    }
     var needsText by remember { mutableStateOf<QualityOption?>(null) }
     var text by remember { mutableStateOf("") }
-
-    val shown = remember(query) {
-        val q = query.trim().lowercase()
-        if (q.isEmpty()) options else options.filter { it.name.lowercase().contains(q) }
-    }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add quality") },
-        text = {
-            Column {
-                OutlinedTextField(query, { query = it }, label = { Text("Search") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Text(
-                    "Prerequisites and karma limits are not checked yet.",
-                    style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(vertical = 4.dp),
-                )
-                LazyColumn(Modifier.weight(1f, fill = false)) {
-                    items(shown, key = { it.id }) { o ->
-                        Column(
-                            Modifier.fillMaxWidth().clickable {
-                                if (o.needsText) { needsText = o; text = "" } else { vm.addQuality(o.id); onDismiss() }
-                            }.padding(vertical = 6.dp),
-                        ) {
-                            Text(o.name)
-                            Text(
-                                listOfNotNull(o.category, "${o.karma} karma", if (o.unsupported.isNotEmpty()) "some bonuses not applied yet: " + o.unsupported.joinToString() else null).joinToString("  ·  "),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
-                    }
-                }
-            }
+    PickerSheet(
+        "Add quality", items,
+        onPick = { id ->
+            val o = options.first { it.id == id }
+            if (o.needsText) { needsText = o; text = "" } else vm.addQuality(id)
         },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        note = "Prerequisites and karma limits are not checked yet.",
+        keepOpenFor = { id -> options.first { it.id == id }.needsText },
+        onDismiss = onDismiss,
     )
     needsText?.let { o ->
-        AlertDialog(
-            onDismissRequest = { needsText = null },
-            title = { Text(o.name) },
-            text = { OutlinedTextField(text, { text = it }, label = { Text("Enter text (a name, a group...)") }, singleLine = true) },
-            confirmButton = { TextButton(enabled = text.isNotBlank(), onClick = { vm.addQuality(o.id, text.trim()); needsText = null; onDismiss() }) { Text("Add") } },
-            dismissButton = { TextButton(onClick = { needsText = null }) { Text("Cancel") } },
-        )
+        TerminalSheet(o.name, onDismiss = { needsText = null }) { close ->
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("This quality asks for a name or a group.", style = MaterialTheme.typography.bodySmall, color = MutedSilver)
+                TerminalField(text, { text = it }, "name, group...")
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Add", { vm.addQuality(o.id, text.trim()); needsText = null; onDismiss() }, Modifier.weight(1f), filled = true, enabled = text.isNotBlank())
+                }
+            }
+        }
     }
 }
+
 
 @Composable
 private fun Row2(left: String, right: String, bold: Boolean = false) {
@@ -597,7 +626,8 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
     val creation = s.karmaLedger != null
     var choosingTradition by remember { mutableStateOf(false) }
     var addingSpell by remember { mutableStateOf(false) }
-    LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item {
             Section("Tradition") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -609,7 +639,6 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
         item {
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("// SPELLS", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                if (creation) TextButton(onClick = { addingSpell = true }) { Text("Add") }
             }
         }
         if (m.spells.isEmpty()) item { Text("No spells.", style = MaterialTheme.typography.bodySmall) }
@@ -624,45 +653,55 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
             }
         }
     }
+    if (creation) PinnedAction("+ Add spell") { addingSpell = true }
+    }
     if (choosingTradition) {
         val options = remember { vm.traditionOptions().map { PickItem(it.id, it.name, "Drain ${it.drain}") } }
-        PickDialog("Choose a tradition", options, { vm.setTradition(it) }) { choosingTradition = false }
+        PickerSheet("Choose a tradition", options, { vm.setTradition(it) }) { choosingTradition = false }
     }
     if (addingSpell) {
         val options = remember { vm.spellOptions().map { PickItem(it.id, it.name, listOf(it.category, "type ${it.type}", it.range, "drain ${it.dv}").filter { x -> x.isNotBlank() }.joinToString("  ·  ")) } }
-        PickDialog("Add a spell", options, { vm.addSpell(it) }) { addingSpell = false }
+        PickerSheet("Add a spell", options, { vm.addSpell(it) }) { addingSpell = false }
     }
 }
 
-class PickItem(val id: String, val title: String, val subtitle: String)
+class PickItem(val id: String, val title: String, val subtitle: String, val group: String = "", val warn: Boolean = false)
 
-/** A searchable list to pick one item from; picking closes the dialog. */
+/**
+ * A searchable list in a tall bottom sheet. Category filters on top (when the items have groups), the list in the middle,
+ * the search prompt at the bottom where the thumb is. Picking closes the sheet unless [keepOpenFor] says otherwise.
+ */
 @Composable
-private fun PickDialog(title: String, items: List<PickItem>, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+private fun PickerSheet(
+    title: String, items: List<PickItem>, onPick: (String) -> Unit,
+    note: String? = null, header: (@Composable ColumnScope.() -> Unit)? = null, keepOpenFor: (String) -> Boolean = { false },
+    onDismiss: () -> Unit,
+) {
     var query by remember { mutableStateOf("") }
-    val shown = remember(query) {
+    var group by remember { mutableStateOf("All") }
+    val groups = remember(items) { listOf("All") + items.map { it.group }.filter { it.isNotBlank() }.distinct() }
+    val shown = remember(query, group, items) {
         val q = query.trim().lowercase()
-        if (q.isEmpty()) items else items.filter { it.title.lowercase().contains(q) }
+        items.filter { (group == "All" || it.group == group) && (q.isEmpty() || it.title.lowercase().contains(q)) }
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column {
-                OutlinedTextField(query, { query = it }, label = { Text("Search") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                LazyColumn(Modifier.weight(1f, fill = false)) {
-                    items(shown, key = { it.id }) { it ->
-                        Column(Modifier.fillMaxWidth().clickable { onPick(it.id); onDismiss() }.padding(vertical = 6.dp)) {
-                            Text(it.title)
-                            Text(it.subtitle, style = MaterialTheme.typography.labelSmall)
-                        }
+    TerminalSheet(title, onDismiss, tall = true) { close ->
+        header?.invoke(this)
+        note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MutedSilver, modifier = Modifier.padding(vertical = 6.dp)) }
+        if (groups.size > 2) ChipRow(groups, group, { group = it }, Modifier.padding(vertical = 8.dp))
+        LazyColumn(Modifier.weight(1f)) {
+            items(shown, key = { it.id }) { it ->
+                Column(Modifier.fillMaxWidth().clickable { onPick(it.id); if (!keepOpenFor(it.id)) close() }) {
+                    Column(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = 8.dp), verticalArrangement = Arrangement.Center) {
+                        Text(it.title)
+                        Text(it.subtitle, style = MaterialTheme.typography.labelSmall, color = if (it.warn) DrainAmber else MutedSilver)
                     }
+                    Hairline(color = TerminalGrid.copy(alpha = 0.6f))
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-    )
+            if (shown.isEmpty()) item { Text("No match.", Modifier.padding(vertical = 16.dp), color = MutedSilver) }
+        }
+        TerminalField(query, { query = it }, "search (${shown.size})", Modifier.padding(top = 8.dp).imePadding())
+    }
 }
 
 /** The step that ends creation: shows what carries over, asks for the starting nuyen roll, and confirms. */
@@ -677,28 +716,21 @@ private fun FinishCard(review: chummer.core.engine.CreationReview, vm: AppViewMo
     if (asking) {
         val plan = vm.finishPlan()
         val dice = roll.toIntOrNull()
-        AlertDialog(
-            onDismissRequest = { asking = false },
-            title = { Text("Finish creation?") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (plan != null) {
-                        Text("Karma carried into the career: ${plan.karmaKept}" + if (plan.karmaLost > 0) " (${plan.karmaLost} lost)" else "")
-                        if (plan.nuyenLost > 0) Text("Nuyen lost beyond the carry-over: ${plan.nuyenLost}", color = MaterialTheme.colorScheme.error)
-                        if (plan.addsStreetLifestyle) Text("A Street lifestyle is added. Roll 1D6 for the starting nuyen (× 20 ¥).")
-                    }
-                    review.warnings.forEach { Text("• $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
-                    OutlinedTextField(
-                        value = roll, onValueChange = { roll = it.filter(Char::isDigit).take(1) }, singleLine = true,
-                        label = { Text("Die roll (1-6)") },
-                    )
-                    Text("This cannot be undone from the app; a backup of the creation file is kept.", style = MaterialTheme.typography.labelSmall)
+        TerminalSheet("Finish creation", onDismiss = { asking = false }) { close ->
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (plan != null) {
+                    TelemetryStrip(listOf("KARMA KEPT" to "${plan.karmaKept}", "LOST" to "${plan.karmaLost}"), accent = if (plan.karmaLost > 0) DrainAmber else PhosphorGreen)
+                    if (plan.nuyenLost > 0) Text("Nuyen lost beyond the carry-over: ${plan.nuyenLost}", color = MaterialTheme.colorScheme.error)
+                    if (plan.addsStreetLifestyle) Text("A Street lifestyle is added. Roll 1D6 for the starting nuyen (× 20 ¥).", style = MaterialTheme.typography.bodySmall)
                 }
-            },
-            confirmButton = {
-                TextButton(enabled = dice != null && dice in 1..6, onClick = { asking = false; vm.finishCreation(dice!! * 20) }) { Text("Finish") }
-            },
-            dismissButton = { TextButton(onClick = { asking = false }) { Text("Cancel") } },
-        )
+                review.warnings.forEach { Text("• $it", style = MaterialTheme.typography.labelSmall, color = DrainAmber) }
+                TerminalField(roll, { roll = it.filter(Char::isDigit).take(1) }, "die roll (1-6)", keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                Text("This cannot be undone from the app; a backup of the creation file is kept.", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Finish", { close(); vm.finishCreation(dice!! * 20) }, Modifier.weight(1f), filled = true, enabled = dice != null && dice in 1..6)
+                }
+            }
+        }
     }
 }

@@ -7,10 +7,28 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.KeyboardType
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CutCornerShape
@@ -85,15 +103,19 @@ fun TerminalCard(
     }
 }
 
-/** A labelled readout in a cell: the value large in mono, the label small above or below. */
+/** A labelled readout in a cell: the label small on top, the value large in mono, a thin accent bar along the top edge. */
 @Composable
-fun StatCell(label: String, value: String, modifier: Modifier = Modifier, accent: Color = Quicksilver) {
-    Column(
-        modifier.clip(SquareShape).background(SlateHigh).border(1.dp, TerminalGrid, SquareShape).padding(vertical = 8.dp, horizontal = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(value, style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMono), color = accent, textAlign = TextAlign.Center)
-        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, maxLines = 1)
+fun StatCell(label: String, value: String, modifier: Modifier = Modifier, accent: Color = Quicksilver, sub: String? = null) {
+    Column(modifier.clip(SquareShape).background(SlateHigh).border(1.dp, TerminalGrid, SquareShape)) {
+        Box(Modifier.fillMaxWidth().height(2.dp).background(accent.copy(alpha = if (accent == Quicksilver) 0.25f else 0.8f)))
+        Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 8.dp, start = 4.dp, end = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = MutedSilver, textAlign = TextAlign.Center, maxLines = 1)
+            Text(
+                value, style = MaterialTheme.typography.titleLarge.copy(fontFamily = JetBrainsMono, shadow = Shadow(accent.copy(alpha = 0.35f), blurRadius = 10f)),
+                color = accent, textAlign = TextAlign.Center, maxLines = 1,
+            )
+            if (sub != null) Text(sub, style = MaterialTheme.typography.labelSmall, color = MutedSilver, textAlign = TextAlign.Center, maxLines = 1)
+        }
     }
 }
 
@@ -133,15 +155,15 @@ fun TerminalButton(
             .heightIn(min = 44.dp).padding(horizontal = 16.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text("[ ${label.uppercase().replace(' ', '_')} ]", style = MaterialTheme.typography.labelLarge, color = if (filled) Obsidian else Quicksilver)
+        Text("[ ${label.uppercase().replace(' ', '_')} ]", style = MaterialTheme.typography.labelLarge, maxLines = 1, color = if (filled) Obsidian else Quicksilver)
     }
 }
 
 /** A bracketed − / + control, [-] and [+]. */
 @Composable
-fun StepButton(label: String, size: Int = 40, onClick: () -> Unit) {
+fun StepButton(label: String, size: Int = 40, color: Color = PhosphorGreen, onClick: () -> Unit) {
     Box(Modifier.size(size.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Text("[$label]", style = MaterialTheme.typography.labelLarge.copy(shadow = Shadow(PhosphorGreen.copy(alpha = 0.5f), blurRadius = 10f)), color = PhosphorGreen)
+        Text("[$label]", style = MaterialTheme.typography.labelLarge.copy(shadow = Shadow(color.copy(alpha = 0.5f), blurRadius = 10f)), color = color)
     }
 }
 
@@ -229,5 +251,157 @@ fun TerminalLine(text: String, modifier: Modifier = Modifier, color: Color = Pho
         },
         style = MaterialTheme.typography.labelLarge.copy(shadow = Shadow(color.copy(alpha = 0.5f), blurRadius = 12f)),
         color = color, modifier = modifier,
+    )
+}
+
+/** A single-line input as a shell prompt: "> text", with a green block cursor and a clear button. */
+@Composable
+fun TerminalField(
+    value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier,
+    keyboardType: KeyboardType = KeyboardType.Text,
+) {
+    BasicTextField(
+        value, onChange, singleLine = true,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = Quicksilver),
+        cursorBrush = SolidColor(PhosphorGreen),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        modifier = modifier.fillMaxWidth(),
+        decorationBox = { inner ->
+            Row(
+                Modifier.fillMaxWidth().background(SlateHigh).border(1.dp, if (value.isEmpty()) TerminalGrid else PhosphorGreen.copy(alpha = 0.6f))
+                    .heightIn(min = 48.dp).padding(start = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("> ", style = MaterialTheme.typography.bodyLarge, color = PhosphorGreen)
+                Box(Modifier.weight(1f)) {
+                    if (value.isEmpty()) Text(hint, style = MaterialTheme.typography.bodyLarge, color = MutedSilver.copy(alpha = 0.7f))
+                    inner()
+                }
+                if (value.isNotEmpty()) Box(Modifier.size(48.dp).clickable { onChange("") }, contentAlignment = Alignment.Center) {
+                    Text("×", style = MaterialTheme.typography.titleMedium, color = MutedSilver)
+                }
+            }
+        },
+    )
+}
+
+/** A row of filter choices, [ALL] [LANGUAGE] ...: the chosen one in inverse video. */
+@Composable
+fun ChipRow(options: List<String>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        options.forEach { o ->
+            val on = o == selected
+            Text(
+                o.uppercase(), style = MaterialTheme.typography.labelMedium, maxLines = 1,
+                color = if (on) Obsidian else MutedSilver,
+                modifier = Modifier.background(if (on) PhosphorGreen else SlateHigh).border(1.dp, if (on) PhosphorGreen else TerminalGrid)
+                    .clickable { onSelect(o) }.heightIn(min = 36.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+/** A line along the sheet or panel: used under headers. */
+@Composable
+fun Hairline(modifier: Modifier = Modifier, color: Color = TerminalGrid) {
+    Box(modifier.fillMaxWidth().height(1.dp).background(color))
+}
+
+/**
+ * A bottom sheet in the terminal style: sharp edges, a glowing handle, a [ TITLE ] header with a close box.
+ * [content] gets a function that closes the sheet with its slide-down animation. A [tall] sheet fills most of the screen (for lists).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TerminalSheet(
+    title: String, onDismiss: () -> Unit, modifier: Modifier = Modifier, accent: Color = PhosphorGreen, tall: Boolean = false,
+    content: @Composable ColumnScope.(close: () -> Unit) -> Unit,
+) {
+    val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val close: () -> Unit = { scope.launch { state.hide() }.invokeOnCompletion { onDismiss() } }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss, sheetState = state, shape = SquareShape,
+        containerColor = MercurySlate, scrimColor = Color.Black.copy(alpha = 0.65f),
+        dragHandle = {
+            Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(width = 44.dp, height = 3.dp).shadow(8.dp, ambientColor = accent, spotColor = accent).background(accent))
+        },
+    ) {
+        Column(modifier.fillMaxWidth().then(if (tall) Modifier.fillMaxHeight(0.86f) else Modifier).padding(horizontal = 12.dp)) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "[ ${title.uppercase().replace(' ', '_')} ]",
+                    style = MaterialTheme.typography.titleSmall.copy(shadow = Shadow(accent.copy(alpha = 0.55f), blurRadius = 14f)),
+                    color = accent, modifier = Modifier.weight(1f),
+                )
+                Box(Modifier.size(44.dp).clickable(onClick = close), contentAlignment = Alignment.Center) {
+                    Text("[×]", style = MaterialTheme.typography.labelLarge, color = MutedSilver)
+                }
+            }
+            Hairline(color = accent.copy(alpha = 0.4f))
+            content(close)
+            Box(Modifier.navigationBarsPadding().height(8.dp))
+        }
+    }
+}
+
+/** A labelled group of choices that wrap onto several lines: one is chosen, shown in inverse video. Each option is an id and a label. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ChoiceChips(label: String, options: List<Pair<String, String>>, selected: String?, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("// ${label.uppercase().replace(' ', '_')}", style = MaterialTheme.typography.labelMedium, color = PhosphorGreen)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            options.forEach { (id, text) ->
+                val on = id == selected
+                Text(
+                    text.uppercase(), style = MaterialTheme.typography.labelMedium, maxLines = 1,
+                    color = if (on) Obsidian else Quicksilver,
+                    modifier = Modifier.background(if (on) PhosphorGreen else SlateHigh).border(1.dp, if (on) PhosphorGreen else TerminalGrid)
+                        .clickable { onSelect(id) }.heightIn(min = 44.dp).padding(horizontal = 14.dp, vertical = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+/** A yes or no question in a short bottom sheet. [danger] colours it red, for deleting. */
+@Composable
+fun ConfirmSheet(
+    title: String, message: String, confirmLabel: String, onConfirm: () -> Unit, onDismiss: () -> Unit,
+    danger: Boolean = false,
+) {
+    val accent = if (danger) CriticalRed else PhosphorGreen
+    TerminalSheet(title, onDismiss, accent = accent) { close ->
+        Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(message, style = MaterialTheme.typography.bodyMedium, color = Quicksilver)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TerminalButton("Cancel", close, Modifier.weight(1f))
+                TerminalButton(confirmLabel, { close(); onConfirm() }, Modifier.weight(1f), accent = accent, filled = true)
+            }
+        }
+    }
+}
+
+/** A dropdown menu in the terminal style: sharp, outlined in green. */
+@Composable
+fun TerminalMenu(expanded: Boolean, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    androidx.compose.material3.DropdownMenu(
+        expanded = expanded, onDismissRequest = onDismiss,
+        containerColor = MercurySlate, shape = SquareShape, border = BorderStroke(1.dp, PhosphorGreen.copy(alpha = 0.45f)),
+        content = content,
+    )
+}
+
+@Composable
+fun TerminalMenuItem(label: String, onClick: () -> Unit, danger: Boolean = false) {
+    androidx.compose.material3.DropdownMenuItem(
+        text = {
+            Text(
+                "> ${label.uppercase()}", style = MaterialTheme.typography.labelLarge,
+                color = if (danger) CriticalRed else Quicksilver,
+            )
+        },
+        onClick = onClick, modifier = Modifier.heightIn(min = 52.dp),
     )
 }
