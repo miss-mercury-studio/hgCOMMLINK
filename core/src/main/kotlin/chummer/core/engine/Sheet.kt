@@ -51,6 +51,8 @@ data class Sheet(
     val movement: String = "",
     /** The nuyen budget and plug-in room of a Karma-build character in creation, where gear is bought from karma-bought nuyen. */
     val creationBuy: CreationBuy? = null,
+    /** Creation: each active skill's specialization and what it could take (by skill name). */
+    val skillSpecs: Map<String, SkillSpecInfo> = emptyMap(),
     /** An adept's power points and powers; null for anyone who is not an adept. */
     val powers: PowerPoints? = null,
     val isMagician: Boolean = false,
@@ -179,6 +181,7 @@ data class Sheet(
                 powers = if (flag(c, "adept")) PowerPoints.of(c, settings, data) else null,
                 isMagician = flag(c, "magician"),
                 limitNotes = LimitModifiers.of(c),
+                skillSpecs = if (!career && s.buildMethod in CREATION_BUILDS) SkillSpecEditor(c, data).info(active.filter { it.rating > 0 }.map { it.name }.toSet()) else emptyMap(),
                 creationBuy = if (!career && s.buildMethod in CREATION_BUILDS) CreationBuy(NuyenLedger.of(c, settings, data), CareerAdvancement(c, data, settings).pluginCapacity()) else null,
                 career = if (career) careerLines(c, data, settings, shown.map { it.name }) else null,
                 karmaLedger = if (!career && s.buildMethod in CREATION_BUILDS) KarmaLedger.of(c, settings, data) else null,

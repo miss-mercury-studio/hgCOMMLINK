@@ -335,6 +335,10 @@ class CharacterEditor(
         return guid
     }
 
+    /** Give an active skill a specialization in creation (one per skill, on a skill with a rating). Returns its GUID, or null. */
+    fun addSpecialization(skillGuid: String, name: String, hasRating: Boolean): String? = SkillSpecEditor(file, data).add(skillGuid, name, hasRating)
+    fun removeSpecialization(specGuid: String): Boolean = SkillSpecEditor(file, data).remove(specGuid)
+
     /** Add a complex form from the game data, in the layout Chummer saves. Returns the new item's GUID. */
     fun addComplexForm(entryId: String, extra: String = ""): String {
         val entry = data[entryId]?.element ?: error("No complex form with id $entryId in the game data")

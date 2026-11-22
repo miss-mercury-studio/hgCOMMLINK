@@ -159,12 +159,7 @@ class CareerAdvancement(
      * style, kept as `SkillSpecializationOption` with the skill as the improved name and the specialization as the unique name), without repeats.
      */
     fun specializationChoices(guid: String): List<String> {
-        val s = skillRow(guid) ?: return emptyList()
-        if (s.isKnowledge) return emptyList()
-        val own = data[s.suid]?.element?.child("specs")?.children("spec").orEmpty().map { it.textContent.trim() }
-        val name = s.name.ifEmpty { data[s.suid]?.element?.child("name")?.textContent?.trim().orEmpty() }
-        val added = improvements.all.filter { it.type == "SkillSpecializationOption" && it.enabled && it.improvedName == name && it.uniqueName.isNotBlank() }.map { it.uniqueName }
-        return (own + added).distinct()
+        return SkillSpecEditor(file, data).choices(guid, improvements.all)
     }
 
     /** Learn a specialization for a skill that has none, paying the settings' price. */

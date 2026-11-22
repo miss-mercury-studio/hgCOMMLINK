@@ -350,6 +350,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun aiProgramCost(advanced: Boolean) = open?.let { gameData.career(it.character).aiProgramCost(advanced) } ?: 0
     fun addAiProgram(id: String) = editCareer("Program added", "Cannot add that (karma, or it needs another program)") { adv, _ -> if (open?.sheet?.isCareer == true) adv.addAiProgram(id) != null else adv.aiPrograms().add(id) != null }
     fun removeAiProgram(guid: String) = editCareer("Program removed", "Nothing changed") { adv, _ -> adv.aiPrograms().remove(guid) }
+    fun addCreationSpec(skillGuid: String, spec: String, skillName: String) = edit("Specialization added", "Cannot specialize that skill (it needs a rating, and takes one specialization)") { it.addSpecialization(skillGuid, spec, hasRating = open?.sheet?.activeSkills?.any { s -> s.name == skillName && s.rating > 0 } == true) != null }
+    fun removeCreationSpec(specGuid: String) = edit("Specialization removed") { it.removeSpecialization(specGuid) }
     fun spriteOptions() = open?.let { gameData.career(it.character).sprites().options() }.orEmpty()
     fun addSprite(entryId: String, name: String) = editCareer("Sprite added", "Cannot add that sprite (limit, or level)") { adv, _ -> adv.sprites().add(entryId, name) != null }
     fun removeSprite(guid: String) = editCareer("Sprite removed", "Nothing changed") { adv, _ -> adv.sprites().remove(guid) }

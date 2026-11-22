@@ -106,18 +106,19 @@ private fun AddExpenseSheet(vm: AppViewModel, onDismiss: () -> Unit) {
 
 /** Pick a specialization from the game data's list, or type your own. */
 @Composable
-fun SpecializationSheet(skill: String, cost: Int, choices: List<String>, karma: Int, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+fun SpecializationSheet(skill: String, cost: Int, choices: List<String>, karma: Int, onPick: (String) -> Unit, onDismiss: () -> Unit, note: String? = null) {
+    val affordable = note != null || cost <= karma
     var text by remember { mutableStateOf("") }
     TerminalSheet("Specialize $skill", onDismiss, tall = choices.size > 4) { close ->
         Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Costs $cost karma; you have $karma.", style = MaterialTheme.typography.labelSmall, color = if (cost <= karma) MutedSilver else DrainAmber)
+            Text(note ?: "Costs $cost karma; you have $karma.", style = MaterialTheme.typography.labelSmall, color = if (affordable) MutedSilver else DrainAmber)
             choices.forEach { c ->
-                Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).border(1.dp, TerminalGrid).clickable(enabled = cost <= karma) { close(); onPick(c) }.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+                Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).border(1.dp, TerminalGrid).clickable(enabled = affordable) { close(); onPick(c) }.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
                     Text(c)
                 }
             }
             TerminalField(text, { text = it }, "or type your own")
-            TerminalButton("Learn", { close(); onPick(text.trim()) }, Modifier.fillMaxWidth(), filled = true, enabled = text.isNotBlank() && cost <= karma)
+            TerminalButton("Learn", { close(); onPick(text.trim()) }, Modifier.fillMaxWidth(), filled = true, enabled = text.isNotBlank() && affordable)
         }
     }
 }

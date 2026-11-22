@@ -372,9 +372,9 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
             // Skills the character has come first; the rest are listed after, as Chummer does.
             val (rated, unrated) = s.activeSkills.filter(::matches).partition { it.rating > 0 }
             if (rated.isNotEmpty()) item { SubHeader("Active skills") }
-            items(rated, key = { "a-" + it.name }) { SkillRow(it, buy, career, karma, vm) }
+            items(rated, key = { "a-" + it.name }) { SkillRow(it, buy, career, karma, vm, s.skillSpecs[it.name]) }
             if (unrated.isNotEmpty()) item { SubHeader(if (rated.isEmpty()) "Active skills" else "Unrated") }
-            items(unrated, key = { "u-" + it.name }) { SkillRow(it, buy, career, karma, vm) }
+            items(unrated, key = { "u-" + it.name }) { SkillRow(it, buy, career, karma, vm, s.skillSpecs[it.name]) }
         }
         if (buy != null) PinnedAction("+ Knowledge skill") { addingKnowledge = true }
     }
@@ -453,7 +453,7 @@ private fun SubHeader(text: String) {
 }
 
 @Composable
-private fun SkillRow(r: SkillResult, buy: AppViewModel?, career: Sheet.CareerLines? = null, karma: Int = 0, vm: AppViewModel? = null) {
+private fun SkillRow(r: SkillResult, buy: AppViewModel?, career: Sheet.CareerLines? = null, karma: Int = 0, vm: AppViewModel? = null, spec: chummer.core.engine.SkillSpecInfo? = null) {
     val unrated = r.rating == 0
     var speccing by remember { mutableStateOf(false) }
     val guid = career?.skillIds?.get(r.name)
@@ -465,6 +465,11 @@ private fun SkillRow(r: SkillResult, buy: AppViewModel?, career: Sheet.CareerLin
                     Text(r.attribute, style = MaterialTheme.typography.labelSmall, color = MutedSilver)
                     if (!unrated) Pips(r.rating, r.ratingMaximum)
                     else Text(if (r.canDefault) "default" else "no default", style = MaterialTheme.typography.labelSmall, color = if (r.canDefault) MutedSilver else DrainAmber)
+                    // Creation: the skill's specialization (tap to take it off), or a way to add one once the skill has a rating.
+                    if (buy != null && spec != null) {
+                        if (spec.spec.isNotEmpty()) Text("spec: ${spec.spec} ×", Modifier.clickable { buy.removeCreationSpec(spec.specGuid) }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
+                        else if (spec.canAdd) Text("+spec", Modifier.clickable { speccing = true }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
+                    }
                     val specCost = guid?.let { career?.specCosts?.get(it) }
                     if (specCost != null) Text("+spec $specCost", Modifier.clickable { speccing = true }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = if (specCost <= karma) PhosphorGreen else MutedSilver)
                 }
@@ -479,6 +484,9 @@ private fun SkillRow(r: SkillResult, buy: AppViewModel?, career: Sheet.CareerLin
             PoolBox(if (unrated && !r.canDefault) "–" else "${r.pool}", lit = !unrated)
         }
         Hairline(color = TerminalGrid.copy(alpha = 0.6f))
+    }
+    if (speccing && buy != null && spec != null) {
+        SpecializationSheet(r.name, 0, spec.choices, 0, { buy.addCreationSpec(spec.skillGuid, it, r.name) }, { speccing = false }, note = "Costs a skill point (karma where the skill has to pay with karma).")
     }
     if (speccing && guid != null && career != null && vm != null) {
         SpecializationSheet(r.name, career.specCosts[guid] ?: 0, career.specChoices[guid].orEmpty(), karma, { vm.addSpecialization(guid, it) }, { speccing = false })
