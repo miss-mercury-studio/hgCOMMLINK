@@ -1,7 +1,7 @@
 # Chummer 5e for Android: Plan
 
 Living document. Update the status checkboxes, the decisions log and the open questions as work proceeds.
-Last updated: 2026-11-21 (M1 done; M2 started)
+Last updated: 2026-11-22. Status: M0 and M1 done (M1 phone checks pending); M2 to M6 in progress, with most of the creation and career surface built; M7 not started. The consolidated to-do list is under "Outstanding items" below; the progress log at the end is history.
 
 ## Goal
 
@@ -105,11 +105,11 @@ Engine code is in `core/src/main/kotlin/chummer/core/engine/`. Each calculation 
 - [x] Skills verified against Chummer's own print XML for Viper (`reference/exports/Viper_career.xml`): all 78 skills match on rating, rating maximum, linked attribute, skill group, default flag and dice pool (`GoldenExportSkillsTest`, attribute totals taken from the export). Fixes from this: knowledge skills never default, and a knowledge skill with no type uses LOG.
 - [x] Derived stats (`DerivedStats`): physical, mental, social and astral limits, initiative score and dice, physical and stun condition monitors, overflow, threshold offsets, lift and carry (from the settings expressions), composure, judge intentions, memory, surprise, lift and carry pool, fatigue resist, dodge, direct mana resist, natural recovery. **Golden: 32 of 32 match** in `GoldenExportDerivedTest`, which replays the export's state (see below).
 - [x] Armor: `ArmorEngine` ports the total armor rule (best non-stacking armor plus `+` accessories up to STR, ware and per-armor improvements) and armor encumbrance. Matches the export for armor, fire, cold, electricity, acid and falling with the Social set worn, and Chummer's stored AGI/REA penalty for the Runner set (`GoldenArmorTest`). The "Custom Fit (Stack)" mod is not read yet.
-- [ ] Bonus handler registry: armor mods' `<bonus>` nodes still come from the saved file's stored improvements. Creating them from the data (needed for new items in M4) is not built; the Social set only worked because its improvements were already stored.
+- [x] Bonus handler registry: built in M4 (`BonusHandlers`); armor mods bought in the app now create their improvements from the data.
 - [x] Resistance pools: judge intentions, fatigue, radiation, sonic, toxins and pathogens by vector, addiction, and all spell defences (31 values) match the export; `DerivedStats.resistances()`. Toxin and pathogen immunity is not handled.
 - [x] Movement (`Movement`): walk, run and sprint strings of the metatype or metavariant times AGI (swim: average of AGI and STR), walk/run/sprint improvements, printed as Chummer does. **Matches Viper's export exactly** (`14/28; 2m / hit, Swim: 7; 1m / hit`); shown under Vitals. Not covered: the cyberleg movement setting, shapeshifters' alternate set, encumbrance.
 - [ ] Still to do from this group: matrix initiative (needs the active commlink's Data Processing, so it waits for gear parsing), astral initiative, wound modifiers (need current damage)
-- [ ] Improvement handler registry for item creation (about 30 `<bonus>` node handlers)
+- [~] Improvement handler registry for item creation: built (`BonusHandlers`, 159 of 246 node types); see M4 for the status and what is left.
 - [x] Character settings (`CharacterSettings`): resolves a character's settings GUID against the user's settings folder, then Chummer's built-in `data/settings.xml`; a legacy name such as `default.xml` falls back to the first built-in profile. Reads simple values, books, custom data refs, banned grades, redliner exclusions and karma costs; expression settings evaluate through `Expr` (which now accepts `{Name}` variables); `toRuleSettings()` feeds the engines (limb count, excluded slots, cyberlimb cap, essence decimals and rounding).
 - [x] Data amend layer (`DataAmender`, `CustomData`, `CustomDataLocator`): a port of Chummer's `AmendNodeChildren` and its `override_`, `custom_`, `amend_` loading order. Custom folders are found by manifest GUID. Tests on Viper's campaign: settings resolve, all 7 folders found (6 from Chummer, 1 campaign), the amends remove and add the expected entries, and all 299 of Viper's `sourceid`s still resolve in the amended data. Not ported: re-creating missing parent nodes when recursing into nodes absent from the base data.
 - [ ] Remaining golden misses (below)
@@ -138,8 +138,8 @@ Open golden misses, with what is known:
 - [x] Layout pass 2, seen on the S24 Ultra (creation Human): stat cells have the label on top and an accent bar; attributes in creation are cells with a large minus and plus; skill rows show rating pips and a boxed dice pool (unrated ones dimmed, with "default" or "no default"); knowledge is one panel with a FREE x/y readout, grouped by type with languages first, remove button separated from the stepper; all pickers (knowledge, quality, tradition, spell) and the finish-creation prompt are terminal-styled bottom sheets (`TerminalSheet`, `PickerSheet`) with category chips and the search prompt at the bottom above the keyboard. Fixed from pass 1: bottom bars now clear the gesture bar. Also bottom sheets now: the new-character form (name, street name, then metatype, variant and profile as wrapping chips, Create pinned at the bottom), the delete and remove confirmations (red `ConfirmSheet`), and the dropdown menus (`TerminalMenu`). The sheet tab bar no longer has a doubled gap above the gesture bar.
 - [ ] Mobile layout design, later: tap a number to see how it is made up (for example a dice pool or armor), denser gear and ware rows, a quick-reference mode for play, landscape and the tablet case are not planned.
 - [x] Sections added from stored values: Gear (armor by equipment set, weapons, vehicles, gear), Ware (cyberware and bioware with essence from `EssenceEngine`, nested), Life (contacts, lifestyle, martial arts). Weapon figures are calculated by `WeaponEngine` (damage, AP, accuracy, RC, concealment, ammo capacity): all 120 checks (15 weapons x 8 fields) match Chummer's export. Not covered: dice pool, wireless bonuses, fire modes changed by accessories, underbarrel inheritance, flechette ammo, availability and cost.
-- [ ] Still missing: spells, adept powers, complex forms, programs and other magic/resonance sections (Viper is mundane, so these need a magical fixture), drugs, the expense log, notes, mugshot, matrix attributes of commlinks, vehicle details, weapon totals.
-- [x] Settings profiles: the app copies `.xml` settings files found beside the characters into its own folder when a character is opened and uses the one matching the character's GUID. Custom data (amend files) is still not applied on the device.
+- [~] Magic and resonance sections now exist (spells, powers, complex forms, sprites, spirits, initiation, critter powers, A.I. programs; see M4 to M6). Still missing from the sheet: drugs, notes, mugshot, matrix attributes of commlinks, vehicle details, weapon totals. (The expense log is the Career card.)
+- [x] Settings profiles: the app copies `.xml` settings files found beside the characters into its own folder when a character is opened and uses the one matching the character's GUID (or file name). Custom data is applied on the device (see above).
 - [ ] Complete character display matching Chummer's numbers
 
 ### M4: Creation, Karma build (XL)
@@ -152,9 +152,8 @@ Approach: creation edits a character document (the same DOM we read) and every c
 - [x] Buying attributes and skills with karma: `CharacterEditor.changeAttribute` and `changeSkill` (+1 or -1), stopping at the attribute's metatype maximum and the settings' creation skill maximum (5 in your profile), refusing to give back points that were not bought; the attribute row's stored total and the stored condition monitor values are rewritten as Chummer does. Golden tests: buying BOD and Pistols on `New_Empty` gives exactly `New_Spent`, and REA +3 and WIL +4 on `empty_troll` gives exactly `troll_spent`; giving the points back restores the empty file. In the app, creation characters show a minus and plus under each attribute and on each active skill, saving after every tap and updating karma left live. Verified on the phone with an Ork: INT 1 to 3 cost 25 and Archery 1 cost 2 (750 to 723).
 - [x] Creation checks: the ledger reports problems (overspent; positive or negative quality karma over the settings' `qualitykarmalimit`, 50 in your profile), the sheet shows them in red and shows the 9/50 style counters on the Karma card and the Qualities tab, and adding a quality that would pass the limit is refused with the reason (`CharacterEditor.qualityLimitProblem`). Matches Chummer's "Positive Qualities 9/50" for the app-made Ork. Other quality prerequisites are not checked.
 - [x] Skill groups, knowledge skills and languages (verified against `reference/New_Skills.chum5`, an Ork with Firearms group 1, Heavy Weapons 1, Black Markets (1 karma), English (native), Street Gangs: Seattle and Turkish (2 free points each); Chummer showed Karma Remaining 642, Skill Groups 5, Active Skills 2, Knowledge 1 karma, free knowledge points 0 of 4). The ledger prices groups (steps shared by all members, each member pays only beyond that), knowledge skills (free points are levels already paid; karma buys the rest; native language free) and the free point pool (`knowledgepointsexpression`, (INT + LOG) x 2 unaugmented). `CharacterEditor` gained `changeSkillGroup`, `addKnowledgeSkill`, `changeKnowledgeSkill` (free points first, then karma) and `removeKnowledgeSkill`; a generated Ork plus these calls reproduces New_Skills field for field (note colours ignored, they are a per-session display setting). The Skills tab shows skill groups with steppers, knowledge skills with steppers, an Add dialog (search over the 195 knowledge skills and languages, a native-language box) and the free points left. Checked on the S24 Ultra (Turkish added, 2 free points bought: free points 4 of 4 to 2 of 4, pool 3, karma unchanged). Still open: specializations (active and knowledge), writing in your own knowledge skill name, the knowledge skill type choice (Academic, Interest, Language, Professional, Street) beyond the data's default.
-- [ ] Still to buy in creation: skill groups, knowledge skills and languages, specializations, special attributes (MAG, RES, EDG limits), contacts, spells, adept powers, complex forms, gear and nuyen. The attribute stepper allows going over the karma budget (the ledger then shows a negative); Chummer's finishing step is the place to refuse that.
-- [ ] Skills and skill groups, specializations, knowledge and language skills, with karma costs.
-- [ ] Qualities with prerequisites (the prerequisite language, about 83 node types) and karma limits.
+- [x] Skills, skill groups, specializations, knowledge and language skills, spells, adept powers, complex forms, gear and nuyen are all buyable in creation (see the entries below and in M5). The attribute stepper still allows going over the karma budget (the ledger then shows a negative); the finishing step refuses it.
+- [x] Quality karma limits. [ ] Quality prerequisites (the prerequisite language, about 83 node types) are not evaluated.
 - [~] The improvement handler registry (`BonusHandlers`): turns an item's `<bonus>` node into improvements. 144 simple nodes (one improvement of a fixed type, with or without a value) are generated from Chummer's source by `tools/gen_bonus_table.py` (re-run on Chummer updates); about 40 more are written by hand (armor family with precedence/group, specific attribute, condition monitor, tabs, skills, skill groups, limit modifiers, movement, lifestyle cost, select-text and select-restricted, karma cost modifiers). Covers 135 of the 246 node types in Chummer's data. `BonusHandlerFixtureTest` replays every item in the 35 fixtures through the handlers (bonus node read from the game data, as creation will) and compares with the improvements Chummer stored: 468 of 680 items match exactly (now 507 of 685 after the karma-cost, drug, sprint, prototype transhuman and weapon-skill-accuracy handlers; 146 of 246 node types handled). The rest: 151 unhandled nodes (mostly choice-driven: select skill, weapon, tradition, mentor spirit, unlock skills, add gear/qualities/limbs/contacts) and mismatches that are old-version drift (the fixtures were mostly saved by Chummer 5.202, which created different improvements or used older text and data; for example `DisableQuality` only exists from 5.226). Not verified against a newer file except Viper.
 - [x] Character editing, first slice: `CharacterEditor` adds a quality from the game data (writing the `<quality>` element in Chummer's layout and its improvements through `BonusHandlers`) and removes one with its improvements. `CharacterEditorTest` re-adds each of Viper's 10 qualities and compares with what Chummer wrote (2 known differences: one quality renamed in newer data, one saved by an older version without its text prompt); adding Toughness changes soak by exactly 1, survives a write and read, and removing it restores the numbers. In the app (Qualities tab): search all 761 qualities, add (with a text prompt for the 94 that ask for one), remove with confirmation; the file is saved and the sheet recalculated; the first save of each file in a session keeps a timestamped backup in the app's private folder. Verified on the S24 Ultra on a copy of Viper (soak 29 to 30).
 - [ ] Not in the editing slice yet: prerequisites (`required`/`forbidden`) and karma limits are not checked; no karma or nuyen bookkeeping (adding a quality does not spend karma); qualities with levels; the 165 qualities whose bonuses use a node type without a handler are added but those bonuses are missing (flagged in the picker). Saved files differ from Chummer's byte for byte (plain newlines and `<x/>` instead of Windows newlines and `<x />`), which is the same XML; checking that desktop Chummer opens an edited file is still to do.
@@ -174,7 +173,7 @@ Approach: creation edits a character document (the same DOM we read) and every c
 - [x] **Talent effects** (Chummer's `SelectMetatypePriority`): a talent gives free ratings in picked skills or skill groups, kept as `SkillBase` or `SkillGroupBase` improvements from the Heritage source (as in the fixtures); the choices are magical skills, resonance skills, a listed set, an XPath filter over the skills, or listed groups. Free spells are stored as `spelllimit` and complex forms as `cfplimit`. The karma ledger now follows the creation form's free spell rules (the talent's count, spell limit and free-spell improvements, attribute- and skill-based free spells, touch-only spells, mystic adept power points bought with karma). Seven free spells cost nothing for a B Magician and the eighth costs 5 (tested).
 - [x] **Finishing** a Priority or Sum-to-Ten character works through the same ledgers (tested: 25 karma keeps the carry-over of 7, the resources budget keeps its ¥200 carry-over, the sheet turns into a career sheet); unspent points are warnings, as in Chummer.
 - [~] **Remaining karma against Chummer's stored value** (`PriorityTableTest`): 18 of 26 creation fixtures match exactly (ratchet 8). Fixes read from the fixtures: skill cost improvements (`ActiveSkillKarmaCost`, `KnowledgeSkillKarmaCost`, `SkillCategoryKarmaCost` and the multipliers, in creation mode) now price skill steps in the ledger as in `Skill.RangeCost`; martial arts cost their karma plus 5 for every technique after the first; a negative quality refund is capped at the quality limit while the positive qualities stay within it (read from the data: it fits Munin, Blindfire, Apex, Skink); specializations on karma-bought skills are paid with points in these files (setting `allowpointbuyspecializationsonkarmaskills`, which the shipped profile `default.xml` they were saved with would hold; the test sets it). Still off: foci and mentor spirit advantages (5 files), complex forms and a Resonance row the engine reads wrongly (Bastion, Yeti), mystic adept power points (resub). The talent skill picker was checked on the phone: an Adept at B offers 64 skills for one free rating of 4 (Archery shown as rating 4, pool 5), Create stays off until the pick is made.
-- [ ] Not built: martial arts, complex forms and initiation costs in the ledger, contacts' special rules (group contacts), the A.I. talent, aspected magician skill group effects beyond the free rating.
+- [x] Martial arts, complex forms, initiation, foci, critter powers and A.I. programs are now counted in the ledger (see the progress log). [ ] Not built: group contacts' special rule (Chummer pays them with karma as positive qualities, but doing so matched Ushi worse), aspected magician skill group effects beyond the free rating.
 
 ### M6: Career advancement (L), in progress
 - [x] Karma and nuyen expense log with undo (`ExpenseLog`): entries read and written in Chummer's layout; **the stored karma and nuyen equal the sum of all entries, refund-flagged ones included** (Viper: -107 + 112 = 5; 2142 + 4536 = 6678). Manual rewards and spends, undo for manual entries and for skill and attribute improvements (the bought rating is given back); the starting karma and nuyen entries cannot be undone.
@@ -182,7 +181,8 @@ Approach: creation edits a character document (the same DOM we read) and every c
 - [x] App: Career card on the Overview (balances, add entry, log with undo), price buttons on attributes, skills, knowledge skills and groups. Builds; **not yet seen on the phone**.
 - [x] Specializations (price from the settings, one per skill; checked against Viper's 7-karma entry; undo removes it) and **buying qualities in career** (karma x the settings' quality multiplier, doubled unless the settings or the quality say otherwise; negative qualities log 0; undo removes the quality and its improvements). In the app: "+spec" on rated skills, and the Add quality list shows career prices. Builds; not yet seen on the phone.
 - [x] Career spells (settings' spell price with the new-spell-cost improvements; rituals priced separately, preparations not told apart yet; undo removes the spell), removing qualities (positive: free; negative: bought off at karma x multiplier, doubled unless the settings say otherwise; logged, not undoable in the app), undo of skill-group improvements. App: spell picker and quality removal show prices. Builds; not yet seen on the phone.
-- [ ] Not built: swapping qualities, quality discounts and `refundkarmaonremove`, preparations, free-spell rules in career, adept powers, initiation, complex forms, martial arts, gear and nuyen purchases (waits for the handler registry and gear creation, M4), lifestyle payments, undo of group improvements, karma-to-nuyen conversion, and the career-karma total for refund entries.
+- [x] Since built (see M4 and the progress log): initiation, complex forms, martial arts, critter powers, A.I. programs, gear, ware, weapon and armor purchases with nuyen entries and undo.
+- [ ] Not built: swapping qualities, quality discounts and `refundkarmaonremove`, preparations, free-spell rules in career, lifestyle payments, undo of negative-quality removal, karma-to-nuyen conversion, selling gear and ware, upgrading ware grade, and the career-karma total for refund entries.
 - [ ] Created-versus-career mode: the sheet already switches on `created`; still to check which creation-only controls must be hidden or locked in career.
 - [ ] Viper's expense log as the test case: the balance and prices are covered; replaying the whole log's purchases against an empty character is not.
 
@@ -194,9 +194,86 @@ Approach: creation edits a character document (the same DOM we read) and every c
 - [ ] Sheet export as HTML or PDF
 - [ ] SumtoTen and LifeModule build methods (optional)
 
+## Outstanding items
+
+Consolidated 2026-11-22 from the milestones, the source notes and the progress log. Remove an item when it is done and log the work in the progress log.
+
+### A. Unverified (built, never checked)
+Phone:
+- [ ] M1: share out, delete, shared-folder choice, list with several characters.
+- [ ] M6 career UI beyond the Viper session: "+spec", quality removal, career spells.
+- [ ] Accessories and armor mods, plug-ins, loading and unloading ammo.
+- [ ] Arts, enhancements and enchantments at a grade, initiation block on a magician.
+- [ ] Spirits section, critter powers block, shapeshifter creation, finishing a Priority or Sum-to-Ten character.
+- [ ] Picker catalog warm-up timing on the phone itself.
+
+Against desktop Chummer:
+- [ ] Open a finished (career-converted) app file, a file with metavariants, and files edited with gear, ware, weapons or powers.
+- [ ] Karma totals for the Mag files, creation nuyen totals, critter characters (no fixture), spirit and sprite details.
+- [ ] Amend-layer quirks read only from source: `amend_weapon.xml` never applied, `removenode` acting as replace.
+
+### B. Parity gaps
+- [ ] Attributes: 14 of 454 miss (Davis Jones 10, saved by 5.183, may need an old-format reader; Bastion and Blindfire 4, cyberlimb averaging one too low).
+- [ ] Essence: 4 of 35 miss (Bastion, Monomax, Fuzzy-chargen, SCSi).
+- [ ] Creation karma: 7 of 26 miss (Bastion and Yeti complex forms, Resub mystic adept power points, Miko, Ocelot, Ushi and prime quality rules, group contacts).
+- [ ] Bonus handlers: 87 of 246 node types unhandled (for example `selectspell`, `addweapon` in power bonuses); about 120 stored items differ, mostly old-version drift.
+- [ ] Price mysteries: Explosive Rounds (300 against 240), Novacoke and Jazz (double), Bone Lacing (18000 paid 6750).
+- [ ] Not calculated: matrix and astral initiative, wound modifiers from damage, skillsofts and activesofts, conditional improvements, broken skill groups, toxin and pathogen immunity, cyberleg movement setting, shapeshifter movement, encumbrance, Cyberzombie, Custom Fit (Stack), FixedValues and Variable essence formulas, essence holes, weapon dice pools, wireless bonuses, fire modes from accessories, flechette ammo, weapon availability and cost.
+- [ ] Chummer creation checks not ported: attribute and skill limits per metatype and group, contact limits, metagenic balance, cyberware grades and capacity, vehicle rules, nuyen limits.
+
+### C. Creation
+- [ ] Attribute stepper can overspend karma (only finishing refuses it).
+- [ ] Quality prerequisites (`required`/`forbidden`) and qualities with levels.
+- [ ] Choice pickers for weapon and armor selections in bonuses.
+- [ ] Knowledge skill specializations, typed knowledge skill names, knowledge skill type choice.
+- [ ] Special attribute limits (MAG, RES, EDG).
+- [ ] Mystic adepts: power points bought with karma, second Magic attribute rule. Adept way and geas discounts, power enhancements, power prerequisites.
+- [ ] Aspected magician skill group effects, tradition bonuses, creation-mode initiation, contact-point warning, shapeshifter second attribute set, non-retroactive essence modifiers.
+- [ ] Critter characters: optional powers, possession traditions, natural weapons from `naturalweapons`, named specializations, movement text, a Force that changes later.
+- [ ] Gear in creation: items with child items or weapons, function price formulas.
+- [ ] Metatype variants for Priority and Sum-to-Ten (for example Nartaki); `settingshashcode` empty on new characters.
+
+### D. Career
+- [ ] Swapping qualities, quality discounts, `refundkarmaonremove`, preparations, free-spell rules.
+- [ ] Lifestyle payments, karma-to-nuyen conversion, career-karma total for refund entries.
+- [ ] Undo of negative-quality removal and of group improvements.
+- [ ] Selling gear and ware, upgrading ware grade.
+- [ ] Hide or lock creation-only controls in career.
+- [ ] Replay Viper's whole expense log against an empty character as a test.
+
+### E. Magic and resonance
+- [ ] Spirits: fettering, powers, attributes and skills, services as a pool.
+- [ ] Sprites: compiling and registering in career, threaded forms.
+- [ ] Mentor spirits: mask and paragon flags, Miko's extra Dolphin improvements.
+- [ ] Initiation: group membership karma, cyberadept daemon.
+- [ ] A.I.: program ratings and effects, Depth-based limits. Shapeshifter Shift form and natural weapons in play.
+- [ ] Spell, drain and spell pools on the sheet.
+
+### F. Gear, ware and vehicles
+- [ ] Ware: `forced`-choice items, cyberlimb attribute setup and modular mounts, essence holes, buying ware in creation.
+- [ ] Vehicles and drones: details, mods, weapon mounts, creation pricing beyond cost.
+- [ ] Commlink matrix attributes.
+- [ ] Items whose bonuses use unhandled node types (flagged "not applied yet", for example 165 qualities).
+
+### G. Sheet and UI
+- [ ] Missing sections: drugs, notes, mugshot, commlink matrix attributes, vehicle details, weapon totals. Mugshot thumbnails in the list.
+- [ ] Tap a number to see how it is made up; denser gear and ware rows; quick-reference play mode.
+- [ ] New-character screen hides the third free-skill button below the fold for a Technomancer (Create looks disabled).
+- [ ] Custom data from subfolders of the characters folder is not read.
+- [ ] Landscape and tablet are not planned.
+
+### H. Infrastructure and long tail
+- [ ] `sync-chummer` script, pinned upstream commit, warning for files newer than the engine supports.
+- [ ] Data-pack updates without an app release.
+- [ ] Amended-data cache built at install or build time for Chummer's own folders (first open with 7 folders is 6.7 s).
+- [ ] Reduce the DOM heap (about 80 MB) if it becomes a problem.
+- [ ] Sheet export as HTML or PDF.
+- [ ] LifeModule build method (optional); languages beyond English.
+- [ ] Toolchain upgrade (AGP 9.1, compileSdk 37).
+
 ## Risks
 
-1. **Engine parity:** about 20 years of accumulated rules behavior. M2 is the measure: attributes 440/454, essence 31/35, skills 78/78 and derived stats 32/32 against Chummer's numbers for Viper. The golden tests keep progress measurable, but creation and bonus handling (M4) are still ahead.
+1. **Engine parity:** about 20 years of accumulated rules behavior. The measures: attributes 440/454, essence 31/35, skills 78/78, derived stats and resistances 63/63 (Viper), weapons 120/120, creation karma 19/26, bonus items 565/685. The golden tests keep progress measurable. Creation and bonus handling are built but still have known gaps (see Outstanding items).
 2. **Checking against Chummer needs its own output.** Saved files store few computed values (no skill totals, limits or armor). Only Viper has a full Chummer print XML. Every other character is checked against stored values or hand-derived numbers until exported. Mitigation: export more characters (Bastion, Blindfire, SCSi, Monomax, Fuzzy-chargen, one magic character).
 3. **Creation validation (M4 and M5):** the most complex rules. Mirror Chummer's source behavior and check each rule against fixtures.
 4. **Phone usability:** Chummer's UI is dense and desktop-oriented. We need a distinct mobile design, not a port.
@@ -213,6 +290,8 @@ Approach: creation edits a character document (the same DOM we read) and every c
 - Which source books are enabled by default? (Viper uses 18 books, including non-core ones.)
 - Do you want to export more characters from Chummer (list in the risks above)? Each one closes golden gaps.
 - Phone check of M1 features not yet tried: share out, delete, list with several characters.
+- The real `default.xml` profile (the fixtures' original) would settle three guessed karma-ledger rules (group contacts and two quality rules).
+- Toolchain upgrade (AGP 9.1, compileSdk 37): when?
 
 ## Progress log
 
