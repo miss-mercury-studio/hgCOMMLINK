@@ -131,7 +131,9 @@ class CharacterFile(val doc: Document) {
     data class SkillRow(
         val name: String, val suid: String, val category: String, val base: Int, val karma: Int,
         val isKnowledge: Boolean, val type: String, val isNativeLanguage: Boolean,
-        val specializations: List<String>, val guid: String = "",
+        val specializations: List<String>, val guid: String = "", val buyWithKarma: Boolean = false,
+        /** Specializations that are not free (those that cost a skill point or karma). */
+        val paidSpecializations: Int = 0,
     )
 
     private fun parseSkill(e: Element) = SkillRow(
@@ -140,6 +142,8 @@ class CharacterFile(val doc: Document) {
         isKnowledge = e.text("isknowledge")?.trim().equals("True", true), type = e.text("type").orEmpty().trim(),
         isNativeLanguage = e.text("isnativelanguage")?.trim().equals("True", true),
         specializations = e.child("specs")?.children("spec").orEmpty().mapNotNull { it.text("name")?.trim() },
+        buyWithKarma = e.text("buywithkarma")?.trim().equals("True", true),
+        paidSpecializations = e.child("specs")?.children("spec").orEmpty().count { it.text("free")?.trim() != "True" },
     )
 
     /** Active skills, then knowledge skills, in file order. */

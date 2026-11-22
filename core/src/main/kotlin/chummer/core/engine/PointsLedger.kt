@@ -27,7 +27,7 @@ data class PointsLedger(val attributes: Pool, val special: Pool, val skills: Poo
         /** True for the build methods that give free points. */
         fun usesPoints(c: CharacterFile) = c.root.text("buildmethod")?.trim() in setOf("Priority", "SumtoTen")
 
-        fun of(c: CharacterFile, data: GameData?, tableName: String = "Standard"): PointsLedger? {
+        fun of(c: CharacterFile, data: GameData?, tableName: String = "Standard", settings: chummer.core.data.CharacterSettings? = null): PointsLedger? {
             if (!usesPoints(c)) return null
             val pack = data as? DataPack ?: return null
             val a = PriorityTable(pack).allotment(c, tableName) ?: return null
@@ -35,13 +35,40 @@ data class PointsLedger(val attributes: Pool, val special: Pool, val skills: Poo
             val attrs = c.root.child("attributes")?.children("attribute").orEmpty()
             val standardUsed = attrs.filter { it.text("name")?.trim() in STANDARD }.sumOf(::base)
             val specialUsed = attrs.filter { it.text("name")?.trim() in SPECIAL }.sumOf(::base)
-            val skillsUsed = c.root.child("newskills")?.child("skills")?.children("skill").orEmpty()
-                .filter { it.text("isknowledge")?.trim() != "True" }.sumOf(::base)
+            val activeRows = c.root.child("newskills")?.child("skills")?.children("skill").orEmpty().filter { it.text("isknowledge")?.trim() != "True" }
+            // A specialization costs a skill point, unless it has to be bought with karma (see [SkillSpecs]).
+            val skillsUsed = activeRows.sumOf(::base) + SkillSpecs.split(c, settings, data).first
             val groupsUsed = c.root.child("newskills")?.child("groups")?.children("group").orEmpty().sumOf(::base)
             return PointsLedger(
                 Pool(a.attributePoints, standardUsed), Pool(a.specialPoints, specialUsed),
                 Pool(a.skillPoints, skillsUsed), Pool(a.skillGroupPoints, groupsUsed),
             )
         }
+    }
+}
+
+/** How Chummer pays for specializations in the points builds: a skill point each, or karma when the skill is bought with karma. */
+object SkillSpecs {
+    /**
+     * The paid specializations of the active skills as (paid with skill points, paid with karma). A specialization is paid with
+     * karma when the skill is marked so, when the skill was bought with karma alone (unless the settings allow points for those),
+     * or when the settings make specializations break skill groups and the skill's group has been raised. A skill with no rating
+     * cannot have a specialization at all. Chummer's `Skill.BuyWithKarma` and `CurrentSpCost`.
+     */
+    fun split(c: CharacterFile, settings: chummer.core.data.CharacterSettings?, data: GameData?): Pair<Int, Int> {
+        val groups = c.skillGroups()
+        val allowPoints = settings?.bool("allowpointbuyspecializationsonkarmaskills") ?: false
+        val breakGroups = settings?.bool("specializationsbreakskillgroups", true) ?: true
+        var points = 0
+        var karma = 0
+        for (s in c.skills().filter { !it.isKnowledge && it.paidSpecializations > 0 }) {
+            val group = data?.get(s.suid)?.element?.child("skillgroup")?.textContent?.trim().orEmpty()
+            val (groupBase, groupKarma) = groups[group] ?: (0 to 0)
+            val forced = (s.karma > 0 && s.base == 0 && !allowPoints) || (breakGroups && (groupBase > 0 || groupKarma > 0))
+            // A skill with no rating cannot have a specialization.
+            if (s.base + s.karma + groupBase + groupKarma == 0) continue
+            if (s.buyWithKarma || forced) karma += s.paidSpecializations else points += s.paidSpecializations
+        }
+        return points to karma
     }
 }

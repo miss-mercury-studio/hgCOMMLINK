@@ -64,4 +64,31 @@ class PriorityTableTest {
         assertTrue(bad.joinToString("; "), bad.isEmpty())
         assertTrue(exact >= 30)
     }
+
+    /** The karma Chummer says is left (stored as `karma`) against our ledger, for the characters still in creation. */
+    @Test
+    fun karmaLeftMatchesWhatChummerStored() {
+        val differences = ArrayList<String>()
+        var checked = 0
+        for ((f, c) in fixtures) {
+            if (c.root.text("created")?.trim() == "True" || c.root.text("appversion")?.startsWith("5.202") != true) continue
+            val settings = chummer.core.data.CharacterSettings.find(c.root.text("settings").orEmpty(), File(src, "Chummer/data/settings.xml"), emptyList())
+            val ledger = KarmaLedger.of(c, settings, data)
+            val stored = c.root.text("karma")?.trim()?.toIntOrNull()
+            checked++
+            if (stored != ledger.remaining) differences += "${f.name}: stored $stored ours ${ledger.remaining} (spent ${ledger.spent}; meta ${ledger.metatype} attr ${ledger.attributes} skills ${ledger.skills} groups ${ledger.skillGroups} know ${ledger.knowledge} qual ${ledger.qualities} contacts ${ledger.contacts} spells ${ledger.spells} nuyen ${ledger.nuyen} budget ${ledger.budget}; not counted ${ledger.notCounted})"
+        }
+        println("checked $checked, ${differences.size} differ")
+        differences.forEach { println(it) }
+        assertTrue("$checked checked, ${differences.size} differ", differences.size <= KNOWN_DIFFERENCES)
+    }
+
+    companion object {
+        /**
+         * 6 of the 26 creation fixtures match Chummer's remaining karma exactly (Apex Predator among them). The others lack things
+         * not built yet (free spells from the talent, mentor spirits, foci, martial arts, complex forms) or depend on the profile
+         * `default.xml` they were saved with, which is not shipped (whether qualities beyond the limit earn or cost anything).
+         */
+        const val KNOWN_DIFFERENCES = 20
+    }
 }

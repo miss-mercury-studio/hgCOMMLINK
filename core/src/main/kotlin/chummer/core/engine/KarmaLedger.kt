@@ -67,7 +67,8 @@ data class KarmaLedger(
             val notCounted = ArrayList<String>()
 
             // Stored in the settings as `buildpoints` (the Karma build budget; 800 in Chummer's own profiles, 700 in San Francisco Showdown).
-            val budget = settings.int("buildpoints", 800)
+            // Priority and Sum-to-Ten characters start with the karma the build method gives (stored as `buildkarma`, 25 by default).
+            val budget = if (PointsLedger.usesPoints(c)) c.root.text("buildkarma")?.trim()?.toIntOrNull() ?: settings.int("buildkarma", 25) else settings.int("buildpoints", 800)
 
             // Metatype (and metavariant) cost.
             val metatype = (c.root.text("metatypebp")?.trim()?.toIntOrNull() ?: 0) * settings.int("metatypecostskarmamultiplier", 1)
@@ -102,7 +103,7 @@ data class KarmaLedger(
             }
             val activeSkills = c.skills().filter { !it.isKnowledge }
             val groups = c.skillGroups()
-            val groupOf = activeSkills.associate { s -> s.name to data?.get(s.suid)?.element?.child("skillgroup")?.textContent?.trim().orEmpty() }
+            val groupOf = activeSkills.associate { s -> s.guid to data?.get(s.suid)?.element?.child("skillgroup")?.textContent?.trim().orEmpty() }
             var skills = 0
             var skillGroups = 0
             // A group's karma raises every member by that many ratings; the group pays for the steps all members share and
@@ -110,7 +111,7 @@ data class KarmaLedger(
             val groupKarma = groups.mapValues { it.value.second }
             for ((name, g) in groupKarma.filter { it.value > 0 }) {
                 if (data == null) { notCounted += "skill group karma"; break }
-                val members = activeSkills.filter { groupOf[it.name] == name }
+                val members = activeSkills.filter { groupOf[it.guid] == name }
                 if (members.isEmpty()) continue
                 val upper = members.minOf { it.base + it.karma + g }
                 val lower = upper - g
@@ -118,17 +119,20 @@ data class KarmaLedger(
                 skillGroups += steps * (if (steps == 1) k("karmanewskillgroup", 5) else k("karmaimproveskillgroup", 5))
             }
             for (s in activeSkills) {
-                val g = groupKarma[groupOf[s.name]] ?: 0
+                val g = groupKarma[groupOf[s.guid]] ?: 0
                 val total = s.base + s.karma + g
                 if (total == 0) continue
                 if (g > 0 && data != null) {
-                    val groupUpper = activeSkills.filter { groupOf[it.name] == groupOf[s.name] }.minOf { it.base + it.karma + g }
+                    val groupUpper = activeSkills.filter { groupOf[it.guid] == groupOf[s.guid] }.minOf { it.base + it.karma + g }
                     skills += stepCost(s.base, groupUpper - g) + stepCost(groupUpper, total)
                 } else {
                     skills += stepCost(s.base, s.base + s.karma)
                 }
-                skills += s.specializations.size * k("karmaspecialization", 7)
+                if (!PointsLedger.usesPoints(c)) skills += s.specializations.size * k("karmaspecialization", 7)
             }
+
+            // In the points builds a specialization costs a skill point, or karma when the skill has to be bought with karma.
+            if (PointsLedger.usesPoints(c)) skills += SkillSpecs.split(c, settings, data).second * k("karmaspecialization", 7)
 
             // Knowledge skills (and languages). Points from the free pool are levels paid for already; karma buys the rest.
             // A native language is free.
@@ -163,9 +167,15 @@ data class KarmaLedger(
                 val bp = q.text("bp")?.trim()?.toIntOrNull() ?: 0
                 val amount = bp * k("karmaquality", 1)
                 val countsToLimit = !q.text("contributetolimit")?.trim().equals("False", true)
-                if (q.text("qualitytype")?.trim().equals("Negative", true)) { qualities -= amount; if (countsToLimit) negative += amount }
-                else { qualities += amount; if (countsToLimit) positive += amount }
+                // The data and the saved files give a negative quality a negative karma value, which is what it gives back.
+                if (q.text("qualitytype")?.trim().equals("Negative", true)) {
+                    val back = -kotlin.math.abs(amount)
+                    if (countsToLimit) negative -= back else qualities += back
+                } else { qualities += amount; if (countsToLimit) positive += amount }
             }
+            // The karma negative qualities give back is capped at the quality limit when the settings say qualities beyond it earn nothing.
+            val qualityLimit = settings.int("qualitykarmalimit", 25)
+            qualities -= if (settings.bool("exceednegativequalitiesnobonus") && negative > qualityLimit) qualityLimit else negative
 
             // Contacts: connection plus loyalty points beyond the free contact points cost karma.
             val contactRows = c.root.child("contacts")?.children("contact").orEmpty()

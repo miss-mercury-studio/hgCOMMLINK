@@ -143,7 +143,7 @@ class CharacterEditor(
         val karma = row.text("karma")?.trim()?.toIntOrNull() ?: 0
         val base = row.text("base")?.trim()?.toIntOrNull() ?: 0
         if (delta > 0 && base + karma >= rules.maxSkillRatingCreate) return false
-        return stepRow(row, delta, base, karma, PointsLedger.of(file, data)?.skills)
+        return stepRow(row, delta, base, karma, PointsLedger.of(file, data, settings = settings)?.skills)
     }
 
     /**
