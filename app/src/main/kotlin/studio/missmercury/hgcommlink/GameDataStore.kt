@@ -58,37 +58,65 @@ class GameDataStore(private val context: Context) {
             .associate { (it.child("key")?.textContent ?: "").trim() to (it.child("text")?.textContent ?: "").trim() }
     }
 
+    private val catalogs = HashMap<String, Any>()
+
+    /**
+     * A list of everything the game data offers (all qualities, all gear...), built once per data pack. Building one takes tens of milliseconds
+     * on a desktop and several times that on a phone, which is too long to spend while a picker opens on the main thread.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> catalog(name: String, build: (DataPack) -> T): T {
+        synchronized(catalogs) { catalogs[name]?.let { return it as T } }
+        // Without loaded data there is nothing to offer yet (the same empty list the pickers always got).
+        val made = build(synchronized(this) { pack } ?: return emptyList<Any>() as T)
+        synchronized(catalogs) { catalogs[name] = made as Any }
+        return made
+    }
+
+    /** Build the big lists on a background thread as soon as the data is loaded, so the first picker opens at once too. */
+    private fun warm() {
+        val p = pack ?: return
+        Thread {
+            runCatching {
+                catalog("quality", QualityCatalog::list); catalog("spell", chummer.core.engine.SpellCatalog::list); catalog("gear", chummer.core.engine.GearCatalog::list)
+                catalog("ware", chummer.core.engine.WareCatalog::list); catalog("weapon", chummer.core.engine.ArmorWeaponCatalog::weapons)
+                catalog("knowledge", chummer.core.engine.KnowledgeCatalog::list)
+            }
+            android.util.Log.i("hgcommlink", "catalogs ready for ${p.byId.size} entries")
+        }.apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
+    }
+
     /** Qualities that can be added, as far as the current game data goes. Needs the data loaded (open a character first). */
     /** Knowledge skills and languages that can be added. */
     fun knowledgeOptions(): List<chummer.core.engine.KnowledgeOption> =
-        synchronized(this) { pack?.let(chummer.core.engine.KnowledgeCatalog::list).orEmpty() }
+        catalog("knowledge", chummer.core.engine.KnowledgeCatalog::list)
 
     fun complexFormOptions(): List<chummer.core.engine.ComplexFormOption> =
-        synchronized(this) { pack?.let(chummer.core.engine.ComplexForms::catalog).orEmpty() }
+        catalog("complexform", chummer.core.engine.ComplexForms::catalog)
 
     fun spellOptions(): List<chummer.core.engine.SpellOption> =
-        synchronized(this) { pack?.let(chummer.core.engine.SpellCatalog::list).orEmpty() }
+        catalog("spell", chummer.core.engine.SpellCatalog::list)
 
     fun traditionOptions(): List<chummer.core.engine.TraditionOption> =
-        synchronized(this) { pack?.let(chummer.core.engine.TraditionCatalog::list).orEmpty() }
+        catalog("tradition", chummer.core.engine.TraditionCatalog::list)
 
-    fun armorOptions(): List<chummer.core.engine.ItemOption> = synchronized(this) { pack?.let(chummer.core.engine.ArmorWeaponCatalog::armor).orEmpty() }
-    fun weaponOptions(): List<chummer.core.engine.ItemOption> = synchronized(this) { pack?.let(chummer.core.engine.ArmorWeaponCatalog::weapons).orEmpty() }
+    fun armorOptions(): List<chummer.core.engine.ItemOption> = catalog("armor", chummer.core.engine.ArmorWeaponCatalog::armor)
+    fun weaponOptions(): List<chummer.core.engine.ItemOption> = catalog("weapon", chummer.core.engine.ArmorWeaponCatalog::weapons)
 
-    fun accessoryOptions(): List<chummer.core.engine.ItemOption> = synchronized(this) { pack?.let(chummer.core.engine.ArmorWeaponCatalog::accessories).orEmpty() }
-    fun armorModOptions(): List<chummer.core.engine.ItemOption> = synchronized(this) { pack?.let(chummer.core.engine.ArmorWeaponCatalog::armorMods).orEmpty() }
+    fun accessoryOptions(): List<chummer.core.engine.ItemOption> = catalog("accessory", chummer.core.engine.ArmorWeaponCatalog::accessories)
+    fun armorModOptions(): List<chummer.core.engine.ItemOption> = catalog("armormod", chummer.core.engine.ArmorWeaponCatalog::armorMods)
 
-    fun wareOptions(): List<chummer.core.engine.WareOption> = synchronized(this) { pack?.let(chummer.core.engine.WareCatalog::list).orEmpty() }
+    fun wareOptions(): List<chummer.core.engine.WareOption> = catalog("ware", chummer.core.engine.WareCatalog::list)
     fun wareGrades(bioware: Boolean, c: CharacterFile): List<String> = synchronized(this) { pack?.let { chummer.core.engine.WareCatalog.gradeNames(it, bioware, settingsFor(c).bannedWareGrades) }.orEmpty() }
 
     fun pluginOptions(parentSourceId: String): List<chummer.core.engine.WareOption> = synchronized(this) { pack?.let { chummer.core.engine.WareCatalog.pluginsFor(it, parentSourceId) }.orEmpty() }
 
-    fun powerOptions(): List<chummer.core.engine.PowerOption> = synchronized(this) { pack?.let(chummer.core.engine.PowerCatalog::list).orEmpty() }
+    fun powerOptions(): List<chummer.core.engine.PowerOption> = catalog("power", chummer.core.engine.PowerCatalog::list)
 
     fun gearOptions(): List<chummer.core.engine.GearOption> =
-        synchronized(this) { pack?.let(chummer.core.engine.GearCatalog::list).orEmpty() }
+        catalog("gear", chummer.core.engine.GearCatalog::list)
 
-    fun qualityOptions(): List<QualityOption> = synchronized(this) { pack?.let(QualityCatalog::list).orEmpty() }
+    fun qualityOptions(): List<QualityOption> = catalog("quality", QualityCatalog::list)
 
     fun finishPlan(c: CharacterFile) =
         chummer.core.engine.CharacterFinisher.plan(c, settingsFor(c), synchronized(this) { pack ?: error("Game data is not loaded yet") })
@@ -162,7 +190,7 @@ class GameDataStore(private val context: Context) {
     /** The talents a priority letter offers (value and name), and whether a metatype is offered at a heritage letter. */
     fun priorityTalents(letter: String): List<chummer.core.engine.TalentOption> = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).talents(letter) }.orEmpty() }
     fun talentSkillChoices(talent: chummer.core.engine.TalentOption): List<String> = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).skillChoices(talent) }.orEmpty() }
-    fun martialArtOptions(): List<chummer.core.engine.MartialArtOption> = synchronized(this) { pack?.let(chummer.core.engine.MartialArtCatalog::arts).orEmpty() }
+    fun martialArtOptions(): List<chummer.core.engine.MartialArtOption> = catalog("martial", chummer.core.engine.MartialArtCatalog::arts)
     fun techniqueOptions(artName: String): List<chummer.core.engine.TechniqueOption> = synchronized(this) {
         val p = pack ?: return@synchronized emptyList()
         chummer.core.engine.MartialArtCatalog.arts(p).firstOrNull { it.name == artName }?.let { chummer.core.engine.MartialArtCatalog.techniquesFor(p, it.id) }.orEmpty()
@@ -176,7 +204,7 @@ class GameDataStore(private val context: Context) {
     @Synchronized
     private fun packFor(dirs: List<CustomDataDir>): DataPack {
         val key = keyOf(dirs)
-        return pack?.takeIf { key == packKey } ?: DataPack.load(dataDir(), dirs, File(context.filesDir, "amended-cache")).also { pack = it; packKey = key }
+        return pack?.takeIf { key == packKey } ?: DataPack.load(dataDir(), dirs, File(context.filesDir, "amended-cache")).also { pack = it; packKey = key; synchronized(catalogs) { catalogs.clear() }; warm() }
     }
 
     /** Build the sheet, plus a warning to show when its numbers may differ from Chummer's (null when none). */
