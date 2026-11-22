@@ -56,6 +56,8 @@ data class Sheet(
     val isMagician: Boolean = false,
     /** Limit modifiers that apply only under a condition (not in the limits above). */
     val limitNotes: List<LimitLine> = emptyList(),
+    /** Free points of a Priority or Sum-to-Ten character in creation; null for other builds. */
+    val points: PointsLedger? = null,
 ) {
     data class CreationBuy(val ledger: NuyenLedger, val pluginCapacity: Map<String, Double>)
     /**
@@ -86,6 +88,8 @@ data class Sheet(
     data class QualityLine(val guid: String, val name: String, val positive: Boolean, val extra: String)
 
     companion object {
+        /** The build methods whose creation screens are supported. */
+        private val CREATION_BUILDS = setOf("Karma", "Priority", "SumtoTen")
         private val ORDER = listOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL", "EDG", "MAG", "RES", "DEP")
 
         fun build(c: CharacterFile, data: GameData, settings: CharacterSettings): Sheet {
@@ -148,7 +152,7 @@ data class Sheet(
                     KnowledgeLine(row.guid, row.name, row.type.ifEmpty { row.category }, row.base, row.karma, row.isNativeLanguage, r?.rating ?: 0, r?.pool ?: 0)
                 }.sortedBy { it.name.lowercase() },
                 qualities = qualities(c),
-                review = if (!career && s.buildMethod == "Karma") CreationReview.of(c, settings, data) else null,
+                review = if (!career && s.buildMethod in CREATION_BUILDS) CreationReview.of(c, settings, data) else null,
                 magic = if (flag(c, "magenabled")) MagicLines(
                     c.root.child("tradition")?.text("name")?.trim().orEmpty(),
                     c.root.child("spells")?.children("spell").orEmpty().map {
@@ -163,9 +167,10 @@ data class Sheet(
                 powers = if (flag(c, "adept")) PowerPoints.of(c, settings, data) else null,
                 isMagician = flag(c, "magician"),
                 limitNotes = LimitModifiers.of(c),
-                creationBuy = if (!career && s.buildMethod == "Karma") CreationBuy(NuyenLedger.of(c, settings, data), CareerAdvancement(c, data, settings).pluginCapacity()) else null,
+                creationBuy = if (!career && s.buildMethod in CREATION_BUILDS) CreationBuy(NuyenLedger.of(c, settings, data), CareerAdvancement(c, data, settings).pluginCapacity()) else null,
                 career = if (career) careerLines(c, data, settings, shown.map { it.name }) else null,
-                karmaLedger = if (!career && s.buildMethod == "Karma") KarmaLedger.of(c, settings, data) else null,
+                karmaLedger = if (!career && s.buildMethod in CREATION_BUILDS) KarmaLedger.of(c, settings, data) else null,
+                points = if (!career) PointsLedger.of(c, data, settings = settings) else null,
                 sections = SheetSections.read(c, WeaponEngine(c.root, set, str, d.limitPhysical).all(), essenceEngine, data),
             )
         }

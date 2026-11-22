@@ -174,6 +174,7 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         CareerCard(s, vm)
+        s.points?.let { PointsSection(it) }
         s.karmaLedger?.let { KarmaSection(it, s.review) }
         s.creationBuy?.let { NuyenCard(it.ledger, vm) }
         if (s.review != null) FinishCard(s.review!!, vm)
@@ -694,6 +695,19 @@ private fun Life(g: chummer.core.engine.SheetSections) {
         }
         if (g.martialArts.isNotEmpty()) item { SubHeader("Martial arts") }
         items(g.martialArts) { Text(it) }
+    }
+}
+
+/** The free points of a Priority or Sum-to-Ten character: what is left to spend in each pool. */
+@Composable
+private fun PointsSection(p: chummer.core.engine.PointsLedger) {
+    Section("Points", summary = "attributes ${p.attributes.left}  skills ${p.skills.left}") {
+        listOf(
+            "Attributes" to p.attributes, "Special attributes" to p.special, "Skills" to p.skills, "Skill groups" to p.groups,
+        ).forEach { (label, pool) ->
+            if (pool.total > 0 || pool.used > 0) Row2(label, "${pool.left} left of ${pool.total}")
+        }
+        Text("Raising a rating spends a free point while there is one, then karma.", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
     }
 }
 

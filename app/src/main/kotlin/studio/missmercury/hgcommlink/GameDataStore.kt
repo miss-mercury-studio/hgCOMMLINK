@@ -117,7 +117,7 @@ class GameDataStore(private val context: Context) {
 
     /** Karma-build profiles and the base metatypes to offer when starting a character. Loads the game data. */
     fun newCharacterOptions(): NewCharacterOptions {
-        val profiles = CharacterSettings.available(File(dataDir(), "settings.xml"), listOf(userSettingsDir)).filter { it.buildMethod == "Karma" }
+        val profiles = CharacterSettings.available(File(dataDir(), "settings.xml"), listOf(userSettingsDir)).filter { it.buildMethod in setOf("Karma", "Priority", "SumtoTen") }
         val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(profiles.firstOrNull()?.customData.orEmpty())
         val metatypes = packFor(resolved.dirs).byId.values
             // A `<hide />` marker (set by custom data such as a campaign's house rules) keeps a metatype out of the creation list.
@@ -135,13 +135,16 @@ class GameDataStore(private val context: Context) {
     }
 
     /** Create a new Karma-build character with the chosen profile (and the custom data that profile enables). */
-    fun createCharacter(profile: CharacterSettings, name: String, alias: String, metatypeId: String, variantId: String? = null): CharacterFile {
+    fun createCharacter(profile: CharacterSettings, name: String, alias: String, metatypeId: String, variantId: String? = null, priorities: chummer.core.engine.PriorityChoice? = null): CharacterFile {
         val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(profile.customData)
-        return NewCharacter.createKarma(
-            packFor(resolved.dirs), profile,
-            NewCharacterRequest(name = name, alias = alias, metatypeId = metatypeId, metavariantId = variantId, customDataNames = resolved.dirs.map { it.name }),
-        )
+        val request = NewCharacterRequest(name = name, alias = alias, metatypeId = metatypeId, metavariantId = variantId, customDataNames = resolved.dirs.map { it.name })
+        val pack = packFor(resolved.dirs)
+        return if (priorities != null) NewCharacter.createPriority(pack, profile, request, priorities) else NewCharacter.createKarma(pack, profile, request)
     }
+
+    /** The talents a priority letter offers (value and name), and whether a metatype is offered at a heritage letter. */
+    fun priorityTalents(letter: String): List<chummer.core.engine.TalentOption> = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).talents(letter) }.orEmpty() }
+    fun heritageOffered(letter: String, metatype: String, variant: String): Boolean = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).heritage(letter, metatype, variant) != null } ?: true }
 
     private fun keyOf(dirs: List<CustomDataDir>): String = dirs.joinToString("|") { d ->
         d.guid + ":" + d.dir.walkTopDown().filter { it.isFile }.sortedBy { it.path }.joinToString(",") { "${it.name}/${it.length()}/${it.lastModified()}" }

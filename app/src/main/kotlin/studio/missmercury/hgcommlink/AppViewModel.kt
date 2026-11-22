@@ -318,11 +318,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         gameData.newCharacterOptions()
     }
 
-    fun createCharacter(profile: chummer.core.data.CharacterSettings, name: String, alias: String, metatypeId: String, variantId: String? = null) {
+    fun priorityTalents(letter: String) = gameData.priorityTalents(letter)
+    fun heritageOffered(letter: String, metatype: String, variant: String) = gameData.heritageOffered(letter, metatype, variant)
+
+    fun createCharacter(profile: chummer.core.data.CharacterSettings, name: String, alias: String, metatypeId: String, variantId: String? = null, priorities: chummer.core.engine.PriorityChoice? = null) {
         viewModelScope.launch {
             try {
                 val file = io {
-                    val character = gameData.createCharacter(profile, name, alias, metatypeId, variantId)
+                    val character = gameData.createCharacter(profile, name, alias, metatypeId, variantId, priorities)
                     repo.saveNew(character, (alias.ifBlank { name }).ifBlank { "New character" })
                 }
                 refresh()

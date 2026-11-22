@@ -42,6 +42,13 @@ data class CreationReview(val problems: List<String>, val warnings: List<String>
                 if (nuyen.unreadable.isNotEmpty()) warnings += "Prices not counted yet: " + nuyen.unreadable.take(5).joinToString() + if (nuyen.unreadable.size > 5) ", ..." else ""
                 problems += availabilityProblems(c, settings, data)
             }
+            // Chummer asks to confirm when free points are left over; they are lost.
+            PointsLedger.of(c, data, settings = settings)?.let { p ->
+                if (p.attributes.left > 0) warnings += "${p.attributes.left} attribute points unspent"
+                if (p.special.left > 0) warnings += "${p.special.left} special attribute points unspent"
+                if (p.skills.left > 0) warnings += "${p.skills.left} skill points unspent"
+                if (p.groups.left > 0) warnings += "${p.groups.left} skill group points unspent"
+            }
             val carryover = settings.karmaCost["karmacarryover"] ?: 7
             if (ledger.remaining > carryover) {
                 warnings += "${ledger.remaining} karma left but only $carryover carry over into the career; the rest is lost"

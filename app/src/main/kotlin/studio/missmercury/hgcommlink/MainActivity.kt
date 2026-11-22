@@ -1,5 +1,6 @@
 package studio.missmercury.hgcommlink
 
+import chummer.core.engine.PriorityChoice
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -281,6 +282,13 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
     var metatype by remember { mutableStateOf<String?>(null) }
     var variant by remember { mutableStateOf<String?>(null) }
     var profile by remember { mutableStateOf<Int?>(null) }
+    // Priority and Sum-to-Ten: a letter for each category (the defaults are worth 10 in Sum-to-Ten and use each letter once).
+    var heritage by remember { mutableStateOf("E") }
+    var attributes by remember { mutableStateOf("A") }
+    var talentLetter by remember { mutableStateOf("B") }
+    var skillsLetter by remember { mutableStateOf("C") }
+    var resources by remember { mutableStateOf("D") }
+    var talent by remember { mutableStateOf<String?>(null) }
 
     TerminalSheet("New character", onDismiss, tall = true) { close ->
         when {
@@ -305,18 +313,46 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
                     } else {
                         Text("Settings: ${options.profiles[0].name}", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
                     }
+                    val method = options.profiles[chosenProfile].buildMethod
+                    val points = method == "Priority" || method == "SumtoTen"
+                    if (points) {
+                        val letters = listOf("A", "B", "C", "D", "E").map { it to it }
+                        ChoiceChips("Metatype priority", letters, heritage, { heritage = it })
+                        ChoiceChips("Attributes priority", letters, attributes, { attributes = it })
+                        ChoiceChips("Magic or resonance priority", letters, talentLetter, { talentLetter = it; talent = null })
+                        ChoiceChips("Skills priority", letters, skillsLetter, { skillsLetter = it })
+                        ChoiceChips("Resources priority", letters, resources, { resources = it })
+                        val talents = vm.priorityTalents(talentLetter)
+                        if (talents.isNotEmpty()) ChoiceChips("Talent", talents.map { it.value to it.value }, talent ?: talents.first().value, { talent = it })
+                    }
                     Text(
-                        "Karma build. Attributes and skills start at the metatype minimum; buy up with karma on the sheet.",
+                        if (points) (if (method == "SumtoTen") "Sum-to-Ten: the letters must be worth 10 in all (A 4, B 3, C 2, D 1, E 0). Attribute and skill points are spent on the sheet."
+                        else "Priority: each letter A to E once. Attribute and skill points are spent on the sheet.")
+                        else "Karma build. Attributes and skills start at the metatype minimum; buy up with karma on the sheet.",
                         style = MaterialTheme.typography.labelSmall, color = MutedSilver,
                     )
+                    if (points) {
+                        val meta = options.metatypes.firstOrNull { it.id == chosenMetatype }
+                        val variantName = meta?.variants?.firstOrNull { it.first == variant }?.second.orEmpty()
+                        val problem = PriorityChoice(heritage, attributes, talentLetter, skillsLetter, resources, "x", method == "SumtoTen").problem()
+                            ?: if (!vm.heritageOffered(heritage, meta?.name.orEmpty(), variantName)) "${meta?.name.orEmpty()} is not offered at metatype priority $heritage" else null
+                        problem?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = DrainAmber) }
+                    }
                 }
                 Row(Modifier.padding(top = 10.dp).imePadding(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TerminalButton("Cancel", close, Modifier.weight(1f))
+                    val method = options.profiles[chosenProfile].buildMethod
+                    val points = method == "Priority" || method == "SumtoTen"
+                    val meta = options.metatypes.firstOrNull { it.id == chosenMetatype }
+                    val talentValue = talent ?: vm.priorityTalents(talentLetter).firstOrNull()?.value.orEmpty()
+                    val choice = if (points) PriorityChoice(heritage, attributes, talentLetter, skillsLetter, resources, talentValue, method == "SumtoTen") else null
+                    val variantName = meta?.variants?.firstOrNull { it.first == variant }?.second.orEmpty()
+                    val ok = choice == null || (choice.problem() == null && talentValue.isNotEmpty() && vm.heritageOffered(heritage, meta?.name.orEmpty(), variantName))
                     TerminalButton("Create", {
                         val id = metatype ?: options.metatypes.firstOrNull { it.name == "Human" }?.id ?: options.metatypes.first().id
-                        vm.createCharacter(options.profiles[chosenProfile], name.trim(), alias.trim(), id, variant)
+                        vm.createCharacter(options.profiles[chosenProfile], name.trim(), alias.trim(), id, variant, choice)
                         close()
-                    }, Modifier.weight(1f), filled = true)
+                    }, Modifier.weight(1f), filled = true, enabled = ok)
                 }
             }
         }
