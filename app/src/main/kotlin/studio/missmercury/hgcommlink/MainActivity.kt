@@ -210,7 +210,8 @@ private fun CharacterList(vm: AppViewModel) {
                             if (s.alias.isNotBlank()) Text("\"${s.alias}\"")
                             Text(listOf(s.metatype, if (s.isCareer) "Career" else "Creation", s.buildMethod).filter { it.isNotBlank() }.joinToString(" - "))
                             Text(
-                                listOfNotNull(s.karma.takeIf { it.isNotBlank() }?.let { "Karma $it" }, s.nuyen.takeIf { it.isNotBlank() }?.let { "¥$it" })
+                                // A character in creation stores no karma (the amount left is calculated), so only careers show it here.
+                                listOfNotNull(s.karma.takeIf { s.isCareer && it.isNotBlank() }?.let { "Karma $it" }, s.nuyen.takeIf { s.isCareer && it.isNotBlank() }?.let { "¥$it" })
                                     .joinToString("   "),
                                 style = MaterialTheme.typography.bodySmall,
                             )

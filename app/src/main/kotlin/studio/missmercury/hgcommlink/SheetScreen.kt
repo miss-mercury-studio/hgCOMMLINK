@@ -240,6 +240,7 @@ private fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
 private fun Skills(s: Sheet, vm: AppViewModel) {
     var query by rememberSaveable { mutableStateOf("") }
     var addingKnowledge by remember { mutableStateOf(false) }
+    var groupsOpen by rememberSaveable { mutableStateOf(false) }
     val q = query.trim()
     fun matches(r: SkillResult) = q.isEmpty() || r.name.contains(q, ignoreCase = true)
     val buy = if (s.karmaLedger != null) vm else null
@@ -250,9 +251,17 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             )
         }
+        // Skill groups: folded away until wanted, since there are eleven of them.
         if (buy != null && q.isEmpty() && s.skillGroups.isNotEmpty()) {
-            item { SubHeader("Skill groups") }
-            items(s.skillGroups, key = { "g-" + it.name }) { g ->
+            item {
+                val bought = s.skillGroups.count { it.karma > 0 }
+                Row(Modifier.fillMaxWidth().clickable { groupsOpen = !groupsOpen }.padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Skill groups", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                    if (bought > 0) Text("$bought bought", style = MaterialTheme.typography.labelSmall)
+                    Text(if (groupsOpen) "  ▾" else "  ▸", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            if (groupsOpen) items(s.skillGroups, key = { "g-" + it.name }) { g ->
                 Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(g.name, Modifier.weight(1f))
                     StepButton("−", 36) { vm.changeSkillGroup(g.name, -1) }
@@ -261,12 +270,7 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
                 }
             }
         }
-        // Skills the character has come first; the rest are listed after, as Chummer does.
-        val (rated, unrated) = s.activeSkills.filter(::matches).partition { it.rating > 0 }
-        if (rated.isNotEmpty()) item { SubHeader("Active skills") }
-        items(rated, key = { "a-" + it.name }) { SkillRow(it, buy) }
-        if (unrated.isNotEmpty()) item { SubHeader(if (rated.isEmpty()) "Active skills" else "Unrated") }
-        items(unrated, key = { "u-" + it.name }) { SkillRow(it, buy) }
+        // Knowledge skills and languages come before the long list of active skills.
         val knowledge = s.knowledge.filter { q.isEmpty() || it.name.contains(q, ignoreCase = true) }
         if (knowledge.isNotEmpty() || buy != null) {
             item {
@@ -278,6 +282,12 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
             }
             items(knowledge, key = { "k-" + it.guid.ifEmpty { it.name } }) { k -> KnowledgeRow(k, buy) }
         }
+        // Skills the character has come first; the rest are listed after, as Chummer does.
+        val (rated, unrated) = s.activeSkills.filter(::matches).partition { it.rating > 0 }
+        if (rated.isNotEmpty()) item { SubHeader("Active skills") }
+        items(rated, key = { "a-" + it.name }) { SkillRow(it, buy) }
+        if (unrated.isNotEmpty()) item { SubHeader(if (rated.isEmpty()) "Active skills" else "Unrated") }
+        items(unrated, key = { "u-" + it.name }) { SkillRow(it, buy) }
     }
     if (addingKnowledge) AddKnowledgeDialog(vm) { addingKnowledge = false }
 }
