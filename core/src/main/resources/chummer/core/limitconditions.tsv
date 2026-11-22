@@ -1,0 +1,139 @@
+LimitCondition_ExcludeIntimidation	Does not include Intimidation
+LimitCondition_ExcludeFansGangers	Except for Urban Brawl Fans and Gangers
+LimitCondition_SportsFans	Fans of Sports Team
+LimitCondition_ShieldPhysicalPenalty	For actions where Shield might get in the way.
+LimitCondition_ExcludeIntimidationVisible	For all tests except Intimidation, Must be visible.
+LimitCondition_ClimbingTests	For climbing only
+LimitCondition_GangVisible	Gang members only, Must be visible.
+LimitCondition_PublicVisible	General public only, Must be visible.
+LimitCondition_Megacorp	Limited to Single Megacorp
+LimitCondition_Sprawl	Limited to Single Sprawl
+LimitCondition_Visible	Must be visible
+LimitCondition_NationalLanguageRanks	Must have 4+ Ranks in National Language
+LimitCondition_BunkerGearVisible	Only during emergency situations, Must be visible
+LimitCondition_TestAttribAGI	Only for Agility-linked Tests
+LimitCondition_SkillsKnowledgeAcademic	Only for Academic Knowledge Skills
+LimitCondition_SkillsActiveContortion	Only for Contortion
+LimitCondition_ClimateChosen	Only in the chosen climate
+LimitCondition_ClimateOpposite	Only in the opposite climate
+LimitCondition_DimLightMatchingPattern	Only in decreased light and environments matching the pattern
+LimitCondition_TestEnhancedSense	Only for tests using the enhanced sense (if it has no specific effect)
+LimitCondition_TestScent	Only for scent-based Perception and Tracking Tests
+LimitCondition_SkillsActiveDisguiseImpersonation	Only for Disguise and Impersonation
+LimitCondition_SkillsActiveEscapeArtistGrappleLoose	Only for Escape Artist and Grappling, Must be loosened
+LimitCondition_SkillsActiveEscapeArtist	Only for Escape Artist
+LimitCondition_SkillsActiveFirstAidMedicine	Only for First Aid and Medicine
+LimitCondition_CyberwareBalanceTail	Only for Gymnastics (Climbing), Gymnastics (Jumping), Running, and knockdown resist
+LimitCondition_SkillsActiveGymnasticsClimbing	Only for Gymnastics (Climbing)
+LimitCondition_CyberwareHydraulicJacks	Only for Gymnastics (Jumping) and Running (Sprinting)
+LimitCondition_IntimidationVisible	Only for Intimidation, Must be visible.
+LimitCondition_Intimidation	Only for Intimidation
+LimitCondition_SkillsActiveNavigation	Only for Navigation
+LimitCondition_SkillsActivePerceptionHearing	Only for Perception (Hearing)
+LimitCondition_SkillsActivePerceptionVisual	Only for Perception (Visual)
+LimitCondition_SkillsActivePerceptionSpatialRecognizer	Only for Perception to find the source of a sound
+LimitCondition_SkillsActivePerception	Only for Perception
+LimitCondition_SkillsActivePerformanceSinging	Only for Performance (Singing)
+LimitCondition_AttunedLocation	Only for tests related to the attuned location
+LimitCondition_ClimateArctic	Only in arctic or cold climates
+LimitCondition_ClimateDesert	Only in desert or hot climates
+LimitCondition_CorporationMembers	Only when dealing with anyone from your corporation
+LimitCondition_DirectingFourVehicles	Only while directing four or more moving vehicles or drones
+LimitCondition_DirectingVehicle	Only when directing a vehicle
+LimitCondition_FaceNotDisguised	Only when your face is not disguised or concealed
+LimitCondition_FavorTarget	Only when dealing with the target of your favor
+LimitCondition_GravityNonEarth	Only for physical actions in non-Earth-normal gravity
+LimitCondition_HighSpeed	Only while moving at Speed 3+ (4+ for aircraft)
+LimitCondition_Juryrigging	Only when juryrigging gear
+LimitCondition_MatrixAcquaintances	Only via the Matrix with someone who knows you
+LimitCondition_NoFlotation	Only in water without a flotation device
+LimitCondition_OrganizationMembers	Only with those within your organization
+LimitCondition_PublicUnderAuthority	Only with members of the public under your authority
+LimitCondition_SpiritChosen	Only with the chosen spirit type
+LimitCondition_SpotSilentIconsInSight	Only for Matrix Perception to spot silent-running icons you have visual sight on
+LimitCondition_SpriteChosen	Only with the chosen sprite type
+LimitCondition_SpriteCrack	Only with Crack Sprites
+LimitCondition_SpriteData	Only with Data Sprites
+LimitCondition_SpriteFault	Only with Fault Sprites
+LimitCondition_SpriteGeneralist	Only with Generalist Sprites
+LimitCondition_TestChase	Only for Chase Actions
+LimitCondition_TestSocialOpposed	Only for Opposed Social Tests
+LimitCondition_TestVehicleStunt	Only for Vehicle Stunt Tests
+LimitCondition_TestDiagnosis	Only for Diagnosis Tests
+LimitCondition_SkillsActivePerformanceSynthtrument	Only for Performance, Must use linked synthtrument
+LimitCondition_SkillsActivePerformance	Only for Performance
+LimitCondition_SkillsKnowledgeScientificTechnical	Only for Scientific or Technical Knowledge Skills
+LimitCondition_Skillwires	Only for Skillwires
+LimitCondition_TestSneakingThermal	Only for Sneaking against Thermographic Vision or thermal sensors.
+LimitCondition_SkillsActiveSneaking	Only for Sneaking against Thermographic Vision or thermal sensors.
+LimitCondition_SkillsActiveSneakingNaked	Only for Sneaking, Must be completely naked
+LimitCondition_SkillsActiveSneakingVisible	Only for Sneaking, Must be visible
+LimitCondition_SkillGroupStealthNaked	Only for Stealth group, Must be completely naked
+LimitCondition_SkillGroupStealth	Only for Stealth group
+LimitCondition_SkillsActiveSwimming	Only for Swimming
+LimitCondition_KnockdownResistanceFootAnchor	Only for knockdown resist, Must be engaged.
+LimitCondition_CyberwareCyberfins	Only for making repairs, typing, dancing etc., Must be engaged
+LimitCondition_GearAutopicker	Only for picking mechanical locks
+LimitCondition_QualityTrustworthy	Only for situations involving trust.
+LimitCondition_HarvestReagents	Only when harvesting reagents
+LimitCondition_JumpedInPerLevel	Only when jumped into a vehicle or drone (control rig equivalent, per level)
+LimitCondition_OutdoorsDaytime	Only when outside during the day
+LimitCondition_OutsideUrban	Only outside urban areas
+LimitCondition_Pollutants	Only when dealing with pollutants
+LimitCondition_SpiritsNotMan	Only with spirits other than Spirits of Man
+LimitCondition_SpiritsOfAir	Only with Spirits of Air
+LimitCondition_SpiritsOfBeasts	Only with Spirits of Beasts
+LimitCondition_SpiritsOfMan	Only with Spirits of Man
+LimitCondition_SpiritsOfWater	Only with Spirits of Water
+LimitCondition_SpiritsPlant	Only with Plant Spirits
+LimitCondition_TestMath	Only for math-intensive actions
+LimitCondition_TestSocialOpposedInitiated	Only for Opposed Social Skill Tests you initiate
+LimitCondition_TestSpeech	Only for test involving speaking
+LimitCondition_TestsEndurance	Only for tests involving endurance, Must be tightened
+LimitCondition_CyberwareRaptorFoot	Only when attacking with the legs
+LimitCondition_QualityChatty	Only when communicating via AR or VR.
+LimitCondition_InUse	Only when in use
+LimitCondition_CyberwareMonkeyFoot	Only when used as hand
+LimitCondition_TestAttribINT	Only with Intuition Tests
+LimitCondition_AttribSkillINT	Only with Intuition-linked skills
+LimitCondition_TestAttribLOG	Only with Logic Tests
+LimitCondition_AttribSkillLOG	Only with Logic-linked skills
+LimitCondition_CorporationVisible	Only with appropriate corp, Must be visible
+LimitCondition_CyberwareSnakeFingers	Only with manual dexterity
+LimitCondition_SportsRivals	Rivals of Sports Team
+LimitCondition_SoldierParagon	Only for attack actions
+LimitCondition_SkillsActiveLeadership	Only for Leadership
+LimitCondition_AvoidUltrasound	Only to avoid detection via ultrasound
+LimitCondition_CalmAtEmergency	Only to calm or pacify people at an emergency site
+LimitCondition_DetectLies	Only to determine if someone is lying
+LimitCondition_EscapeRestraints	Only for escaping hand restraints and small openings
+LimitCondition_ExamineCloseActive	Only when examining material within 30 cm, Must be active
+LimitCondition_FindFood	Only for finding food supplies
+LimitCondition_FineManipulationActive	Only for fine manipulation, Must be active
+LimitCondition_Hiding	Only while hiding
+LimitCondition_IdentifyByImage	Only for Matrix Search to identify an individual by image
+LimitCondition_IdentifySound	Only to identify a sound
+LimitCondition_JumpedIn	Only when jumped into a vehicle or drone
+LimitCondition_Knockdown	Only when comparing against DV for knockdown
+LimitCondition_NakedStationary	Must be completely naked and stationary
+LimitCondition_PerExposedBioTattoo	Per exposed bio-tattoo
+LimitCondition_Rappelling	Only for rappelling
+LimitCondition_ReadEmotions	Only to determine a target's emotional state
+LimitCondition_SeductionVsMetahumans	Only for seduction vs metahumans
+LimitCondition_SkillsActivePerceptionScent	Only for Perception (Scent)
+LimitCondition_SkillsActivePerceptionTaste	Only for Perception (Taste)
+LimitCondition_SkillsActivePerceptionTouch	Only for Perception (Touch)
+LimitCondition_SkillsKnowledgeRelated	Only for related Knowledge Skill Tests
+LimitCondition_SpeciesChosen	Only with the selected species
+LimitCondition_TerrainChosen	Only in the chosen terrain
+LimitCondition_TerrainCold	Only in cold terrain
+LimitCondition_TerrainDesert	Only in desert terrain
+LimitCondition_TerrainHot	Only in hot terrain
+LimitCondition_TestBuySellProduct	Only for Availability and Negotiation Tests to buy or sell the covered product type
+LimitCondition_TestMeleeCombat	Only for melee combat tests
+LimitCondition_TrackedTargets	Only regarding tracked targets
+LimitCondition_UsingScent	Only when using olfactory sensors or the Scent critter power
+LimitCondition_VsAnimals	Only vs animals
+LimitCondition_VsGeneticSampleSource	Only vs the individual whose genetic sample was used
+LimitCondition_VsMetahumans	Only vs metahumans
+LimitCondition_WearerTroll	Only while the wearer is a troll

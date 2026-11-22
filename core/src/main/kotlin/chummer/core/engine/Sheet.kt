@@ -54,6 +54,8 @@ data class Sheet(
     /** An adept's power points and powers; null for anyone who is not an adept. */
     val powers: PowerPoints? = null,
     val isMagician: Boolean = false,
+    /** Limit modifiers that apply only under a condition (not in the limits above). */
+    val limitNotes: List<LimitLine> = emptyList(),
 ) {
     data class CreationBuy(val ledger: NuyenLedger, val pluginCapacity: Map<String, Double>)
     /**
@@ -160,6 +162,7 @@ data class Sheet(
                 movement = Movement.of(c, data, set, attrs)?.full().orEmpty(),
                 powers = if (flag(c, "adept")) PowerPoints.of(c, settings, data) else null,
                 isMagician = flag(c, "magician"),
+                limitNotes = LimitModifiers.of(c),
                 creationBuy = if (!career && s.buildMethod == "Karma") CreationBuy(NuyenLedger.of(c, settings, data), CareerAdvancement(c, data, settings).pluginCapacity()) else null,
                 career = if (career) careerLines(c, data, settings, shown.map { it.name }) else null,
                 karmaLedger = if (!career && s.buildMethod == "Karma") KarmaLedger.of(c, settings, data) else null,

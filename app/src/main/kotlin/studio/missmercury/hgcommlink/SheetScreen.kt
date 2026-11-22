@@ -246,6 +246,14 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
                 Stat("Social", s.limits.social.toString(), Modifier.weight(1f))
                 Stat("Astral", s.limits.astral.toString(), Modifier.weight(1f))
             }
+            // Modifiers that only apply under a condition: listed, and not part of the numbers above.
+            listOf("Physical", "Mental", "Social").forEach { limit ->
+                val notes = s.limitNotes.filter { it.limit == limit }
+                if (notes.isNotEmpty()) {
+                    Text(limit.uppercase(), Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+                    notes.forEach { Text(it.fullName, style = MaterialTheme.typography.bodySmall) }
+                }
+            }
         }
 
         Section("Dice pools", collapsible = true, startExpanded = false) {
