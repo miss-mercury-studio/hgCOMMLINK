@@ -499,6 +499,17 @@ private fun Qualities(s: Sheet, vm: AppViewModel) {
         items(positive, key = { it.guid }) { QualityRow(it) { removing = it } }
         item { SubHeader("Negative") }
         items(negative, key = { it.guid }) { QualityRow(it) { removing = it } }
+        if (s.mentors.isNotEmpty()) {
+            item { SubHeader("Mentor spirit") }
+            items(s.mentors, key = { it.guid }) { m ->
+                Column(Modifier.fillMaxWidth()) {
+                    Text(m.name, fontWeight = FontWeight.Bold)
+                    Small(m.advantage)
+                    Small("Disadvantage: " + m.disadvantage)
+                    for (set in m.sets) ChoiceChips(if (set.set == 1) "Advantage choice" else "Second choice", listOf("" to "None") + set.options.map { it to it }, set.chosen, { vm.chooseMentor(m.guid, set.set, it) })
+                }
+            }
+        }
     }
     PinnedAction("+ Add quality") { adding = true }
     }

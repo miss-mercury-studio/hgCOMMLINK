@@ -218,6 +218,16 @@ object BonusHandlers {
             out += improvement(ctx, "LimitModifier", ctx.friendlyName.ifEmpty { unique }, bonus, node.t("limit").orEmpty(), rating = 0.0, condition = condition)
         }
 
+        // Dice for a category of spells (`spellcategory` is an alias), or for one spell.
+        put("spellcategorydicepool") { node, ctx, unique, out ->
+            val name = node.t("name").orEmpty()
+            if (name.isEmpty()) return@put
+            value(node.t("val"), ctx.rating)?.let { out += improvement(ctx, "SpellCategory", uniqueFor(node, unique), it, name, condition = node.t("condition").orEmpty()) }
+        }
+        put("spelldicepool") { node, ctx, unique, out ->
+            val name = node.t("id") ?: node.t("name") ?: return@put
+            value(node.t("val"), ctx.rating)?.let { out += improvement(ctx, "SpellDicePool", uniqueFor(node, unique), it, name) }
+        }
         put("specificskill") { node, ctx, unique, out ->
             val addToRating = node.t("applytorating").equals("True", true)
             val condition = node.t("condition").orEmpty()

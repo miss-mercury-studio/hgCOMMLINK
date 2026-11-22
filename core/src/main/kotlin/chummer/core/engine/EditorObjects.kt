@@ -49,6 +49,7 @@ class EditorObjects(private val file: CharacterFile, private val data: GameData)
         add("advantage", d("advantage")); add("disadvantage", d("disadvantage")); add("mentormask", "False"); add("bonus"); add("choice1"); add("choice2"); add("notes")
         add("id", d("id"))
         (root.child("mentorspirits") ?: el("mentorspirits").also { root.appendChild(it) }).appendChild(m)
+        MentorEditor(file, data).rebuild(guid)
         return MentorRef(guid, d("id"))
     }
 

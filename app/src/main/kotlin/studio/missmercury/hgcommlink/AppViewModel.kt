@@ -321,6 +321,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun addEnhancement(id: String) = editCareer("Enhancement added", "Cannot add that (karma, or its requirements)") { adv, _ -> adv.addEnhancement(id) != null }
     fun addGradeSpell(id: String) = editCareer("Spell added", "Not enough karma") { adv, _ -> adv.addGradeSpell(id) != null }
     fun updateSprite(guid: String, name: String, level: Int, tasks: Int, registered: Boolean) = editCareer("Sprite changed", "Cannot change the sprite that way (level, or registration limit)") { adv, _ -> adv.sprites().update(guid, name, level, tasks, registered) }
+    fun chooseMentor(guid: String, set: Int, choice: String) = editCareer(null, "Cannot choose that") { adv, _ -> adv.mentors().choose(guid, set, choice) }
     fun spriteOptions() = open?.let { gameData.career(it.character).sprites().options() }.orEmpty()
     fun addSprite(entryId: String, name: String) = editCareer("Sprite added", "Cannot add that sprite (limit, or level)") { adv, _ -> adv.sprites().add(entryId, name) != null }
     fun removeSprite(guid: String) = editCareer("Sprite removed", "Nothing changed") { adv, _ -> adv.sprites().remove(guid) }

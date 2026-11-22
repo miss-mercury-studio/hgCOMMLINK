@@ -264,6 +264,8 @@ class CareerAdvancement(
 
     fun initiation() = InitiationEditor(file, data, settings)
 
+    fun mentors() = MentorEditor(file, data)
+
     /**
      * Take the next initiation (submersion) grade with karma, and 10,000 nuyen more for schooling. Null when the grade passes Magic (Resonance), or
      * karma or nuyen fall short. Chummer's entries are "Initiate Grade 0 -> 1" (karma, undoable) and, for schooling, the same text in nuyen.
