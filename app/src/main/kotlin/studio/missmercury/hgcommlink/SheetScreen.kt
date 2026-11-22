@@ -604,6 +604,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
                 Small(w.accessories.groupingBy { it }.eachCount().entries.joinToString(", ") { (n, c) -> if (c > 1) "$n x$c" else n })
                 if (creating && w.guid.isNotEmpty() && w.removable) RemoveLink { vm.removePurchase(w.guid) }
                 if (canBuy && w.guid.isNotEmpty() && w.canLoad) Text("load ammo", Modifier.clickable { loading = w.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
+                if (canBuy && w.guid.isNotEmpty() && w.loadedClips > 0) Text("unload ammo", Modifier.clickable { vm.unloadAmmo(w.guid) }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
                 if (canBuy && w.guid.isNotEmpty() && w.allowAccessory) Text("+ accessory", Modifier.clickable { attaching = "accessory" to w.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
             }
         }

@@ -233,5 +233,11 @@ class ArmorWeaponEditorTest {
         val totalAfter = c.root.child("gears")!!.children("gear").filter { it.text("name") == "Ammo: Regular Ammo" }.sumOf { it.text("qty")!!.trim().toDouble() }
         assertEquals(totalBefore, totalAfter, 0.001) // rounds are moved, not created
         assertTrue(!ed.loadAmmo(w, ammo.text("guid")!!.trim(), 1)) // the slot is full now
+        // Unloading puts the rounds back into the loose stack and empties the clip.
+        assertTrue(ed.unloadAmmo(w, 1))
+        assertEquals("0", clip.text("count"))
+        assertEquals(before, ammo.text("qty")!!.trim().toDouble(), 0.001)
+        assertEquals(totalBefore, c.root.child("gears")!!.children("gear").filter { it.text("name") == "Ammo: Regular Ammo" }.sumOf { it.text("qty")!!.trim().toDouble() }, 0.001)
+        assertTrue(!ed.unloadAmmo(w, 1))
     }
 }

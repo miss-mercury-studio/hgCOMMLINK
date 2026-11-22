@@ -430,6 +430,9 @@ class CareerAdvancement(
     /** Load ammunition from a gear stack into a weapon's first empty clip. */
     fun loadAmmo(weaponGuid: String, ammoGuid: String): Boolean = ArmorWeaponEditor(file, data).loadAmmo(weaponGuid, ammoGuid)
 
+    /** Take the rounds out of the weapon's last loaded clip, back into the loose ammunition. */
+    fun unloadAmmo(weaponGuid: String): Boolean = ArmorWeaponEditor(file, data).unloadAmmo(weaponGuid)
+
     /** Capacity each top-level ware item has left for plug-ins (only items that take plug-ins). */
     fun pluginCapacity(): Map<String, Double> {
         val editor = CyberwareEditor(file, data)

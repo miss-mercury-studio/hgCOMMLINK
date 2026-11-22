@@ -27,6 +27,8 @@ data class WeaponTotals(
     val canLoad: Boolean = false,
     /** A weapon the user bought, as opposed to one that comes with the character (Unarmed Attack) or another item. */
     val removable: Boolean = false,
+    /** Clips that hold rounds now (they can be unloaded). */
+    val loadedClips: Int = 0,
 )
 
 /**
@@ -111,6 +113,7 @@ class WeaponEngine(
             allowAccessory = w.t("allowaccessory").equals("True", true) && w.t("weapontype") != "gear" && w.t("included") != "True",
             canLoad = w.t("requireammo").equals("True", true) && w.t("type").equals("Ranged", true) && w.t("weapontype") != "gear" && w.t("ammo").let { it.isNotEmpty() && it != "0" },
             removable = w.t("included") != "True" && w.t("weapontype") != "gear",
+            loadedClips = w.child("clips")?.children("clip").orEmpty().count { (it.t("count").toIntOrNull() ?: 0) > 0 },
         )
     }
 

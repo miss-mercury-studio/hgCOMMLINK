@@ -207,6 +207,41 @@ class ArmorWeaponEditor(private val file: CharacterFile, private val data: GameD
         return true
     }
 
+    /**
+     * Take the rounds out of a weapon's clip [slot] (1-based; 0 means the last loaded clip) and put them back into the
+     * loose stack of the same ammunition, or leave them as their own loose item. Returns false when no clip holds rounds.
+     */
+    fun unloadAmmo(weaponGuid: String, slot: Int = 0): Boolean {
+        val weapon = findWeapon(weaponGuid) ?: return false
+        val clips = weapon.child("clips")?.children("clip").orEmpty()
+        val index = if (slot > 0) slot - 1 else clips.indexOfLast { (it.text("count")?.trim()?.toIntOrNull() ?: 0) > 0 }
+        val clip = clips.getOrNull(index) ?: return false
+        val n = clip.text("count")?.trim()?.toIntOrNull() ?: 0
+        if (n <= 0) return false
+        val id = clip.text("id")?.trim().orEmpty()
+        val gears = root.child("gears")
+        val loaded = gears?.children("gear")?.firstOrNull { it.text("guid")?.trim().equals(id, true) }
+        if (loaded != null) {
+            val loose = gears.children("gear").firstOrNull {
+                it !== loaded && it.text("sourceid")?.trim().equals(loaded.text("sourceid")?.trim(), true) && it.text("location")?.trim() != "loaded"
+            }
+            val rounds = loaded.text("qty")?.trim()?.toDoubleOrNull() ?: n.toDouble()
+            // Another clip may share the loaded item; only its own rounds leave it.
+            val sharedElsewhere = clips.any { it !== clip && it.text("id")?.trim().equals(id, true) && (it.text("count")?.trim()?.toIntOrNull() ?: 0) > 0 }
+            if (sharedElsewhere) loaded.child("qty")!!.textContent = fmtQty(rounds - n)
+            if (loose != null && !sharedElsewhere) {
+                loose.child("qty")!!.textContent = fmtQty((loose.text("qty")?.trim()?.toDoubleOrNull() ?: 0.0) + rounds)
+                gears.removeChild(loaded)
+            } else if (loose != null) {
+                loose.child("qty")!!.textContent = fmtQty((loose.text("qty")?.trim()?.toDoubleOrNull() ?: 0.0) + n)
+            } else if (!sharedElsewhere) loaded.child("location")?.textContent = ""
+        }
+        clip.child("count")!!.textContent = "0"
+        clip.child("location")!!.textContent = ""
+        clip.child("id")!!.textContent = "00000000-0000-0000-0000-000000000000"
+        return true
+    }
+
     private fun fmtQty(v: Double) = if (v == Math.rint(v)) v.toLong().toString() else v.toString()
 
     private fun findIn(file: String, tag: String, name: String): String? =

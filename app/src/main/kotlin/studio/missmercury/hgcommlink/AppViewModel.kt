@@ -246,6 +246,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun pluginOptions(parentSourceId: String) = gameData.pluginOptions(parentSourceId)
     fun loadAmmo(weaponGuid: String, ammoGuid: String) = editCareer("Ammo loaded", "Cannot load that (no empty clip, or wrong ammunition)") { adv, _ -> adv.loadAmmo(weaponGuid, ammoGuid) }
 
+    fun unloadAmmo(weaponGuid: String) = editCareer("Ammo unloaded", "Nothing to unload") { adv, _ -> adv.unloadAmmo(weaponGuid) }
+
     /** The newest log entry that can be undone, for the menu shortcut. */
     fun lastUndoable(): chummer.core.engine.ExpenseEntry? =
         open?.sheet?.career?.let { c -> c.expenses.firstOrNull { it.guid in c.undoable } }
