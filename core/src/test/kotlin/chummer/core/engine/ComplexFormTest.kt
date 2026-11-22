@@ -106,3 +106,16 @@ class ComplexFormTest {
         assertEquals(made - 1, Sheet.build(c, data, settings).complexForms!!.sprites.size)
     }
 }
+
+/** Focus binding costs. */
+class FocusCostTest {
+    @Test
+    fun aFocusCostsItsForceTimesThePriceOfItsKind() {
+        assertEquals(8, FocusCost.of("Qi Focus", 4, emptyMap()))
+        assertEquals(24, FocusCost.of("Power Focus", 4, emptyMap()))
+        // The settings' price wins, a choice in brackets or after a comma is ignored, and an individualized focus is cheaper.
+        assertEquals(12, FocusCost.of("Weapon Focus (Sword)", 3, mapOf("karmaweaponfocus" to 4)))
+        assertEquals(10, FocusCost.of("Spellcasting Focus, Individualized, Partial", 3, emptyMap()) + 5)
+        assertEquals(4, FocusCost.of("Sustaining Focus, Individualized, Complete", 3, emptyMap()))
+    }
+}

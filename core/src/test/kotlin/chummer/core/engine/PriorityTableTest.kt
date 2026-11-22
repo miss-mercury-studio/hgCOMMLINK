@@ -91,14 +91,15 @@ class PriorityTableTest {
 
     companion object {
         /**
-         * 18 of the 26 creation fixtures match Chummer's remaining karma exactly. The other 8 lack things not built yet: foci and mentor
-         * spirit advantages (Gangerbean, Miko, Ocelot, Ushi, prime), a mystic adept's power points (resub), and something unexplained in
-         * Bastion and Yeti (not their complex forms, which are all free, nor their Resonance, which matches Chummer's stored value).
+         * 19 of the 26 creation fixtures match Chummer's remaining karma exactly (foci are priced now: Gangerbean's Qi Focus at 4 costs 8). The
+         * other 7: quality rules the data does not settle (Miko, Ocelot, Ushi, prime; Miko is a changeling with metagenic qualities), a mystic
+         * adept's power points (resub), and something unexplained in Bastion and Yeti (not their complex forms, nor their Resonance, which
+         * matches Chummer's stored value; their ledgers also differ in ways foci and mentor spirits cannot explain).
          * Two rules were read from the data, not from Chummer's source: the
          * fixtures only add up when specializations on skills bought with karma can be paid with skill points (the profile `default.xml`
          * they were saved with is not shipped, so the test sets that option), and a negative quality refund is capped at the quality
          * limit when the positive qualities stay within it.
          */
-        const val KNOWN_DIFFERENCES = 8
+        const val KNOWN_DIFFERENCES = 7
     }
 }

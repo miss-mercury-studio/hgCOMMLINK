@@ -41,8 +41,9 @@ data class KarmaLedger(
     /** Martial arts: each style costs its karma, and every technique after the first costs the settings' technique price. */
     val martialArts: Int = 0,
     val complexForms: Int = 0,
+    val foci: Int = 0,
 ) {
-    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen + martialArts + complexForms
+    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen + martialArts + complexForms + foci
     val remaining get() = budget - spent
     val knowledgePointsLeft get() = knowledgePoints - knowledgePointsUsed
 
@@ -203,7 +204,8 @@ data class KarmaLedger(
                     if (countsToLimit) negative -= back else qualities += back
                 } else { qualities += amount; if (countsToLimit) positive += amount }
             }
-            // The karma negative qualities give back is capped at the quality limit when the settings say qualities beyond it earn nothing.
+            // The karma negative qualities give back is capped at the quality limit when the positive qualities stay within it. (Read from the
+            // fixtures; Chummer's own settings `exceednegativequalitiesnobonus` and `exceedpositivequalitiescostdoubled` made them match worse.)
             val qualityLimit = settings.int("qualitykarmalimit", 25)
             qualities -= if (negative > qualityLimit && positive <= qualityLimit) qualityLimit else negative
 
@@ -270,7 +272,7 @@ data class KarmaLedger(
             }
 
             for ((tag, label) in listOf(
-                "foci" to "foci", "aiprograms" to "programs",
+                "stackedfoci" to "stacked foci", "aiprograms" to "programs",
                 "initiationgrades" to "initiation", "critterpowers" to "critter powers",
                 "metamagics" to "metamagics", "mentorspirits" to "mentor spirits",
             )) if (c.root.child(tag)?.children().orEmpty().isNotEmpty()) notCounted += label
@@ -284,13 +286,46 @@ data class KarmaLedger(
             val formPrice = ComplexForms.price(k("karmanewcomplexform", 4), set)
             val formsUsed = c.root.child("complexforms")?.children("complexform").orEmpty().count { (it.text("grade")?.trim()?.toIntOrNull() ?: 0) == 0 }
             val complexForms = maxOf(0, formsUsed - (c.root.text("cfplimit")?.trim()?.toIntOrNull() ?: 0)) * formPrice
+            // Bonded foci: each costs its Force (the gear's rating) times the settings' price for that kind of focus (Chummer's `Focus.BindingKarmaCost`).
+            val gearByGuid = HashMap<String, org.w3c.dom.Element>()
+            run {
+                val all = c.root.getElementsByTagName("gear")
+                for (i in 0 until all.length) (all.item(i) as org.w3c.dom.Element).text("guid")?.trim()?.lowercase()?.let { gearByGuid[it] = all.item(i) as org.w3c.dom.Element }
+            }
+            val foci = c.root.child("foci")?.children("focus").orEmpty().sumOf { f ->
+                val g = gearByGuid[f.text("gearid")?.trim()?.lowercase()] ?: return@sumOf 0
+                FocusCost.of(g.text("name")?.trim().orEmpty(), g.text("rating")?.trim()?.toIntOrNull() ?: 0, cost)
+            }
             val nuyenKarma = (c.root.text("nuyenbp")?.trim()?.toDoubleOrNull()?.toInt() ?: 0)
                 .coerceIn(0, if (settings.bool("unrestrictednuyen")) Int.MAX_VALUE else settings.int("nuyenmaxbp", 10))
 
             return KarmaLedger(
                 budget, metatype, attributes, skills, qualities, contacts, notCounted, positive, negative,
-                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma, martialArts, complexForms,
+                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma, martialArts, complexForms, foci,
             )
         }
+    }
+}
+
+/** What binding a focus costs in karma. */
+object FocusCost {
+    private val DEFAULTS = mapOf(
+        "qifocus" to 2, "sustainingfocus" to 2, "counterspellingfocus" to 2, "banishingfocus" to 2, "bindingfocus" to 2, "weaponfocus" to 3,
+        "spellcastingfocus" to 2, "ritualspellcastingfocus" to 2, "spellshapingfocus" to 3, "summoningfocus" to 2, "alchemicalfocus" to 3,
+        "centeringfocus" to 3, "maskingfocus" to 3, "disenchantingfocus" to 3, "powerfocus" to 6, "flexiblesignaturefocus" to 3,
+    )
+
+    /** Chummer's `Focus.BindingKarmaCost`: Force times the price for the kind of focus, less 1 or 2 for an individualized one (a name with a choice in brackets or after a comma is cut). */
+    fun of(gearName: String, rating: Int, karmaCost: Map<String, Int>): Int {
+        var name = gearName
+        var extra = 0
+        if (name.endsWith(", Individualized, Complete")) { extra = -2; name = name.removeSuffix(", Individualized, Complete") }
+        else if (name.endsWith(", Individualized, Partial")) { extra = -1; name = name.removeSuffix(", Individualized, Partial") }
+        val paren = name.indexOf('(')
+        if (paren > 0) name = name.substring(0, paren - 1)
+        name = name.substringBefore(',')
+        val key = name.lowercase().replace(" ", "")
+        val multiplier = karmaCost["karma$key"] ?: DEFAULTS[key] ?: 1
+        return rating * multiplier + extra
     }
 }
