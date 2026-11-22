@@ -20,11 +20,11 @@ data class SheetSections(
     val lifestyles: List<LifestyleLine>,
     val martialArts: List<String>,
 ) {
-    data class ArmorItemLine(val name: String, val value: String, val equipped: Boolean, val mods: List<String>)
+    data class ArmorItemLine(val name: String, val value: String, val equipped: Boolean, val mods: List<String>, val guid: String = "")
     /** Armor grouped by equipment set; the set name is empty for armor not in any set. */
     data class ArmorSet(val name: String, val items: List<ArmorItemLine>)
-    data class WareLine(val name: String, val grade: String, val rating: Int, val essence: Double, val isBioware: Boolean, val children: List<WareLine>)
-    data class GearLine(val name: String, val category: String, val quantity: String, val rating: Int, val children: List<String>)
+    data class WareLine(val name: String, val grade: String, val rating: Int, val essence: Double, val isBioware: Boolean, val children: List<WareLine>, val guid: String = "", val sourceId: String = "")
+    data class GearLine(val name: String, val category: String, val quantity: String, val rating: Int, val children: List<String>, val guid: String = "", val loaded: Boolean = false)
     data class VehicleLine(val name: String, val category: String, val stats: String)
     data class ContactLine(val name: String, val type: String, val connection: Int, val loyalty: Int, val notes: String)
     data class LifestyleLine(val name: String, val type: String, val monthly: String, val notes: String)
@@ -45,6 +45,7 @@ data class SheetSections(
                             a.child("armormods")?.children("armormod").orEmpty()
                                 .filter { it.t("included") != "True" }
                                 .map { m -> m.t("name") + m.n("rating").takeIf { it > 0 }?.let { " $it" }.orEmpty() },
+                            a.t("guid"),
                         )
                     },
                 )
@@ -53,7 +54,7 @@ data class SheetSections(
             fun ware(a: CharacterFile.Augmentation, hasParent: Boolean): WareLine = WareLine(
                 a.name, a.grade.takeIf { it != "None" }.orEmpty(), a.rating,
                 essence.calculatedEss(a, hasParent), a.improvementSource.equals("Bioware", true),
-                a.children.map { ware(it, true) },
+                a.children.map { ware(it, true) }, a.guid, a.sourceId,
             )
             val wares = c.augmentations().map { ware(it, false) }
 
@@ -61,6 +62,7 @@ data class SheetSections(
                 GearLine(
                     g.t("name"), g.t("category"), g.t("qty").removeSuffix(".0"), g.n("rating"),
                     g.child("children")?.children("gear").orEmpty().map { it.t("name") },
+                    g.t("guid"), g.t("location") == "loaded",
                 )
             }.sortedWith(compareBy({ it.category }, { it.name }))
 

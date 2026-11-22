@@ -86,6 +86,12 @@ class GoldenExportDerivedTest {
         expect("dodge", d.dodge)
         for ((field, v) in d.resistances()) expect(field, v)
         expect("physicalcmnaturalrecovery", d.physicalCMNaturalRecovery)
+        // Movement: the export's full movement string.
+        checked++
+        val moveSet = set
+        val movement = Movement.of(c, pack, moveSet, attrs)?.full()
+        val wantMove = export.text("movement")!!.trim()
+        if (movement != wantMove) misses += "movement: Chummer=$wantMove ours=$movement"
         // Essence from the engine against the export's total essence.
         val wantEss = export.text("totaless")!!.trim().toDouble()
         checked++

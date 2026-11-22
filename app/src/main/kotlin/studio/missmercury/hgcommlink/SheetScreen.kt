@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,11 +95,14 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
                         "Overview" -> Overview(sheet, vm)
                         "Skills" -> Skills(sheet, vm)
                         "Magic" -> Magic(sheet, vm)
-                        "Gear" -> Gear(sheet.sections)
-                        "Ware" -> Ware(sheet.sections, sheet.essence)
+                        "Gear" -> Gear(sheet.sections, sheet, vm)
+                        "Ware" -> Ware(sheet.sections, sheet.essence, sheet, vm)
                         "Life" -> Life(sheet.sections)
                         else -> Qualities(sheet, vm)
                     }
+                    // Soft edges where the scrolling content passes under the header and the tab bar, instead of a hard cut.
+                    Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(14.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Obsidian, Color.Transparent))))
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(14.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Obsidian))))
                 }
                 BottomNav(tabs, current) { tabName = it }
             }
@@ -160,9 +164,10 @@ private fun Header(s: Sheet, warning: String?) {
 private fun Overview(s: Sheet, vm: AppViewModel) {
     val creation = s.karmaLedger != null
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        CareerCard(s, vm)
         s.karmaLedger?.let { KarmaSection(it, s.review) }
         if (s.review != null) FinishCard(s.review!!, vm)
 
@@ -180,6 +185,7 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
                     Stat("Essence", formatEssence(s.essence), Modifier.weight(1f), if (s.essence < 6.0) DrainAmber else Quicksilver)
                 }
                 val extras = buildList {
+                    if (s.movement.isNotEmpty()) add("Move ${s.movement}")
                     add("Overflow ${s.cmOverflow}")
                     if (s.armor.encumbrance != 0) add("Encumbrance ${s.armor.encumbrance}")
                     s.armor.byType.filter { it.second != s.armor.general }.forEach { add("${it.first} ${it.second}") }
@@ -194,6 +200,24 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
                 s.attributes.chunked(2).forEach { pair ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         pair.forEach { a -> AttributeTile(a, a.name in BUYABLE, vm, Modifier.weight(1f)) }
+                        repeat(2 - pair.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+            } else if (s.career != null) {
+                // Career: two to a row, each with the karma price of its next point.
+                val karma = s.karma.toIntOrNull() ?: 0
+                s.attributes.chunked(2).forEach { pair ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        pair.forEach { a ->
+                            val cost = if (a.name in BUYABLE) s.career!!.attributeCosts[a.name] else null
+                            Row(Modifier.weight(1f).background(SlateHigh).border(1.dp, TerminalGrid), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f).padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(a.total.toString(), style = MaterialTheme.typography.titleLarge.copy(fontFamily = JetBrainsMono), color = Quicksilver)
+                                    Text(a.name + if (a.maximum > 0) " /${a.maximum}" else "", style = MaterialTheme.typography.labelSmall, color = MutedSilver, maxLines = 1)
+                                }
+                                if (a.name in BUYABLE) UpgradeButton(cost, karma) { vm.improveAttribute(a.name) }
+                            }
+                        }
                         repeat(2 - pair.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
@@ -281,11 +305,13 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
     val q = query.trim()
     fun matches(r: SkillResult) = q.isEmpty() || r.name.contains(q, ignoreCase = true)
     val buy = if (s.karmaLedger != null) vm else null
+    val career = s.career
+    val karma = s.karma.toIntOrNull() ?: 0
     Column(Modifier.fillMaxSize()) {
         TerminalField(query, { query = it }, "search skills", Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
             // Skill groups: folded away until wanted, since there are eleven of them.
-            if (buy != null && q.isEmpty() && s.skillGroups.isNotEmpty()) {
+            if ((buy != null || career != null) && q.isEmpty() && s.skillGroups.isNotEmpty()) {
                 item {
                     val bought = s.skillGroups.count { it.karma > 0 }
                     CollapsibleHeader("Skill groups", groupsOpen, { groupsOpen = !groupsOpen }, summary = if (bought > 0) "$bought bought" else null)
@@ -294,9 +320,14 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
                     Column {
                         Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(g.name, Modifier.weight(1f), color = if (g.karma > 0) Quicksilver else MutedSilver)
-                            StepButton("−", 44) { vm.changeSkillGroup(g.name, -1) }
-                            Text("${g.karma}", Modifier.width(24.dp), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
-                            StepButton("+", 44) { vm.changeSkillGroup(g.name, 1) }
+                            if (career != null) {
+                                Text("${g.karma}", Modifier.padding(end = 8.dp), style = MaterialTheme.typography.titleMedium)
+                                UpgradeButton(career.groupCosts[g.name], karma) { vm.improveGroup(g.name) }
+                            } else {
+                                StepButton("−", 44) { vm.changeSkillGroup(g.name, -1) }
+                                Text("${g.karma}", Modifier.width(24.dp), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                                StepButton("+", 44) { vm.changeSkillGroup(g.name, 1) }
+                            }
                         }
                         Hairline(color = TerminalGrid.copy(alpha = 0.6f))
                     }
@@ -316,16 +347,16 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
                     knowledge.groupBy { it.type.ifBlank { "Other" } }.toList()
                         .sortedWith(compareBy({ it.first != "Language" }, { it.first })).forEach { (type, list) ->
                             Text(type.uppercase(), style = MaterialTheme.typography.labelSmall, color = MutedSilver)
-                            list.forEach { KnowledgeRow(it, buy) }
+                            list.forEach { k -> KnowledgeRow(k, buy, career?.skillCosts?.get(k.guid), career != null, karma) { vm.improveSkill(k.guid) } }
                         }
                 }
             }
             // Skills the character has come first; the rest are listed after, as Chummer does.
             val (rated, unrated) = s.activeSkills.filter(::matches).partition { it.rating > 0 }
             if (rated.isNotEmpty()) item { SubHeader("Active skills") }
-            items(rated, key = { "a-" + it.name }) { SkillRow(it, buy) }
+            items(rated, key = { "a-" + it.name }) { SkillRow(it, buy, career, karma, vm) }
             if (unrated.isNotEmpty()) item { SubHeader(if (rated.isEmpty()) "Active skills" else "Unrated") }
-            items(unrated, key = { "u-" + it.name }) { SkillRow(it, buy) }
+            items(unrated, key = { "u-" + it.name }) { SkillRow(it, buy, career, karma, vm) }
         }
         if (buy != null) PinnedAction("+ Knowledge skill") { addingKnowledge = true }
     }
@@ -357,7 +388,7 @@ private fun Pips(rating: Int, max: Int) {
 }
 
 @Composable
-private fun KnowledgeRow(k: Sheet.KnowledgeLine, buy: AppViewModel?) {
+private fun KnowledgeRow(k: Sheet.KnowledgeLine, buy: AppViewModel?, upgradeCost: Int? = null, inCareer: Boolean = false, karma: Int = 0, onUpgrade: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
         if (buy != null) StepButton("×", 36, CriticalRed.copy(alpha = 0.85f)) { buy.removeKnowledge(k.guid) }
         Column(Modifier.weight(1f)) {
@@ -371,6 +402,7 @@ private fun KnowledgeRow(k: Sheet.KnowledgeLine, buy: AppViewModel?) {
             StepButton("+", 44) { buy.changeKnowledge(k.guid, 1) }
         } else if (!k.native) {
             Text("${k.points + k.karma}", Modifier.padding(horizontal = 8.dp), style = MaterialTheme.typography.titleMedium)
+            if (inCareer) UpgradeButton(upgradeCost, karma, onUpgrade)
         }
         PoolBox(if (k.native) "N" else "${k.pool}", lit = true)
     }
@@ -403,8 +435,10 @@ private fun SubHeader(text: String) {
 }
 
 @Composable
-private fun SkillRow(r: SkillResult, buy: AppViewModel?) {
+private fun SkillRow(r: SkillResult, buy: AppViewModel?, career: Sheet.CareerLines? = null, karma: Int = 0, vm: AppViewModel? = null) {
     val unrated = r.rating == 0
+    var speccing by remember { mutableStateOf(false) }
+    val guid = career?.skillIds?.get(r.name)
     Column {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -413,16 +447,23 @@ private fun SkillRow(r: SkillResult, buy: AppViewModel?) {
                     Text(r.attribute, style = MaterialTheme.typography.labelSmall, color = MutedSilver)
                     if (!unrated) Pips(r.rating, r.ratingMaximum)
                     else Text(if (r.canDefault) "default" else "no default", style = MaterialTheme.typography.labelSmall, color = if (r.canDefault) MutedSilver else DrainAmber)
+                    val specCost = guid?.let { career?.specCosts?.get(it) }
+                    if (specCost != null) Text("+spec $specCost", Modifier.clickable { speccing = true }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = if (specCost <= karma) PhosphorGreen else MutedSilver)
                 }
             }
             if (buy != null) {
                 StepButton("−", 44) { buy.changeSkill(r.name, -1) }
                 Text("${r.rating}", Modifier.width(22.dp), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
                 StepButton("+", 44) { buy.changeSkill(r.name, 1) }
+            } else if (career != null && vm != null) {
+                if (guid != null) UpgradeButton(career.skillCosts[guid], karma) { vm.improveSkill(guid) }
             }
             PoolBox(if (unrated && !r.canDefault) "–" else "${r.pool}", lit = !unrated)
         }
         Hairline(color = TerminalGrid.copy(alpha = 0.6f))
+    }
+    if (speccing && guid != null && career != null && vm != null) {
+        SpecializationSheet(r.name, career.specCosts[guid] ?: 0, career.specChoices[guid].orEmpty(), karma, { vm.addSpecialization(guid, it) }, { speccing = false })
     }
 }
 
@@ -446,7 +487,7 @@ private fun Qualities(s: Sheet, vm: AppViewModel) {
     if (adding) AddQualityDialog(vm, onDismiss = { adding = false })
     removing?.let { q ->
         ConfirmSheet(
-            "Remove ${q.name}?", "The improvements it gave this character are removed too. A copy of the file is kept in the app's backups folder.",
+            "Remove ${q.name}?", "The improvements it gave this character are removed too." + (s.career?.qualityRemoval?.get(q.guid)?.takeIf { it > 0 }?.let { " Buying it off costs $it karma." } ?: "") + " A copy of the file is kept in the app's backups folder.",
             "Remove", onConfirm = { vm.removeQuality(q.guid) }, onDismiss = { removing = null }, danger = true,
         )
     }
@@ -466,9 +507,10 @@ private fun AddQualityDialog(vm: AppViewModel, onDismiss: () -> Unit) {
     val options = remember { vm.qualityOptions() }
     val items = remember {
         options.map { o ->
+            val careerCost = vm.careerQualityCost(o.id)
             PickItem(
                 o.id, o.name,
-                listOfNotNull(o.category, "${o.karma} karma", if (o.unsupported.isNotEmpty()) "some bonuses not applied yet: " + o.unsupported.joinToString() else null).joinToString("  ·  "),
+                listOfNotNull(o.category, if (careerCost != null) "costs $careerCost karma" else "${o.karma} karma", if (o.unsupported.isNotEmpty()) "some bonuses not applied yet: " + o.unsupported.joinToString() else null).joinToString("  ·  "),
                 o.category, warn = o.unsupported.isNotEmpty(),
             )
         }
@@ -481,7 +523,7 @@ private fun AddQualityDialog(vm: AppViewModel, onDismiss: () -> Unit) {
             val o = options.first { it.id == id }
             if (o.needsText) { needsText = o; text = "" } else vm.addQuality(id)
         },
-        note = "Prerequisites and karma limits are not checked yet.",
+        note = if (vm.open?.sheet?.isCareer == true) "Costs karma now. Prerequisites are not checked yet." else "Prerequisites and karma limits are not checked yet.",
         keepOpenFor = { id -> options.first { it.id == id }.needsText },
         onDismiss = onDismiss,
     )
@@ -514,8 +556,12 @@ private fun Small(text: String) {
 }
 
 @Composable
-private fun Gear(g: chummer.core.engine.SheetSections) {
-    LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewModel) {
+    var buying by remember { mutableStateOf<String?>(null) }
+    var attaching by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var loading by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (g.armorSets.isNotEmpty()) item { SubHeader("Armor") }
         items(g.armorSets) { set ->
             TerminalCard(set.name.ifBlank { "Not in a set" }) {
@@ -523,6 +569,7 @@ private fun Gear(g: chummer.core.engine.SheetSections) {
                     set.items.forEach { a ->
                         Row2(a.name, a.value.let { v -> if (a.equipped) v else "$v (off)" })
                         Small(a.mods.joinToString(", "))
+                        if (s.career != null && a.guid.isNotEmpty()) Text("+ mod", Modifier.clickable { attaching = "mod" to a.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
                     }
                 }
             }
@@ -537,6 +584,8 @@ private fun Gear(g: chummer.core.engine.SheetSections) {
                     w.reach.takeIf { w.type.equals("Melee", true) && it.isNotBlank() }?.let { "reach $it" }, w.accuracy.takeIf { it.isNotBlank() }?.let { "acc $it" },
                     "RC ${w.rc}", w.conceal.takeIf { it != "0" }?.let { "conceal $it" }).filterNotNull().filter { it.isNotBlank() }.joinToString("  ·  "))
                 Small(w.accessories.groupingBy { it }.eachCount().entries.joinToString(", ") { (n, c) -> if (c > 1) "$n x$c" else n })
+                if (s.career != null && w.guid.isNotEmpty() && w.canLoad) Text("load ammo", Modifier.clickable { loading = w.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
+                if (s.career != null && w.guid.isNotEmpty() && w.allowAccessory) Text("+ accessory", Modifier.clickable { attaching = "accessory" to w.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
             }
         }
         if (g.vehicles.isNotEmpty()) item { SubHeader("Vehicles") }
@@ -549,27 +598,50 @@ private fun Gear(g: chummer.core.engine.SheetSections) {
             }
         }
     }
-}
-
-@Composable
-private fun Ware(g: chummer.core.engine.SheetSections, essence: Double) {
-    LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        item { Row2("Essence", formatEssence(essence), bold = true) }
-        val (bio, cyber) = g.ware.partition { it.isBioware }
-        if (cyber.isNotEmpty()) item { SubHeader("Cyberware") }
-        items(cyber) { WareRow(it, 0) }
-        if (bio.isNotEmpty()) item { SubHeader("Bioware") }
-        items(bio) { WareRow(it, 0) }
-        if (g.ware.isEmpty()) item { Text("No augmentations.") }
+    if (s.career != null) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TerminalButton("Gear", { buying = "gear" }, Modifier.weight(1f))
+        TerminalButton("Weapon", { buying = "weapon" }, Modifier.weight(1f))
+        TerminalButton("Armor", { buying = "armor" }, Modifier.weight(1f))
+    }
+    }
+    buying?.let { BuyGearDialog(it, vm, s.nuyen) { buying = null } }
+    attaching?.let { (kind, guid) -> AttachPartDialog(kind, guid, vm, s.nuyen) { attaching = null } }
+    loading?.let { weapon ->
+        val ammo = g.gear.filter { it.category == "Ammunition" && !it.loaded && it.guid.isNotEmpty() }
+        PickerSheet("Load ammo", ammo.map { PickItem(it.guid, it.name, "x${it.quantity}") }, onPick = { vm.loadAmmo(weapon, it) }, note = if (ammo.isEmpty()) "No loose ammunition." else "Fills the first empty clip.", onDismiss = { loading = null })
     }
 }
 
 @Composable
-private fun WareRow(w: chummer.core.engine.SheetSections.WareLine, depth: Int) {
+private fun Ware(g: chummer.core.engine.SheetSections, essence: Double, s: Sheet, vm: AppViewModel) {
+    var buying by remember { mutableStateOf<Boolean?>(null) }
+    var plugging by remember { mutableStateOf<chummer.core.engine.SheetSections.WareLine?>(null) }
+    Column(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        item { Row2("Essence", formatEssence(essence), bold = true) }
+        val (bio, cyber) = g.ware.partition { it.isBioware }
+        if (cyber.isNotEmpty()) item { SubHeader("Cyberware") }
+        items(cyber) { WareRow(it, 0, s.career?.pluginCapacity?.get(it.guid)) { plugging = it } }
+        if (bio.isNotEmpty()) item { SubHeader("Bioware") }
+        items(bio) { WareRow(it, 0, s.career?.pluginCapacity?.get(it.guid)) { plugging = it } }
+        if (g.ware.isEmpty()) item { Text("No augmentations.") }
+    }
+    if (s.career != null) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TerminalButton("+ Cyberware", { buying = false }, Modifier.weight(1f))
+        TerminalButton("+ Bioware", { buying = true }, Modifier.weight(1f))
+    }
+    }
+    buying?.let { BuyWareDialog(it, vm, s.nuyen, essence) { buying = null } }
+    plugging?.let { w -> BuyWareDialog(w.isBioware, vm, s.nuyen, essence, parent = w) { plugging = null } }
+}
+
+@Composable
+private fun WareRow(w: chummer.core.engine.SheetSections.WareLine, depth: Int, capacityLeft: Double? = null, onPlug: () -> Unit = {}) {
     Column(Modifier.padding(start = (depth * 16).dp)) {
         Row2(w.name + if (w.rating > 0) " (rating ${w.rating})" else "", if (w.essence != 0.0) formatEssence(w.essence) else "", bold = depth == 0)
         Small(w.grade.takeIf { !it.equals("Standard", true) }.orEmpty())
         w.children.forEach { WareRow(it, depth + 1) }
+        if (capacityLeft != null) Text("+ plug-in  (capacity left ${"%.0f".format(java.util.Locale.ROOT, capacityLeft)})", Modifier.clickable(onClick = onPlug).padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
     }
 }
 
@@ -660,7 +732,7 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
         PickerSheet("Choose a tradition", options, { vm.setTradition(it) }) { choosingTradition = false }
     }
     if (addingSpell) {
-        val options = remember { vm.spellOptions().map { PickItem(it.id, it.name, listOf(it.category, "type ${it.type}", it.range, "drain ${it.dv}").filter { x -> x.isNotBlank() }.joinToString("  ·  ")) } }
+        val options = remember { vm.spellOptions().map { PickItem(it.id, it.name, listOf(it.category, "type ${it.type}", it.range, "drain ${it.dv}", vm.careerSpellCost(it.id)?.let { c -> "costs $c karma" }.orEmpty()).filter { x -> x.isNotBlank() }.joinToString("  ·  ")) } }
         PickerSheet("Add a spell", options, { vm.addSpell(it) }) { addingSpell = false }
     }
 }
@@ -672,7 +744,7 @@ class PickItem(val id: String, val title: String, val subtitle: String, val grou
  * the search prompt at the bottom where the thumb is. Picking closes the sheet unless [keepOpenFor] says otherwise.
  */
 @Composable
-private fun PickerSheet(
+internal fun PickerSheet(
     title: String, items: List<PickItem>, onPick: (String) -> Unit,
     note: String? = null, header: (@Composable ColumnScope.() -> Unit)? = null, keepOpenFor: (String) -> Boolean = { false },
     onDismiss: () -> Unit,

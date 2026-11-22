@@ -69,6 +69,20 @@ class GameDataStore(private val context: Context) {
     fun traditionOptions(): List<chummer.core.engine.TraditionOption> =
         synchronized(this) { pack?.let(chummer.core.engine.TraditionCatalog::list).orEmpty() }
 
+    fun armorOptions(): List<chummer.core.engine.ItemOption> = synchronized(this) { pack?.let(chummer.core.engine.ArmorWeaponCatalog::armor).orEmpty() }
+    fun weaponOptions(): List<chummer.core.engine.ItemOption> = synchronized(this) { pack?.let(chummer.core.engine.ArmorWeaponCatalog::weapons).orEmpty() }
+
+    fun accessoryOptions(): List<chummer.core.engine.ItemOption> = synchronized(this) { pack?.let(chummer.core.engine.ArmorWeaponCatalog::accessories).orEmpty() }
+    fun armorModOptions(): List<chummer.core.engine.ItemOption> = synchronized(this) { pack?.let(chummer.core.engine.ArmorWeaponCatalog::armorMods).orEmpty() }
+
+    fun wareOptions(): List<chummer.core.engine.WareOption> = synchronized(this) { pack?.let(chummer.core.engine.WareCatalog::list).orEmpty() }
+    fun wareGrades(bioware: Boolean, c: CharacterFile): List<String> = synchronized(this) { pack?.let { chummer.core.engine.WareCatalog.gradeNames(it, bioware, settingsFor(c).bannedWareGrades) }.orEmpty() }
+
+    fun pluginOptions(parentSourceId: String): List<chummer.core.engine.WareOption> = synchronized(this) { pack?.let { chummer.core.engine.WareCatalog.pluginsFor(it, parentSourceId) }.orEmpty() }
+
+    fun gearOptions(): List<chummer.core.engine.GearOption> =
+        synchronized(this) { pack?.let(chummer.core.engine.GearCatalog::list).orEmpty() }
+
     fun qualityOptions(): List<QualityOption> = synchronized(this) { pack?.let(QualityCatalog::list).orEmpty() }
 
     fun finishPlan(c: CharacterFile) =
@@ -80,6 +94,9 @@ class GameDataStore(private val context: Context) {
 
     fun editor(c: CharacterFile) =
         CharacterEditor(c, synchronized(this) { pack ?: error("Game data is not loaded yet") }, translations::get, settingsFor(c))
+
+    /** The career karma and nuyen tools for a finished character. */
+    fun career(c: CharacterFile) = chummer.core.engine.CareerAdvancement(c, synchronized(this) { pack ?: error("Game data is not loaded yet") }, settingsFor(c))
     private fun chummerCustomDir() = unpack("chummer-customdata", "chummer-customdata")
 
     /** Settings profiles copied from the user's folder (see CharacterRepository.syncSideFiles). */

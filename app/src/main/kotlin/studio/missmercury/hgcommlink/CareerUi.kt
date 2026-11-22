@@ -1,0 +1,279 @@
+package studio.missmercury.hgcommlink
+
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import chummer.core.engine.ExpenseEntry
+import chummer.core.engine.Sheet
+import studio.missmercury.hgcommlink.ui.*
+
+/**
+ * A karma upgrade control for career characters: "+20" with the price, or "MAX" at the ceiling. Dimmed when the
+ * character cannot pay (it still answers a tap, with the reason).
+ */
+@Composable
+fun UpgradeButton(cost: Int?, karma: Int, onClick: () -> Unit) {
+    val affordable = cost != null && cost <= karma
+    Box(
+        Modifier.widthIn(min = 52.dp).heightIn(min = 44.dp)
+            .alpha(if (cost == null || affordable) 1f else 0.45f)
+            .border(1.dp, if (affordable) PhosphorGreen else TerminalGrid)
+            .clickable(enabled = cost != null, onClick = onClick).padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(if (cost == null) "MAX" else "+$cost", style = MaterialTheme.typography.labelLarge, color = if (affordable) PhosphorGreen else MutedSilver)
+    }
+}
+
+/** Karma and nuyen balances, a way to add an entry by hand, and the log with undo. */
+@Composable
+fun CareerCard(s: Sheet, vm: AppViewModel) {
+    val career = s.career ?: return
+    var adding by remember { mutableStateOf(false) }
+    var showLog by remember { mutableStateOf(false) }
+    var undoing by remember { mutableStateOf<ExpenseEntry?>(null) }
+    TerminalCard("Career", tag = "00") {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TelemetryStrip(listOf("KARMA" to s.karma, "NUYEN" to "¥${s.nuyen}"))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TerminalButton("Add entry", { adding = true }, Modifier.weight(1f))
+                TerminalButton(if (showLog) "Hide log" else "Log (${career.expenses.size})", { showLog = !showLog }, Modifier.weight(1f))
+            }
+            if (showLog) career.expenses.take(60).forEach { e ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(e.reason.ifBlank { "(no reason)" }, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                        Text(e.date.replace('T', ' ').take(16) + "  " + e.type, style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+                    }
+                    val amount = if (e.amount == Math.rint(e.amount)) e.amount.toLong().toString() else e.amount.toString()
+                    Text(
+                        (if (e.amount > 0) "+" else "") + amount, Modifier.padding(horizontal = 8.dp),
+                        color = if (e.amount < 0) DrainAmber else PhosphorGreen, style = MaterialTheme.typography.labelLarge,
+                    )
+                    if (e.guid in career.undoable) StepButton("↶", 40, MutedSilver) { undoing = e } else Box(Modifier.widthIn(min = 40.dp))
+                }
+            }
+            if (showLog && career.expenses.size > 60) Text("Showing the newest 60 of ${career.expenses.size}.", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+        }
+    }
+    if (adding) AddExpenseSheet(vm) { adding = false }
+    undoing?.let { e ->
+        ConfirmSheet("Undo entry", "Take back \"${e.reason}\"? The ${e.type.lowercase()} balance changes by ${-e.amount.toLong()}.", "Undo", { vm.undoExpense(e.guid) }, { undoing = null })
+    }
+}
+
+@Composable
+private fun AddExpenseSheet(vm: AppViewModel, onDismiss: () -> Unit) {
+    var karma by remember { mutableStateOf(true) }
+    var spend by remember { mutableStateOf(false) }
+    var amount by remember { mutableStateOf("") }
+    var reason by remember { mutableStateOf("") }
+    val value = amount.toDoubleOrNull()
+    TerminalSheet("Add entry", onDismiss) { close ->
+        Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ChoiceChips("Currency", listOf("k" to "Karma", "n" to "Nuyen"), if (karma) "k" else "n", { karma = it == "k" })
+            ChoiceChips("Direction", listOf("g" to "Gain", "s" to "Spend"), if (spend) "s" else "g", { spend = it == "s" })
+            TerminalField(amount, { amount = it.filter { c -> c.isDigit() || (c == '.' && !karma) } }, if (karma) "karma" else "nuyen", keyboardType = KeyboardType.Number)
+            TerminalField(reason, { reason = it }, "reason (Mission Reward, ...)")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TerminalButton("Cancel", close, Modifier.weight(1f))
+                TerminalButton("Save", { close(); vm.addExpense(karma, (if (spend) -1 else 1) * value!!, reason.trim()) }, Modifier.weight(1f), filled = true, enabled = value != null && value > 0)
+            }
+        }
+    }
+}
+
+/** Pick a specialization from the game data's list, or type your own. */
+@Composable
+fun SpecializationSheet(skill: String, cost: Int, choices: List<String>, karma: Int, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf("") }
+    TerminalSheet("Specialize $skill", onDismiss, tall = choices.size > 4) { close ->
+        Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Costs $cost karma; you have $karma.", style = MaterialTheme.typography.labelSmall, color = if (cost <= karma) MutedSilver else DrainAmber)
+            choices.forEach { c ->
+                Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).border(1.dp, TerminalGrid).clickable(enabled = cost <= karma) { close(); onPick(c) }.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+                    Text(c)
+                }
+            }
+            TerminalField(text, { text = it }, "or type your own")
+            TerminalButton("Learn", { close(); onPick(text.trim()) }, Modifier.fillMaxWidth(), filled = true, enabled = text.isNotBlank() && cost <= karma)
+        }
+    }
+}
+
+/** Pick gear, a weapon or armor ([kind]: "gear", "weapon", "armor") from the game data, choose rating and quantity where they apply, and pay. */
+@Composable
+fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
+    class Opt(val id: String, val name: String, val category: String, val cost: Double?, val avail: String, val min: Int, val max: Int, val note: String?, val blocked: Boolean)
+    val options = remember(kind) {
+        when (kind) {
+            "weapon" -> vm.weaponOptions().map { o ->
+                Opt(o.id, o.name, o.category, o.cost, o.avail, 0, 0, o.detail, o.problem != null)
+            }
+            "armor" -> vm.armorOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, 1, o.maxRating, o.detail, o.problem != null) }
+            else -> vm.gearOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, o.minRating, o.maxRating, if (o.unsupported.isNotEmpty()) "some bonuses not applied yet" else null, false) }
+        }
+    }
+    val items = remember(kind) {
+        options.map { o ->
+            PickItem(
+                o.id, o.name,
+                listOfNotNull(o.category, o.note, o.cost?.let { "¥" + formatNuyen(it) } ?: "price not readable yet", o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + chummer.core.engine.GearEditor.availText(it, if (o.max > 0) maxOf(o.min, 1) else 0) },
+                    if (o.blocked) "not supported yet" else null).joinToString("  ·  "),
+                o.category, warn = o.cost == null || o.blocked,
+            )
+        }
+    }
+    var chosen by remember { mutableStateOf<Opt?>(null) }
+    PickerSheet("Buy $kind", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "You have ¥$nuyen.", keepOpenFor = { true }, onDismiss = onDismiss)
+    chosen?.let { o ->
+        val hasRating = o.max > 0
+        var rating by remember(o.id) { mutableStateOf(if (hasRating) maxOf(o.min, 1).toString() else "") }
+        var qty by remember(o.id) { mutableStateOf("1") }
+        val r = if (hasRating) rating.toIntOrNull()?.coerceIn(maxOf(o.min, 1), o.max) else null
+        val q = if (kind == "gear") qty.toDoubleOrNull() else 1.0
+        val cost = if (q == null || o.blocked) null else when (kind) {
+            "weapon" -> vm.weaponCost(o.id)
+            "armor" -> vm.armorCost(o.id, r)
+            else -> vm.gearCost(o.id, r, q)
+        }
+        val have = nuyen.toDoubleOrNull() ?: 0.0
+        TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating (${maxOf(o.min, 1)}-${o.max})", keyboardType = KeyboardType.Number)
+                if (kind == "gear") TerminalField(qty, { qty = it.filter { c -> c.isDigit() || c == '.' } }, "quantity", keyboardType = KeyboardType.Number)
+                Text(
+                    when {
+                        o.blocked -> "This item comes with parts that are not supported yet."
+                        cost == null -> "The price of this item cannot be worked out yet."
+                        else -> "Costs ¥${formatNuyen(cost)}; you have ¥$nuyen."
+                    },
+                    style = MaterialTheme.typography.labelSmall, color = if (cost == null || cost > have) DrainAmber else MutedSilver,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Buy", {
+                        close(); chosen = null
+                        when (kind) { "weapon" -> vm.buyWeapon(o.id); "armor" -> vm.buyArmor(o.id, r); else -> vm.buyGear(o.id, r, q!!) }
+                        onDismiss()
+                    }, Modifier.weight(1f), filled = true, enabled = cost != null && q != null && q > 0 && cost <= have)
+                }
+            }
+        }
+    }
+}
+
+private fun formatNuyen(v: Double) = if (v == Math.rint(v)) "%,d".format(v.toLong()) else "%,.2f".format(v)
+
+/** Pick a weapon accessory ([kind] "accessory", for the weapon with [parentGuid]) or an armor mod ("mod"), choose mount and rating, and pay. */
+@Composable
+fun AttachPartDialog(kind: String, parentGuid: String, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
+    val options = remember(kind) { if (kind == "accessory") vm.accessoryOptions() else vm.armorModOptions() }
+    val items = remember(kind) {
+        options.map { o ->
+            PickItem(
+                o.id, o.name,
+                listOfNotNull(o.category.takeIf { it.isNotBlank() }, o.detail.takeIf { it.isNotBlank() }?.let { if (kind == "accessory") "cost $it" else it }, o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + chummer.core.engine.GearEditor.availText(it, 1) }).joinToString("  ·  "),
+                o.category,
+            )
+        }
+    }
+    var chosen by remember { mutableStateOf<chummer.core.engine.ItemOption?>(null) }
+    PickerSheet(if (kind == "accessory") "Add accessory" else "Add armor mod", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "You have ¥$nuyen.", keepOpenFor = { true }, onDismiss = onDismiss)
+    chosen?.let { o ->
+        val hasRating = o.maxRating > 1 || (kind == "accessory" && o.maxRating > 0)
+        var rating by remember(o.id) { mutableStateOf(if (hasRating) "1" else "") }
+        var mount by remember(o.id) { mutableStateOf(o.mounts.firstOrNull()) }
+        val r = if (hasRating) rating.toIntOrNull()?.coerceIn(1, o.maxRating) else null
+        val cost = if (kind == "accessory") vm.accessoryCost(parentGuid, o.id, r) else vm.armorModCost(o.id, r)
+        val have = nuyen.toDoubleOrNull() ?: 0.0
+        TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating (1-${o.maxRating})", keyboardType = KeyboardType.Number)
+                if (kind == "accessory" && o.mounts.size > 1) ChoiceChips("Mount", o.mounts.map { it to it }, mount, { mount = it })
+                Text(
+                    if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥$nuyen.",
+                    style = MaterialTheme.typography.labelSmall, color = if (cost == null || cost > have) DrainAmber else MutedSilver,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Buy", {
+                        close(); chosen = null
+                        if (kind == "accessory") vm.buyAccessory(parentGuid, o.id, mount, r) else vm.buyArmorMod(parentGuid, o.id, r)
+                        onDismiss()
+                    }, Modifier.weight(1f), filled = true, enabled = cost != null && cost <= have)
+                }
+            }
+        }
+    }
+}
+
+/** Pick cyberware or bioware, choose grade and rating, see price and essence, and install it. */
+@Composable
+fun BuyWareDialog(bioware: Boolean, vm: AppViewModel, nuyen: String, essence: Double, parent: chummer.core.engine.SheetSections.WareLine? = null, onDismiss: () -> Unit) {
+    val options = remember(bioware, parent?.guid) { if (parent != null) vm.pluginOptions(parent.sourceId) else vm.wareOptions().filter { it.isBioware == bioware } }
+    val grades = remember(bioware) { vm.wareGrades(bioware) }
+    val items = remember(bioware) {
+        options.map { o ->
+            PickItem(
+                o.id, o.name,
+                listOfNotNull(
+                    o.category, o.cost?.let { "from ¥" + formatNuyen(it) } ?: "price not readable yet", o.essence?.let { "ess " + "%.2f".format(java.util.Locale.ROOT, it) },
+                    o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + chummer.core.engine.GearEditor.availText(it, if (o.maxRating > 0) maxOf(o.minRating, 1) else 0) }, o.problem?.let { "not supported yet: $it" },
+                    if (o.unsupported.isNotEmpty()) "some bonuses not applied yet" else null,
+                ).joinToString("  ·  "),
+                o.category, warn = o.problem != null || o.cost == null || o.unsupported.isNotEmpty(),
+            )
+        }
+    }
+    var chosen by remember { mutableStateOf<chummer.core.engine.WareOption?>(null) }
+    PickerSheet(if (bioware) "Install bioware" else "Install cyberware", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "You have ¥$nuyen and ${"%.2f".format(java.util.Locale.ROOT, essence)} essence.", keepOpenFor = { true }, onDismiss = onDismiss)
+    chosen?.let { o ->
+        val forced = o.forcedGrade.isNotEmpty() || parent != null
+        var grade by remember(o.id) { mutableStateOf(if (parent != null) parent.grade.ifEmpty { "Standard" } else if (forced) o.forcedGrade else if ("Standard" in grades) "Standard" else grades.firstOrNull().orEmpty()) }
+        val hasRating = o.maxRating > 0
+        var rating by remember(o.id) { mutableStateOf(if (hasRating) maxOf(o.minRating, 1).toString() else "") }
+        val r = if (hasRating) rating.toIntOrNull()?.coerceIn(maxOf(o.minRating, 1), o.maxRating) else null
+        val cost = if (o.problem == null) vm.wareCost(o.id, grade, r) else null
+        val ess = if (o.problem == null) vm.wareEssence(o.id, grade, r) else null
+        val have = nuyen.toDoubleOrNull() ?: 0.0
+        val ok = cost != null && ess != null && cost <= have && (parent != null && o.essence != null && !o.addsToParent || essence - ess >= 0)
+        TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (!forced && grades.size > 1) ChoiceChips("Grade", grades.map { it to it }, grade, { grade = it })
+                if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating (${maxOf(o.minRating, 1)}-${o.maxRating})", keyboardType = KeyboardType.Number)
+                Text(
+                    when {
+                        o.problem != null -> "This item is not supported yet: ${o.problem}."
+                        cost == null || ess == null -> "The price or essence of this item cannot be worked out yet."
+                        else -> "Costs ¥${formatNuyen(cost)} and ${"%.2f".format(java.util.Locale.ROOT, ess)} essence; you have ¥$nuyen and ${"%.2f".format(java.util.Locale.ROOT, essence)} essence."
+                    },
+                    style = MaterialTheme.typography.labelSmall, color = if (ok) MutedSilver else DrainAmber,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Install", { close(); chosen = null; vm.buyWare(o.id, grade, r, parent?.guid); onDismiss() }, Modifier.weight(1f), filled = true, enabled = ok)
+                }
+            }
+        }
+    }
+}

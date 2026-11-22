@@ -45,6 +45,7 @@ class CharacterFile(val doc: Document) {
         val improvementSource: String = "Cyberware", val isGeneware: Boolean = false, val suite: Boolean = false,
         val essDiscount: Double = 0.0, val extraEssAdditive: Double = 0.0, val extraEssMultiplicative: Double = 1.0,
         val forceGrade: String = "", val minRating: Int = 0, val prototypeTranshuman: Boolean = false,
+        val guid: String = "",
     ) {
         val isLimb get() = limbSlot.isNotEmpty()
     }
@@ -66,6 +67,7 @@ class CharacterFile(val doc: Document) {
         extraEssMultiplicative = e.text("extraessmultiplicativemultiplier")?.trim()?.toDoubleOrNull() ?: 1.0,
         forceGrade = e.text("forcegrade").orEmpty().trim(), minRating = e.int("minrating"),
         prototypeTranshuman = e.text("prototypetranshuman")?.trim().equals("True", true),
+        guid = e.text("guid").orEmpty().trim(),
     )
 
     fun augmentations(): List<Augmentation> =

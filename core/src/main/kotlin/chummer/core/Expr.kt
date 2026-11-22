@@ -17,11 +17,34 @@ class Expr private constructor(private val s: String, private val vars: Map<Stri
 
         fun eval(formula: String, vars: Map<String, Double> = emptyMap()): Double {
             val e = Expr(formula.trim(), vars)
-            val v = e.sum()
+            val v = e.cmp()
             e.skip()
             require(e.i == e.s.length) { "Unexpected '${e.s.substring(e.i)}' in \"$formula\"" }
             return v
         }
+    }
+
+    /** Comparisons give 1 or 0, as XPath's `number(Rating > 1)` does when used in a price. */
+    private fun cmp(): Double {
+        var v = sum()
+        skip()
+        loop@ while (i < s.length) {
+            val op = when {
+                s.startsWith(">=", i) -> ">="
+                s.startsWith("<=", i) -> "<="
+                s.startsWith("!=", i) -> "!="
+                s[i] == '>' -> ">"
+                s[i] == '<' -> "<"
+                s[i] == '=' -> "="
+                else -> break@loop
+            }
+            i += op.length
+            val r = sum()
+            val ok = when (op) { ">=" -> v >= r; "<=" -> v <= r; "!=" -> v != r; ">" -> v > r; "<" -> v < r; else -> v == r }
+            v = if (ok) 1.0 else 0.0
+            skip()
+        }
+        return v
     }
 
     private fun skip() { while (i < s.length && s[i].isWhitespace()) i++ }
@@ -59,7 +82,7 @@ class Expr private constructor(private val s: String, private val vars: Map<Stri
         val c = s[i]
         if (c == '(') {
             i++
-            val v = sum()
+            val v = cmp()
             skip()
             require(i < s.length && s[i] == ')') { "Missing ) in \"$s\"" }
             i++
@@ -83,6 +106,7 @@ class Expr private constructor(private val s: String, private val vars: Map<Stri
             while (i < s.length && (s[i].isLetterOrDigit() || s[i] == '_')) i++
             val name = s.substring(st, i)
             skip()
+            if (name == "number" && i < s.length && s[i] == '(') return atom() // number(x) is x
             require(i >= s.length || s[i] != '(') { "Function '$name' not supported in \"$s\"" }
             return vars[name] ?: throw IllegalArgumentException("Unknown variable '$name' in \"$s\"")
         }

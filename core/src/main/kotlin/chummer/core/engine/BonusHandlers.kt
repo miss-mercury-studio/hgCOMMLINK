@@ -277,6 +277,40 @@ object BonusHandlers {
 
         for (t in listOf("skillcategorykarmacost" to "SkillCategoryKarmaCost", "skillcategorypointcostmultiplier" to "SkillCategoryPointCostMultiplier",
             "skillcategoryspecializationkarmacostmultiplier" to "SkillCategorySpecializationKarmaCostMultiplier",
-            "skillcategorykarmacostmultiplier" to "SkillCategoryKarmaCostMultiplier")) put(t.first, costModifier(t.second))
+            "skillcategorykarmacostmultiplier" to "SkillCategoryKarmaCostMultiplier",
+            "activeskillkarmacost" to "ActiveSkillKarmaCost", "knowledgeskillkarmacost" to "KnowledgeSkillKarmaCost",
+            "skillgroupkarmacost" to "SkillGroupKarmaCost", "skillgroupcategorykarmacost" to "SkillGroupCategoryKarmaCost",
+            "skillgroupcategorykarmacostmultiplier" to "SkillGroupCategoryKarmaCostMultiplier")) put(t.first, costModifier(t.second))
+
+        // A drug's positive effect on an attribute category: the value is also kept as the augmented value.
+        put("drugpositiveattributemodifier") { node, ctx, unique, out ->
+            val v = value(node.textContent, ctx.rating) ?: return@put
+            out += improvement(ctx, "DrugPositiveAttributeModifier", unique, v, node.attr("category").orEmpty(), augmented = v)
+        }
+
+        // Sprint distance in metres and in percent for a movement category.
+        put("sprintbonus") { node, ctx, unique, out ->
+            val category = node.t("category").orEmpty()
+            if (category.isEmpty()) return@put
+            node.t("val")?.takeIf { it.isNotEmpty() }?.let { t -> value(t, ctx.rating)?.takeIf { it != 0.0 }?.let { out += improvement(ctx, "SprintBonus", unique, it, category) } }
+            node.t("percent")?.takeIf { it.isNotEmpty() }?.let { t -> value(t, ctx.rating)?.takeIf { it != 0.0 }?.let { out += improvement(ctx, "SprintBonusPercent", unique, it, category) } }
+        }
+
+        // The improvement carries the node text and the item rating (Chummer also adds the value to the character's prototype count).
+        put("prototypetranshuman") { node, ctx, unique, out ->
+            out += improvement(ctx, "PrototypeTranshuman", unique, 0.0, node.textContent.trim(), rating = ctx.rating.toDouble())
+        }
+
+        // Accuracy for a weapon skill: the skill is named in the node or picked by the user.
+        put("weaponskillaccuracy") { node, ctx, unique, out ->
+            val skill = ctx.choice.ifEmpty { node.t("name").orEmpty() }
+            if (skill.isEmpty() && node.child("selectskill") != null) return@put
+            out += improvement(ctx, "WeaponSkillAccuracy", unique, value(node.t("value"), ctx.rating) ?: 0.0, skill)
+        }
+
+        // Older data spelled the metagenic limit node "metageneticlimit".
+        put("metageneticlimit") { node, ctx, unique, out ->
+            value(node.textContent, ctx.rating)?.let { out += improvement(ctx, "MetageneticLimit", unique, it) }
+        }
     }
 }

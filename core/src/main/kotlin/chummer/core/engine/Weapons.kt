@@ -21,6 +21,10 @@ data class WeaponTotals(
     val accuracy: String,
     val conceal: String,
     val accessories: List<String>,
+    val guid: String = "",
+    /** Accessories can be added, and ammunition loaded (guns that need it; not melee, unarmed or gear-linked weapons). */
+    val allowAccessory: Boolean = false,
+    val canLoad: Boolean = false,
 )
 
 /**
@@ -101,7 +105,9 @@ class WeaponEngine(
         return WeaponTotals(
             name, w.t("type"), category, damage, ap, w.t("mode").takeIf { it != "0" }.orEmpty(), rc,
             ammoCapacity(w.t("ammo"), accessories),
-            w.t("reach"), accuracy, signed(conceal), accessories.map { it.t("name") },
+            w.t("reach"), accuracy, signed(conceal), accessories.map { it.t("name") }, w.t("guid"),
+            allowAccessory = w.t("allowaccessory").equals("True", true) && w.t("weapontype") != "gear" && w.t("included") != "True",
+            canLoad = w.t("requireammo").equals("True", true) && w.t("type").equals("Ranged", true) && w.t("weapontype") != "gear" && w.t("ammo").let { it.isNotEmpty() && it != "0" },
         )
     }
 

@@ -45,7 +45,26 @@ data class Sheet(
     val magic: MagicLines?,
     /** What stops this character from being finished, for a Karma-build character in creation. */
     val review: CreationReview?,
+    /** What karma can buy and the expense log; only for a career character. */
+    val career: CareerLines? = null,
+    /** Ground, swim and fly movement as the printed sheet gives it; empty when the metatype has none ("Special"). */
+    val movement: String = "",
 ) {
+    /**
+     * Career spending: the karma price of the next step of each attribute, skill (by GUID) and skill group (null at the
+     * maximum), the GUID of each active skill by name, and the expense log, newest first.
+     */
+    data class CareerLines(
+        val attributeCosts: Map<String, Int?>, val skillCosts: Map<String, Int?>, val skillIds: Map<String, String>,
+        val groupCosts: Map<String, Int?>, val expenses: List<ExpenseEntry>, val undoable: Set<String>,
+        /** Skills that can still learn a specialization (by GUID): its price and the choices the game data lists. */
+        val specCosts: Map<String, Int>, val specChoices: Map<String, List<String>>,
+        /** Karma it costs to remove each quality, by GUID (0 for a positive one). */
+        val qualityRemoval: Map<String, Int>,
+        /** Capacity each installed ware item has left for plug-ins, by GUID (only items that take plug-ins). */
+        val pluginCapacity: Map<String, Double>,
+    )
+
     data class SpellLine(val guid: String, val name: String, val category: String, val type: String, val range: String, val duration: String, val dv: String, val descriptors: String)
     data class MagicLines(val tradition: String, val spells: List<SpellLine>)
     data class GroupLine(val name: String, val karma: Int)
@@ -132,8 +151,29 @@ data class Sheet(
                         )
                     },
                 ) else null,
+                movement = Movement.of(c, data, set, attrs)?.full().orEmpty(),
+                career = if (career) careerLines(c, data, settings, shown.map { it.name }) else null,
                 karmaLedger = if (!career && s.buildMethod == "Karma") KarmaLedger.of(c, settings, data) else null,
                 sections = SheetSections.read(c, WeaponEngine(c.root, set, str, d.limitPhysical).all(), essenceEngine),
+            )
+        }
+
+        private fun careerLines(c: CharacterFile, data: GameData, settings: CharacterSettings, attributes: List<String>): CareerLines {
+            val adv = CareerAdvancement(c, data, settings)
+            val log = ExpenseLog(c)
+            val rows = c.skills()
+            val entries = log.entries()
+            return CareerLines(
+                attributeCosts = attributes.associateWith { adv.attributeOffer(it).cost },
+                skillCosts = rows.associate { it.guid to adv.skillOffer(it.guid).cost },
+                skillIds = rows.filter { !it.isKnowledge }.associate { it.name to it.guid },
+                groupCosts = c.skillGroups().keys.associateWith { adv.groupOffer(it).cost },
+                expenses = entries.reversed(),
+                undoable = entries.filter { log.canUndo(it) }.map { it.guid }.toSet(),
+                pluginCapacity = adv.pluginCapacity(),
+                qualityRemoval = c.root.child("qualities")?.children("quality").orEmpty().mapNotNull { q -> q.text("guid")?.trim()?.let { g -> adv.qualityRemovalCost(g)?.let { g to it } } }.toMap(),
+                specCosts = rows.mapNotNull { r -> adv.specializationOffer(r.guid).cost?.let { r.guid to it } }.toMap(),
+                specChoices = rows.filter { adv.specializationOffer(it.guid).cost != null }.associate { it.guid to adv.specializationChoices(it.guid) },
             )
         }
 

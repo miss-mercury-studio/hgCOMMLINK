@@ -116,8 +116,17 @@ private fun App(vm: AppViewModel) {
 
     LaunchedEffect(vm.message) {
         vm.message?.let {
-            snackbar.showSnackbar(it)
+            // A change that can be undone shows UNDO on its confirmation. The message is cleared after it is shown:
+            // clearing it first would restart this effect and cancel the snackbar.
+            val offer = vm.undoOffer
+            // Six seconds to undo: an indefinite snackbar that this gives up on (cancelling it removes it).
+            val result = if (offer != null) kotlinx.coroutines.withTimeoutOrNull(6_000) {
+                snackbar.showSnackbar(it, actionLabel = "UNDO", duration = androidx.compose.material3.SnackbarDuration.Indefinite)
+            } ?: androidx.compose.material3.SnackbarResult.Dismissed
+            else { snackbar.showSnackbar(it); androidx.compose.material3.SnackbarResult.Dismissed }
+            vm.undoOffer = null
             vm.message = null
+            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed && offer != null) vm.undoExpense(offer)
         }
     }
 
@@ -132,7 +141,7 @@ private fun App(vm: AppViewModel) {
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = Quicksilver,
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { SnackbarHost(snackbar, Modifier.padding(bottom = 64.dp)) },
         topBar = {
             if (open == null) {
                 var menu by remember { mutableStateOf(false) }
@@ -174,6 +183,9 @@ private fun App(vm: AppViewModel) {
                         var sheetMenu by remember { mutableStateOf(false) }
                         IconButton(onClick = { sheetMenu = true }) { Icon(Icons.Default.MoreVert, "More") }
                         TerminalMenu(sheetMenu, { sheetMenu = false }) {
+                            vm.lastUndoable()?.let { last ->
+                                TerminalMenuItem("Undo: " + last.reason.take(28), onClick = { sheetMenu = false; vm.undoExpense(last.guid) })
+                            }
                             TerminalMenuItem("Share", onClick = {
                                 sheetMenu = false
                                 vm.shareIntent(open.file)?.let { ctx.startActivity(Intent.createChooser(it, "Share ${open.file.name}")) }
