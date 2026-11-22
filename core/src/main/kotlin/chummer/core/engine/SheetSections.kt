@@ -19,8 +19,10 @@ data class SheetSections(
     val vehicles: List<VehicleLine>,
     val contacts: List<ContactLine>,
     val lifestyles: List<LifestyleLine>,
-    val martialArts: List<String>,
+    val martialArts: List<MartialArtLine>,
 ) {
+    /** A martial arts style and its techniques (GUIDs for removing them). */
+    data class MartialArtLine(val guid: String, val name: String, val techniques: List<Pair<String, String>>)
     data class ArmorItemLine(val name: String, val value: String, val equipped: Boolean, val mods: List<String>, val guid: String = "",
         /** Gear installed in the armor, and the capacity left for more (null when the armor has none). */
         val gear: List<String> = emptyList(), val capacityLeft: Double? = null)
@@ -86,7 +88,9 @@ data class SheetSections(
                 LifestyleLine(it.t("name"), it.t("baselifestyle"), it.t("cost"), it.t("notes"))
             }
 
-            val arts = c.root.child("martialarts")?.children("martialart").orEmpty().map { it.t("name") }
+            val arts = c.root.child("martialarts")?.children("martialart").orEmpty().map { a ->
+                MartialArtLine(a.t("guid"), a.t("name"), a.child("martialarttechniques")?.children("martialarttechnique").orEmpty().map { it.t("guid") to it.t("name") })
+            }
             return SheetSections(sets, weapons, wares, gear, vehicles, contacts, lifestyles, arts)
         }
 

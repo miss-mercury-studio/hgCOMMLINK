@@ -97,7 +97,7 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
                         "Magic" -> Magic(sheet, vm)
                         "Gear" -> Gear(sheet.sections, sheet, vm)
                         "Ware" -> Ware(sheet.sections, sheet.essence, sheet, vm)
-                        "Life" -> Life(sheet.sections)
+                        "Life" -> Life(sheet.sections, sheet, vm)
                         else -> Qualities(sheet, vm)
                     }
                     // Soft edges where the scrolling content passes under the header and the tab bar, instead of a hard cut.
@@ -680,8 +680,13 @@ private fun WareRow(w: chummer.core.engine.SheetSections.WareLine, depth: Int, c
 }
 
 @Composable
-private fun Life(g: chummer.core.engine.SheetSections) {
-    LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+private fun Life(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewModel) {
+    val canBuy = s.career != null || s.creationBuy != null
+    val creating = s.creationBuy != null
+    var addingArt by remember { mutableStateOf(false) }
+    var addingTechnique by remember { mutableStateOf<chummer.core.engine.SheetSections.MartialArtLine?>(null) }
+    Column(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (g.contacts.isNotEmpty()) item { SubHeader("Contacts   (connection / loyalty)") }
         items(g.contacts) { c ->
             Column {
@@ -694,7 +699,41 @@ private fun Life(g: chummer.core.engine.SheetSections) {
             Column { Row2(l.name, "${l.type}  ¥${l.monthly}/mo"); Small(l.notes) }
         }
         if (g.martialArts.isNotEmpty()) item { SubHeader("Martial arts") }
-        items(g.martialArts) { Text(it) }
+        items(g.martialArts) { art ->
+            Column {
+                Row2(art.name, "", bold = true)
+                art.techniques.forEach { (tg, tn) ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("· $tn", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        if (creating) Text("×", Modifier.clickable { vm.removePurchase(tg) }.padding(horizontal = 12.dp, vertical = 6.dp), color = CriticalRed)
+                    }
+                }
+                if (canBuy) Text("+ technique", Modifier.clickable { addingTechnique = art }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
+                if (creating) RemoveLink { vm.removePurchase(art.guid) }
+            }
+        }
+    }
+    if (canBuy) PinnedAction("+ Martial art") { addingArt = true }
+    }
+    if (addingArt) {
+        val options = remember { vm.martialArtOptions() }
+        val known = g.martialArts.map { it.name }.toSet()
+        PickerSheet(
+            "Learn martial art",
+            options.filter { it.name !in known }.map { o ->
+                PickItem(o.id, o.name, listOfNotNull(vm.martialArtCost(o.id)?.let { "$it karma" }, o.source.takeIf { it.isNotBlank() }?.let { it + " " + o.page }, if (o.unsupported.isNotEmpty()) "some effects not applied yet" else null).joinToString("  ·  "), warn = o.unsupported.isNotEmpty())
+            },
+            onPick = { vm.buyMartialArt(it) }, note = if (creating) "Costs karma; the karma card counts it." else "Costs karma now.", onDismiss = { addingArt = false },
+        )
+    }
+    addingTechnique?.let { art ->
+        val options = remember(art.name) { vm.techniqueOptions(art.name) }
+        val known = art.techniques.map { it.second }.toSet()
+        val price = vm.techniqueCost(art.guid) ?: 0
+        PickerSheet(
+            "Technique: ${art.name}", options.filter { it.name !in known }.map { PickItem(it.id, it.name, listOfNotNull(it.source.takeIf { s -> s.isNotBlank() }?.let { s -> s + " " + it.page }, if (it.unsupported.isNotEmpty()) "some effects not applied yet" else null).joinToString("  ·  "), warn = it.unsupported.isNotEmpty()) },
+            onPick = { vm.buyTechnique(art.guid, it) }, note = if (price == 0) "The first technique is free." else "Costs $price karma.", onDismiss = { addingTechnique = null },
+        )
     }
 }
 

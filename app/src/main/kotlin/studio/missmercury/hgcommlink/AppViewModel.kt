@@ -258,6 +258,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Take a bought item out again, in creation (career uses undo). */
     fun removePurchase(guid: String) = editCareer("Removed", "Cannot remove that here") { adv, _ -> adv.removePurchase(guid) }
 
+    fun martialArtOptions() = gameData.martialArtOptions()
+    fun techniqueOptions(artName: String) = gameData.techniqueOptions(artName)
+    fun martialArtCost(id: String) = open?.let { gameData.career(it.character).martialArtCost(id) }
+    fun techniqueCost(artGuid: String) = open?.let { gameData.career(it.character).techniqueCost(artGuid) }
+    fun buyMartialArt(id: String) = editCareer("Martial art learned", "Cannot learn that (karma, or already known)") { adv, _ -> adv.buyMartialArt(id) != null }
+    fun buyTechnique(artGuid: String, id: String) = editCareer("Technique learned", "Cannot learn that (karma, or already known)") { adv, _ -> adv.buyTechnique(artGuid, id) != null }
+
     fun powerOptions() = gameData.powerOptions()
     fun addPower(entryId: String, extra: String = "") = edit("Power added", "Cannot add that power (power points, or it is already taken)") { it.powerProblem(entryId, extra) == null && run { it.addPower(entryId, 1, extra); true } }
     fun changePowerLevel(guid: String, delta: Int) = edit(null, "No more levels (power points, or the limit)") { it.changePowerLevel(guid, delta) }

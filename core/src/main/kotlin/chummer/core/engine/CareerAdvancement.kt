@@ -311,7 +311,7 @@ class CareerAdvancement(
         if (!inCreation) return false
         val aw = ArmorWeaponEditor(file, data)
         val removed = GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
-            aw.removeAccessory(guid) || aw.removeArmorMod(guid) || CyberwareEditor(file, data).remove(guid)
+            aw.removeAccessory(guid) || aw.removeArmorMod(guid) || CyberwareEditor(file, data).remove(guid) || removeMartialArtItem(guid)
         if (removed) NuyenLedger.sync(file, settings, data)
         return removed
     }
@@ -437,6 +437,41 @@ class CareerAdvancement(
 
     /** Load ammunition from a gear stack into a weapon's first empty clip. */
     fun loadAmmo(weaponGuid: String, ammoGuid: String): Boolean = ArmorWeaponEditor(file, data).loadAmmo(weaponGuid, ammoGuid)
+
+    // ---- martial arts
+
+    /** What a style costs in karma now (its own price, normally 7), or null when the style is unknown. */
+    fun martialArtCost(entryId: String): Int? = data[entryId]?.element?.let { it.child("cost")?.textContent?.trim()?.toIntOrNull() ?: 7 }
+
+    /** What a technique costs: nothing for a style's first, the settings' technique price for each after. */
+    fun techniqueCost(artGuid: String): Int? {
+        val art = MartialArtEditor(file, data).art(artGuid) ?: return null
+        return if ((art.child("martialarttechniques")?.children("martialarttechnique")?.size ?: 0) > 0) k("karmamaneuver", 5) else 0
+    }
+
+    /** Learn a style: costs its karma in career, nothing is logged in creation (the karma ledger counts it). Returns the style's GUID, or null. */
+    fun buyMartialArt(entryId: String, now: LocalDateTime = LocalDateTime.now()): String? {
+        val cost = martialArtCost(entryId) ?: return null
+        if (!inCreation && cost > log.karma) return null
+        val guid = runCatching { MartialArtEditor(file, data).addArt(entryId) }.getOrNull() ?: return null
+        if (!inCreation) log.add("Karma", -cost.toDouble(), "Learned Martial Art " + data[entryId]!!.element.child("name")?.textContent?.trim().orEmpty(), "AddMartialArt", objectId = guid, now = now)
+        return guid
+    }
+
+    fun buyTechnique(artGuid: String, entryId: String, now: LocalDateTime = LocalDateTime.now()): String? {
+        val cost = techniqueCost(artGuid) ?: return null
+        if (!inCreation && cost > log.karma) return null
+        val guid = runCatching { MartialArtEditor(file, data).addTechnique(artGuid, entryId) }.getOrNull() ?: return null
+        if (!inCreation) log.add("Karma", -cost.toDouble(), "Learned Technique " + data[entryId]!!.element.child("name")?.textContent?.trim().orEmpty(), "AddMartialArtTechnique", objectId = guid, now = now)
+        return guid
+    }
+
+    /** In creation, take a style or technique out again (the karma ledger follows). */
+    fun removeMartialArtItem(guid: String): Boolean {
+        if (!inCreation) return false
+        val editor = MartialArtEditor(file, data)
+        return editor.removeTechnique(guid) || editor.removeArt(guid)
+    }
 
     /** Take the rounds out of the weapon's last loaded clip, back into the loose ammunition. */
     fun unloadAmmo(weaponGuid: String): Boolean = ArmorWeaponEditor(file, data).unloadAmmo(weaponGuid)

@@ -353,6 +353,12 @@ object BonusHandlers {
             if (ctx.choice.isNotEmpty()) out += improvement(ctx, "Tradition", unique, 0.0, ctx.choice)
         }
 
+        // A specialization a martial art adds as an option for a skill (Chummer: SkillSpecializationOption, the spec as the unique name).
+        put("addskillspecializationoption") { node, ctx, _, out ->
+            val spec = node.t("spec") ?: return@put
+            out += improvement(ctx, "SkillSpecializationOption", spec, 0.0, node.t("skill").orEmpty())
+        }
+
         // Another limb slot; `precedence` picks the unique name.
         put("addlimb") { node, ctx, unique, out ->
             out += improvement(ctx, "AddLimb", node.attr("precedence")?.let { "precedence$it" } ?: unique, value(node.t("val"), ctx.rating) ?: 0.0, node.t("limbslot").orEmpty())
