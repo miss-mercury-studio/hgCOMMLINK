@@ -27,6 +27,25 @@ class NewCharacterRequest(
     val customDataNames: List<String> = emptyList(),
 )
 
+/** The priority letters for a Priority or Sum-to-Ten character, and the talent chosen at the talent letter (for example `Magician`). */
+class PriorityChoice(
+    val heritage: String, val attributes: String, val talentLetter: String, val skills: String, val resources: String,
+    /** The talent's `value` in `priorities.xml` (`Mundane`, `Magician`, `Adept`, `Technomancer`...). */
+    val talent: String,
+    val sumToTen: Boolean,
+) {
+    val letters get() = listOf(heritage, attributes, talentLetter, skills, resources)
+
+    /** What is wrong with these letters, or null: Sum-to-Ten letters must be worth 10 in all, Priority letters must be A to E once each. */
+    fun problem(): String? {
+        if (letters.any { it !in listOf("A", "B", "C", "D", "E") }) return "Each category needs a letter from A to E"
+        return if (sumToTen) {
+            val total = letters.sumOf { mapOf("A" to 4, "B" to 3, "C" to 2, "D" to 1, "E" to 0).getValue(it) }
+            if (total == 10) null else "The letters are worth $total points; Sum-to-Ten needs exactly 10"
+        } else if (letters.toSet().size == 5) null else "Each letter A to E can be used once"
+    }
+}
+
 /**
  * Creates a new character file for the Karma build method. The skeleton is a character Chummer 5.226 saved
  * with nothing bought (`new-character-karma.chum5`, emptied of the parts below); everything that depends on the
@@ -154,6 +173,77 @@ object NewCharacter {
             cv.appendChild(element("stuncm", (8 + ceil(wil / 2.0).toInt()).toString()))
             cv.appendChild(element("stuncmthresholdoffset", "0"))
         }
+        return character
+    }
+
+    /**
+     * Creates a character for the Priority or Sum-to-Ten build: a Karma-build character plus what the letters give. The build fields
+     * (`buildmethod`, the priorities with their Sum-to-Ten values, the point totals Chummer keeps beside them, the nuyen from the
+     * resources letter), the metatype's karma cost, the talent's quality and its Magic or Resonance as the attribute's minimum.
+     * Not set up yet: the skills a talent gives for free, free spells, and the Magic or Resonance skill groups' effects.
+     */
+    fun createPriority(data: DataPack, settings: CharacterSettings, request: NewCharacterRequest, choice: PriorityChoice): CharacterFile {
+        choice.problem()?.let { error(it) }
+        val character = createKarma(data, settings, request)
+        val root = character.root
+        val table = PriorityTable(data)
+        val doc = character.doc
+        fun element(tag: String, text: String) = doc.createElement(tag).also { it.textContent = text }
+        fun set(tag: String, value: String) {
+            root.child(tag)?.textContent = value ?: return
+            if (root.child(tag) == null) error("Skeleton has no <$tag>")
+        }
+        fun addAfter(after: String, tag: String, value: String) {
+            root.child(tag)?.let { it.textContent = value; return }
+            val anchor = root.child(after)
+            val e = element(tag, value)
+            if (anchor?.nextSibling != null) root.insertBefore(e, anchor.nextSibling) else root.appendChild(e)
+        }
+
+        set("buildmethod", if (choice.sumToTen) "SumtoTen" else "Priority")
+        // Settings-driven limits Chummer stores in the file (in the order of its own files, after the build method).
+        addAfter("buildmethod", "maxavail", settings.int("availability", 12).toString())
+        addAfter("buildmethod", "nuyenmaxbp", settings.int("nuyenmaxbp", 10).toString())
+        addAfter("buildmethod", "maxnuyen", settings.int("nuyenmaxbp", 10).toString())
+        addAfter("buildmethod", "maxkarma", settings.int("buildkarma", 25).toString())
+        addAfter("buildmethod", "buildkarma", settings.int("buildkarma", 25).toString())
+        if (choice.sumToTen) addAfter("buildmethod", "sumtoten", "10")
+
+        fun stored(letter: String) = letter + "," + table.sumToTenValue(letter)
+        set("prioritymetatype", stored(choice.heritage)); set("priorityattributes", stored(choice.attributes))
+        set("priorityspecial", stored(choice.talentLetter)); root.children("priorityskills").first().textContent = stored(choice.skills)
+        set("priorityresources", stored(choice.resources)); set("prioritytalent", choice.talent)
+
+        val metatype = root.child("metatype")!!.textContent.trim()
+        val variant = root.child("metavariant")?.textContent?.trim().orEmpty()
+        val (special, karma) = table.heritage(choice.heritage, metatype, variant)
+            ?: error("$metatype is not offered at priority ${choice.heritage}")
+        val talent = table.talents(choice.talentLetter).firstOrNull { it.value == choice.talent }
+            ?: error("${choice.talent} is not offered at priority ${choice.talentLetter}")
+        set("metatypebp", karma.toString())
+        set("special", special.toString()); set("totalspecial", special.toString())
+        set("totalattributes", table.attributes(choice.attributes).toString())
+        root.child("newskills")!!.child("skillptsmax")!!.textContent = table.skills(choice.skills).toString()
+        root.child("newskills")!!.child("skillgrpsmax")!!.textContent = table.skillGroups(choice.skills).toString()
+        set("startingnuyen", table.resources(choice.resources, settings.string("prioritytable", "Standard")).toString())
+        // Contact points come from Charisma: the settings' expression (3 per point by default).
+        val cha = root.child("attributes")!!.children("attribute").first { it.child("name")?.textContent?.trim() == "CHA" }.child("totalvalue")?.textContent?.trim()?.toDoubleOrNull() ?: 1.0
+        set("contactpoints", standardRound(settings.evaluate("contactpointsexpression", mapOf("CHAUnaug" to cha, "CHA" to cha), "{CHAUnaug} * 3")).toString())
+
+        // The talent: Magic or Resonance as the minimum of that attribute, and the talent's quality.
+        fun raiseMinimum(name: String, minimum: Int) {
+            if (minimum <= 0) return
+            val row = root.child("attributes")!!.children("attribute").first { it.child("name")?.textContent?.trim() == name }
+            row.child("metatypemin")!!.textContent = minimum.toString()
+            row.child("totalvalue")!!.textContent = minimum.toString()
+        }
+        raiseMinimum("MAG", talent.magic); raiseMinimum("RES", talent.resonance); raiseMinimum("DEP", talent.depth)
+        val editor = CharacterEditor(character, data, settings = settings)
+        for (name in talent.qualities) {
+            val id = data.byId.entries.firstOrNull { it.value.file == "qualities.xml" && it.value.element.tagName == "quality" && it.value.element.child("name")?.textContent?.trim() == name }?.key ?: continue
+            editor.addQuality(id, qualitySource = "Metatype")
+        }
+        root.child("karma")!!.textContent = KarmaLedger.of(character, settings, data).remaining.toString()
         return character
     }
 }
