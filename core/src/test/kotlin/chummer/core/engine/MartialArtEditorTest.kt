@@ -101,4 +101,21 @@ class MartialArtEditorTest {
         assertEquals(before, KarmaLedger.of(c, s, data).martialArts)
         assertFalse(adv.removeMartialArtItem(guid))
     }
+
+    @Test
+    fun aStylesSpecializationIsOfferedForItsSkill() {
+        val c = viper()
+        val adv = CareerAdvancement(c, data, settings)
+        val unarmed = c.skills().first { !it.isKnowledge && (it.name == "Unarmed Combat" || data[it.suid]?.name == "Unarmed Combat") }
+        val before = adv.specializationChoices(unarmed.guid)
+        assertFalse("Carromeleg" in before)
+        adv.log.manualKarma(50, "Reward")
+        val guid = adv.buyMartialArt(art("Carromeleg"))!!
+        val after = adv.specializationChoices(unarmed.guid)
+        assertTrue(after.toString(), "Carromeleg" in after)
+        assertEquals(before, after.filter { it != "Carromeleg" }) // the data's own come first and are kept
+        // Taking the style away takes its option with it.
+        assertTrue(MartialArtEditor(c, data).removeArt(guid))
+        assertFalse("Carromeleg" in adv.specializationChoices(unarmed.guid))
+    }
 }
