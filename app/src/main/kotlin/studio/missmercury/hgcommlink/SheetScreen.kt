@@ -50,7 +50,6 @@ import chummer.core.engine.QualityOption
 import chummer.core.engine.Sheet
 import chummer.core.engine.SkillResult
 
-private val TABS = listOf("Overview", "Skills", "Gear", "Ware", "Life", "Qualities")
 
 /** The character sheet: calculated numbers on three tabs. Read-only. */
 @Composable
@@ -66,15 +65,22 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
             )
             else -> {
                 Header(sheet, open.warning)
-                                ScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
-                    TABS.forEachIndexed { i, t -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) }) }
+                                // The Magic tab appears once the character has magic switched on (for example with the Magician quality).
+                val tabs = buildList {
+                    add("Overview"); add("Skills")
+                    if (sheet.magic != null) add("Magic")
+                    add("Gear"); add("Ware"); add("Life"); add("Qualities")
                 }
-                when (tab) {
-                    0 -> Overview(sheet, vm)
-                    1 -> Skills(sheet, vm)
-                    2 -> Gear(sheet.sections)
-                    3 -> Ware(sheet.sections, sheet.essence)
-                    4 -> Life(sheet.sections)
+                ScrollableTabRow(selectedTabIndex = tab.coerceAtMost(tabs.size - 1), edgePadding = 0.dp) {
+                    tabs.forEachIndexed { i, t -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) }) }
+                }
+                when (tabs.getOrNull(tab)) {
+                    "Overview" -> Overview(sheet, vm)
+                    "Skills" -> Skills(sheet, vm)
+                    "Magic" -> Magic(sheet, vm)
+                    "Gear" -> Gear(sheet.sections)
+                    "Ware" -> Ware(sheet.sections, sheet.essence)
+                    "Life" -> Life(sheet.sections)
                     else -> Qualities(sheet, vm)
                 }
             }
@@ -581,10 +587,85 @@ private fun KarmaSection(l: chummer.core.engine.KarmaLedger) {
 }
 
 /** The attributes that can be bought with karma in creation. */
-private val BUYABLE = setOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL", "EDG")
+private val BUYABLE = setOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL", "EDG", "MAG")
 
 /** A round-ish text button for buying (+) or giving back (-) a point. */
 @Composable
 private fun StepButton(label: String, size: Int = 40, onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(size.dp)) { Text(label, style = MaterialTheme.typography.titleLarge) }
+}
+
+/** Tradition and spells of a character with magic. */
+@Composable
+private fun Magic(s: Sheet, vm: AppViewModel) {
+    val m = s.magic ?: return
+    val creation = s.karmaLedger != null
+    var choosingTradition by remember { mutableStateOf(false) }
+    var addingSpell by remember { mutableStateOf(false) }
+    LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        item {
+            Section("Tradition") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(m.tradition.ifEmpty { "None chosen yet" }, Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                    if (creation) TextButton(onClick = { choosingTradition = true }) { Text(if (m.tradition.isEmpty()) "Choose" else "Change") }
+                }
+            }
+        }
+        item {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Spells", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                if (creation) TextButton(onClick = { addingSpell = true }) { Text("Add") }
+            }
+        }
+        if (m.spells.isEmpty()) item { Text("No spells.", style = MaterialTheme.typography.bodySmall) }
+        items(m.spells, key = { it.guid }) { sp ->
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(sp.name, fontWeight = FontWeight.Bold)
+                    Small(listOf(sp.category, "type ${sp.type}", sp.range, "duration ${sp.duration}", "drain ${sp.dv}").filter { it.isNotBlank() }.joinToString("  ·  "))
+                    Small(sp.descriptors)
+                }
+                if (creation) StepButton("×", 36) { vm.removeSpell(sp.guid) }
+            }
+        }
+    }
+    if (choosingTradition) {
+        val options = remember { vm.traditionOptions().map { PickItem(it.id, it.name, "Drain ${it.drain}") } }
+        PickDialog("Choose a tradition", options, { vm.setTradition(it) }) { choosingTradition = false }
+    }
+    if (addingSpell) {
+        val options = remember { vm.spellOptions().map { PickItem(it.id, it.name, listOf(it.category, "type ${it.type}", it.range, "drain ${it.dv}").filter { x -> x.isNotBlank() }.joinToString("  ·  ")) } }
+        PickDialog("Add a spell", options, { vm.addSpell(it) }) { addingSpell = false }
+    }
+}
+
+class PickItem(val id: String, val title: String, val subtitle: String)
+
+/** A searchable list to pick one item from; picking closes the dialog. */
+@Composable
+private fun PickDialog(title: String, items: List<PickItem>, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    var query by remember { mutableStateOf("") }
+    val shown = remember(query) {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) items else items.filter { it.title.lowercase().contains(q) }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                OutlinedTextField(query, { query = it }, label = { Text("Search") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                LazyColumn(Modifier.weight(1f, fill = false)) {
+                    items(shown, key = { it.id }) { it ->
+                        Column(Modifier.fillMaxWidth().clickable { onPick(it.id); onDismiss() }.padding(vertical = 6.dp)) {
+                            Text(it.title)
+                            Text(it.subtitle, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }

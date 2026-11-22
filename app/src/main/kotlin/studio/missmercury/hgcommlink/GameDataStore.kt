@@ -63,6 +63,12 @@ class GameDataStore(private val context: Context) {
     fun knowledgeOptions(): List<chummer.core.engine.KnowledgeOption> =
         synchronized(this) { pack?.let(chummer.core.engine.KnowledgeCatalog::list).orEmpty() }
 
+    fun spellOptions(): List<chummer.core.engine.SpellOption> =
+        synchronized(this) { pack?.let(chummer.core.engine.SpellCatalog::list).orEmpty() }
+
+    fun traditionOptions(): List<chummer.core.engine.TraditionOption> =
+        synchronized(this) { pack?.let(chummer.core.engine.TraditionCatalog::list).orEmpty() }
+
     fun qualityOptions(): List<QualityOption> = synchronized(this) { pack?.let(QualityCatalog::list).orEmpty() }
 
     fun editor(c: CharacterFile) =
@@ -80,7 +86,8 @@ class GameDataStore(private val context: Context) {
         CharacterSettings.find(c.root.text("settings").orEmpty(), File(dataDir(), "settings.xml"), listOf(userSettingsDir))
 
     /** A choice in the new character dialog. */
-    data class NewCharacterOptions(val profiles: List<CharacterSettings>, val metatypes: List<Pair<String, String>>)
+    data class MetatypeOption(val id: String, val name: String, val variants: List<Pair<String, String>>)
+    data class NewCharacterOptions(val profiles: List<CharacterSettings>, val metatypes: List<MetatypeOption>)
 
     /** Karma-build profiles and the base metatypes to offer when starting a character. Loads the game data. */
     fun newCharacterOptions(): NewCharacterOptions {
@@ -88,17 +95,24 @@ class GameDataStore(private val context: Context) {
         val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(profiles.firstOrNull()?.customData.orEmpty())
         val metatypes = packFor(resolved.dirs).byId.values
             .filter { it.file == "metatypes.xml" && it.element.tagName == "metatype" }
-            .map { (it.element.child("id")?.textContent?.trim().orEmpty()) to (it.element.child("name")?.textContent?.trim().orEmpty()) }
-            .sortedBy { it.second.lowercase() }
+            .map { e ->
+                MetatypeOption(
+                    e.element.child("id")?.textContent?.trim().orEmpty(), e.element.child("name")?.textContent?.trim().orEmpty(),
+                    e.element.child("metavariants")?.children("metavariant").orEmpty().map { v ->
+                        (v.child("id")?.textContent?.trim().orEmpty()) to (v.child("name")?.textContent?.trim().orEmpty())
+                    },
+                )
+            }
+            .sortedBy { it.name.lowercase() }
         return NewCharacterOptions(profiles, metatypes)
     }
 
     /** Create a new Karma-build character with the chosen profile (and the custom data that profile enables). */
-    fun createCharacter(profile: CharacterSettings, name: String, alias: String, metatypeId: String): CharacterFile {
+    fun createCharacter(profile: CharacterSettings, name: String, alias: String, metatypeId: String, variantId: String? = null): CharacterFile {
         val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(profile.customData)
         return NewCharacter.createKarma(
             packFor(resolved.dirs), profile,
-            NewCharacterRequest(name = name, alias = alias, metatypeId = metatypeId, customDataNames = resolved.dirs.map { it.name }),
+            NewCharacterRequest(name = name, alias = alias, metatypeId = metatypeId, metavariantId = variantId, customDataNames = resolved.dirs.map { it.name }),
         )
     }
 

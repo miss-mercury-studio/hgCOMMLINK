@@ -232,6 +232,7 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var alias by remember { mutableStateOf("") }
     var metatype by remember { mutableStateOf<String?>(null) }
+    var variant by remember { mutableStateOf<String?>(null) }
     var profile by remember { mutableStateOf<Int?>(null) }
 
     AlertDialog(
@@ -244,15 +245,29 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
                 Text("No settings profile with the Karma build method was found. Put your profile's .xml file in your characters folder.")
             } else {
                 val chosenProfile = profile ?: 0
-                val chosenMetatype = metatype ?: options.metatypes.firstOrNull { it.second == "Human" }?.first
+                val chosenMetatype = metatype ?: options.metatypes.firstOrNull { it.name == "Human" }?.id
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(alias, { alias = it }, label = { Text("Street name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Text("Metatype", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 12.dp))
-                    options.metatypes.forEach { (id, label) ->
-                        Row(Modifier.fillMaxWidth().clickable { metatype = id }, verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = id == chosenMetatype, onClick = { metatype = id })
-                            Text(label)
+                    options.metatypes.forEach { m ->
+                        Row(Modifier.fillMaxWidth().clickable { metatype = m.id; variant = null }, verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = m.id == chosenMetatype, onClick = { metatype = m.id; variant = null })
+                            Text(m.name)
+                        }
+                    }
+                    val variants = options.metatypes.firstOrNull { it.id == chosenMetatype }?.variants.orEmpty()
+                    if (variants.isNotEmpty()) {
+                        Text("Variant", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 12.dp))
+                        Row(Modifier.fillMaxWidth().clickable { variant = null }, verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = variant == null, onClick = { variant = null })
+                            Text("None")
+                        }
+                        variants.forEach { (id, label) ->
+                            Row(Modifier.fillMaxWidth().clickable { variant = id }, verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = variant == id, onClick = { variant = id })
+                                Text(label)
+                            }
                         }
                     }
                     if (options.profiles.size > 1) {
@@ -277,8 +292,8 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
             val ready = options != null && options.profiles.isNotEmpty()
             TextButton(enabled = ready, onClick = {
                 val o = options!!
-                val id = metatype ?: o.metatypes.firstOrNull { it.second == "Human" }?.first ?: o.metatypes.first().first
-                vm.createCharacter(o.profiles[profile ?: 0], name.trim(), alias.trim(), id)
+                val id = metatype ?: o.metatypes.firstOrNull { it.name == "Human" }?.id ?: o.metatypes.first().id
+                vm.createCharacter(o.profiles[profile ?: 0], name.trim(), alias.trim(), id, variant)
                 onDismiss()
             }) { Text("Create") }
         },

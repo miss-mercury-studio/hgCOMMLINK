@@ -41,7 +41,11 @@ data class Sheet(
     val sections: SheetSections,
     /** Karma spent and remaining; only for a Karma-build character still in creation. */
     val karmaLedger: KarmaLedger?,
+    /** The magic section, present when the character has magic switched on. */
+    val magic: MagicLines?,
 ) {
+    data class SpellLine(val guid: String, val name: String, val category: String, val type: String, val range: String, val duration: String, val dv: String, val descriptors: String)
+    data class MagicLines(val tradition: String, val spells: List<SpellLine>)
     data class GroupLine(val name: String, val karma: Int)
     data class KnowledgeLine(
         val guid: String, val name: String, val type: String, val points: Int, val karma: Int,
@@ -115,6 +119,16 @@ data class Sheet(
                     KnowledgeLine(row.guid, row.name, row.type.ifEmpty { row.category }, row.base, row.karma, row.isNativeLanguage, r?.rating ?: 0, r?.pool ?: 0)
                 }.sortedBy { it.name.lowercase() },
                 qualities = qualities(c),
+                magic = if (flag(c, "magenabled")) MagicLines(
+                    c.root.child("tradition")?.text("name")?.trim().orEmpty(),
+                    c.root.child("spells")?.children("spell").orEmpty().map {
+                        SpellLine(
+                            it.text("guid").orEmpty().trim(), it.text("name").orEmpty().trim(), it.text("category").orEmpty().trim(),
+                            it.text("type").orEmpty().trim(), it.text("range").orEmpty().trim(), it.text("duration").orEmpty().trim(),
+                            it.text("dv").orEmpty().trim(), it.text("descriptors").orEmpty().trim(),
+                        )
+                    },
+                ) else null,
                 karmaLedger = if (!career && s.buildMethod == "Karma") KarmaLedger.of(c, settings, data) else null,
                 sections = SheetSections.read(c, WeaponEngine(c.root, set, str, d.limitPhysical).all(), essenceEngine),
             )

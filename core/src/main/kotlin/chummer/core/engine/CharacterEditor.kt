@@ -511,3 +511,13 @@ object SpellCatalog {
             SpellOption(id, t("name"), t("category"), t("type"), t("range"), t("dv"), t("descriptor"))
         }.sortedWith(compareBy({ it.category }, { it.name.lowercase() }))
 }
+
+/** A magical tradition that can be chosen. */
+data class TraditionOption(val id: String, val name: String, val drain: String)
+
+object TraditionCatalog {
+    fun list(data: chummer.core.DataPack): List<TraditionOption> =
+        data.byId.entries.filter { it.value.file == "traditions.xml" && it.value.element.tagName == "tradition" }.map { (id, e) ->
+            TraditionOption(id, e.element.child("name")?.textContent?.trim().orEmpty(), e.element.child("drain")?.textContent?.trim().orEmpty())
+        }.sortedBy { it.name.lowercase() }
+}

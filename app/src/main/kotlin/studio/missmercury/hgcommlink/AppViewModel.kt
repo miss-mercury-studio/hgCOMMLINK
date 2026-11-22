@@ -166,6 +166,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun qualityOptions() = gameData.qualityOptions()
     fun knowledgeOptions() = gameData.knowledgeOptions()
+    fun spellOptions() = gameData.spellOptions()
+    fun traditionOptions() = gameData.traditionOptions()
+
+    fun setTradition(entryId: String) = edit("Tradition chosen") { it.setTradition(entryId); true }
+    fun addSpell(entryId: String) = edit("Added spell") { it.addSpell(entryId); true }
+    fun removeSpell(guid: String) = edit("Removed spell") { it.removeItem(guid) }
 
     /** Buy (+1) or give back (-1) a step of a skill group with karma, in creation. */
     fun changeSkillGroup(name: String, delta: Int) =
@@ -184,11 +190,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         gameData.newCharacterOptions()
     }
 
-    fun createCharacter(profile: chummer.core.data.CharacterSettings, name: String, alias: String, metatypeId: String) {
+    fun createCharacter(profile: chummer.core.data.CharacterSettings, name: String, alias: String, metatypeId: String, variantId: String? = null) {
         viewModelScope.launch {
             try {
                 val file = io {
-                    val character = gameData.createCharacter(profile, name, alias, metatypeId)
+                    val character = gameData.createCharacter(profile, name, alias, metatypeId, variantId)
                     repo.saveNew(character, (alias.ifBlank { name }).ifBlank { "New character" })
                 }
                 refresh()
