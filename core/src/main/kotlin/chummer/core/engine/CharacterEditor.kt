@@ -119,26 +119,46 @@ class CharacterEditor(
         val rules = (settings ?: error("Settings are needed to change attributes")).toRuleSettings()
         val row = attributeRow(name) ?: return false
         val karma = row.text("karma")?.trim()?.toIntOrNull() ?: 0
+        val base = row.text("base")?.trim()?.toIntOrNull() ?: 0
         val now = AttributeEngine.forFile(file, rules)[name] ?: return false
         if (delta > 0 && now.value >= now.totalMaximum) return false
-        if (delta < 0 && karma <= 0) return false
-        row.child("karma")!!.textContent = (karma + delta).toString()
+        val points = PointsLedger.of(file, data)
+        val pool = points?.let { if (name in PointsLedger.SPECIAL) it.special else if (name in PointsLedger.STANDARD) it.attributes else null }
+        if (!stepRow(row, delta, base, karma, pool)) return false
         AttributeEngine.forFile(file, rules)[name]?.let { row.child("totalvalue")?.textContent = it.totalValue.toString() }
         refreshCalculatedValues()
         return true
     }
+
+    /** A skill row's name: files from Chummer 5.226 store it, older ones only the id of the skill in the data. */
+    private fun rowName(row: Element): String? =
+        row.text("name")?.trim()?.takeIf { it.isNotEmpty() } ?: data[row.text("suid")?.trim().orEmpty()]?.element?.child("name")?.textContent?.trim()
 
     /** Buy or give back one rating point of an active skill with karma. Fails at the creation maximum or with no karma point to give back. */
     fun changeSkill(name: String, delta: Int): Boolean {
         require(delta == 1 || delta == -1)
         val rules = (settings ?: error("Settings are needed to change skills")).toRuleSettings()
         val row = root.child("newskills")?.child("skills")?.children("skill")
-            ?.firstOrNull { it.text("name")?.trim() == name && it.text("isknowledge")?.trim() != "True" } ?: return false
+            ?.firstOrNull { rowName(it) == name && it.text("isknowledge")?.trim() != "True" } ?: return false
         val karma = row.text("karma")?.trim()?.toIntOrNull() ?: 0
         val base = row.text("base")?.trim()?.toIntOrNull() ?: 0
         if (delta > 0 && base + karma >= rules.maxSkillRatingCreate) return false
-        if (delta < 0 && karma <= 0) return false
-        row.child("karma")!!.textContent = (karma + delta).toString()
+        return stepRow(row, delta, base, karma, PointsLedger.of(file, data)?.skills)
+    }
+
+    /**
+     * One step on a row that can be paid with free points (`base`) or karma: a raise uses a free point while the pool has one and
+     * karma after that; giving back takes karma first, then a free point. Without a pool (the Karma build) everything is karma.
+     */
+    private fun stepRow(row: Element, delta: Int, base: Int, karma: Int, pool: Pool?): Boolean {
+        if (delta > 0) {
+            if (pool != null && pool.left > 0) row.child("base")!!.textContent = (base + 1).toString()
+            else row.child("karma")!!.textContent = (karma + 1).toString()
+        } else when {
+            karma > 0 -> row.child("karma")!!.textContent = (karma - 1).toString()
+            pool != null && base > 0 -> row.child("base")!!.textContent = (base - 1).toString()
+            else -> return false
+        }
         return true
     }
 
@@ -152,16 +172,15 @@ class CharacterEditor(
         val groups = root.child("newskills")?.child("groups") ?: return false
         val row = groups.children("group").firstOrNull { it.text("name")?.trim() == name } ?: return false
         val karma = row.text("karma")?.trim()?.toIntOrNull() ?: 0
-        if (delta < 0 && karma <= 0) return false
+        val base = row.text("base")?.trim()?.toIntOrNull() ?: 0
         if (delta > 0) {
             val members = root.child("newskills")!!.child("skills")!!.children("skill").filter {
                 data[it.text("suid")?.trim().orEmpty()]?.element?.child("skillgroup")?.textContent?.trim() == name
             }
-            val highest = members.maxOfOrNull { m -> (m.text("base")?.trim()?.toIntOrNull() ?: 0) + (m.text("karma")?.trim()?.toIntOrNull() ?: 0) + karma } ?: karma
+            val highest = members.maxOfOrNull { m -> (m.text("base")?.trim()?.toIntOrNull() ?: 0) + (m.text("karma")?.trim()?.toIntOrNull() ?: 0) + karma + base } ?: (karma + base)
             if (highest + 1 > rules.maxSkillRatingCreate) return false
         }
-        row.child("karma")!!.textContent = (karma + delta).toString()
-        return true
+        return stepRow(row, delta, base, karma, PointsLedger.of(file, data)?.groups)
     }
 
     private fun knowledgeRow(guid: String): Element? =

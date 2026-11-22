@@ -46,4 +46,22 @@ class PriorityTableTest {
         println("checked $checked, differences: $bad")
         assertTrue(bad.joinToString("\n"), bad.isEmpty())
     }
+
+    @Test
+    fun pointsSpentNeverPassTheAllotmentAndFillItInRecentFiles() {
+        val bad = ArrayList<String>()
+        var exact = 0
+        for ((f, c) in fixtures) {
+            val ledger = PointsLedger.of(c, data) ?: run { bad += "${f.name}: no ledger"; null } ?: continue
+            if (c.root.text("appversion")?.startsWith("5.202") != true) continue
+            if (ledger.attributes.used != ledger.attributes.total) bad += "${f.name}: attribute points ${ledger.attributes}"
+            if (ledger.groups.used != ledger.groups.total) bad += "${f.name}: group points ${ledger.groups}"
+            if (ledger.skills.used > ledger.skills.total) bad += "${f.name}: skill points ${ledger.skills}"
+            if (ledger.special.used > ledger.special.total) bad += "${f.name}: special points ${ledger.special}"
+            exact++
+        }
+        println("checked $exact recent files, differences: $bad")
+        assertTrue(bad.joinToString("; "), bad.isEmpty())
+        assertTrue(exact >= 30)
+    }
 }
