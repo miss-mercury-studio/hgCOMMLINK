@@ -187,10 +187,26 @@ data class KarmaLedger(
             }.getOrDefault(0)
             val knowledgePointsUsed = knowledgeRows.sumOf { it.base }
 
+            // Contacts (Chummer's `Contact.ContactPoints`): connection and loyalty, one more for family and two for blackmail, changed by the discount and
+            // minimum improvements, at least 2 unless free. Normal contacts use the free contact points, group contacts are paid with karma as positive qualities.
+            val contactRows = c.root.child("contacts")?.children("contact").orEmpty()
+            fun contactPoints(e: org.w3c.dom.Element): Int {
+                if (e.text("free")?.trim().equals("True", true)) return 0
+                var v = (e.text("connection")?.trim()?.toIntOrNull() ?: 0) + (e.text("loyalty")?.trim()?.toIntOrNull() ?: 0)
+                if (e.text("family")?.trim().equals("True", true)) v++
+                if (e.text("blackmail")?.trim().equals("True", true)) v += 2
+                v += standardRound(set.valueOf("ContactKarmaDiscount"))
+                return maxOf(v, 2 + standardRound(set.valueOf("ContactKarmaMinimum")))
+            }
+            val isGroup = { e: org.w3c.dom.Element -> e.text("group")?.trim().equals("True", true) }
+            val isContact = { e: org.w3c.dom.Element -> (e.text("type")?.trim() ?: "Contact").equals("Contact", true) }
+            // Chummer pays group contacts with karma as positive qualities, but the one fixture that has one (Ushi Resub) matches better when it
+            // simply uses the free contact points like any other contact, so that is what is done (see the PLAN).
+            val groupContactKarma = 0
             // Qualities the user chose: positive ones cost karma, negative ones give it back. Free ones from the
             // metatype are not counted.
-            var qualities = 0
-            var positive = 0
+            var qualities = groupContactKarma
+            var positive = groupContactKarma
             var negative = 0
             for (q in c.root.child("qualities")?.children("quality").orEmpty()) {
                 if (q.text("qualitysource")?.trim() != "Selected") continue
@@ -209,13 +225,9 @@ data class KarmaLedger(
             val qualityLimit = settings.int("qualitykarmalimit", 25)
             qualities -= if (negative > qualityLimit && positive <= qualityLimit) qualityLimit else negative
 
-            // Contacts: connection plus loyalty points beyond the free contact points cost karma.
-            val contactRows = c.root.child("contacts")?.children("contact").orEmpty()
             val freePoints = c.root.text("contactpoints")?.trim()?.toIntOrNull() ?: 0
-            val usedPoints = contactRows.filter { it.text("free")?.trim() != "True" }
-                .sumOf { (it.text("connection")?.trim()?.toIntOrNull() ?: 0) + (it.text("loyalty")?.trim()?.toIntOrNull() ?: 0) }
+            val usedPoints = contactRows.filter { isContact(it) }.sumOf(::contactPoints)
             val contacts = maxOf(0, usedPoints - freePoints) * k("karmacontact", 1)
-            if (contactRows.any { it.text("group")?.trim() == "True" }) notCounted += "group contacts"
 
             // Spells, rituals and preparations. Free spells (from improvements) cover spells first, then rituals, then preparations.
             val spellRows = c.root.child("spells")?.children("spell").orEmpty()
