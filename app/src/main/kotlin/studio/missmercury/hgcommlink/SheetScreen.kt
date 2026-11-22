@@ -3,6 +3,10 @@ package studio.missmercury.hgcommlink
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -61,15 +65,8 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
                 Modifier.padding(24.dp), color = MaterialTheme.colorScheme.error,
             )
             else -> {
-                Header(sheet)
-                if (open.warning != null) {
-                    Text(
-                        open.warning,
-                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                    )
-                }
-                ScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
+                Header(sheet, open.warning)
+                                ScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
                     TABS.forEachIndexed { i, t -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) }) }
                 }
                 when (tab) {
@@ -86,44 +83,91 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
 }
 
 @Composable
-private fun Header(s: Sheet) {
-    val line = listOfNotNull(
-        s.metatype.takeIf { it.isNotBlank() }, if (s.isCareer) "Career" else "Creation",
-        s.karmaLedger?.let { "Karma left ${it.remaining}" } ?: s.karma.takeIf { it.isNotBlank() }?.let { "Karma $it" },
-        s.nuyen.takeIf { it.isNotBlank() }?.let { "¥$it" },
-    ).joinToString("  ·  ")
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-        Text(line, style = MaterialTheme.typography.bodySmall, color = if (s.karmaLedger?.remaining?.let { it < 0 } == true) MaterialTheme.colorScheme.error else Color.Unspecified)
+private fun Header(s: Sheet, warning: String?) {
+    var showWarning by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                listOfNotNull(
+                    s.metatype.takeIf { it.isNotBlank() }, if (s.isCareer) "Career" else "Creation",
+                    s.nuyen.takeIf { it.isNotBlank() }?.let { "¥$it" },
+                ).joinToString("  ·  "),
+                style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
+            )
+            val l = s.karmaLedger
+            if (l != null) {
+                Text(
+                    "${l.remaining} karma left", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+                    color = if (l.remaining < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                )
+            } else if (s.karma.isNotBlank()) {
+                Text("Karma ${s.karma}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            }
+        }
         s.karmaLedger?.problems?.forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+        if (warning != null) {
+            // One line until tapped, so a long explanation does not push the sheet down.
+            Text(
+                if (showWarning) warning else "⚠ $warning",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error,
+                maxLines = if (showWarning) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth().clickable { showWarning = !showWarning }.padding(vertical = 2.dp),
+            )
+        }
     }
 }
 
 @Composable
 private fun Overview(s: Sheet, vm: AppViewModel) {
+    val creation = s.karmaLedger != null
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         s.karmaLedger?.let { KarmaSection(it) }
-        Section("Attributes") {
-            // Four to a row reads well on a phone held upright.
-            s.attributes.chunked(4).forEach { row ->
+
+        // The numbers needed in play, together: initiative, condition, armor.
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    row.forEach { a ->
-                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Stat(a.name, a.total.toString())
-                            if (s.karmaLedger != null && a.name in BUYABLE) Stepper({ vm.changeAttribute(a.name, -1) }, { vm.changeAttribute(a.name, 1) })
-                        }
-                    }
-                    repeat(4 - row.size) { Column(Modifier.weight(1f)) {} }
+                    Stat("Initiative", "${s.initiativeValue} + ${s.initiativeDice}d6", Modifier.weight(1.4f))
+                    Stat("Physical", s.physicalCM.toString(), Modifier.weight(1f))
+                    Stat("Stun", s.stunCM.toString(), Modifier.weight(1f))
                 }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Stat("ESS", formatEssence(s.essence), Modifier.weight(1f))
-                Stat("Initiative", "${s.initiativeValue} + ${s.initiativeDice}d6", Modifier.weight(2f))
-                Column(Modifier.weight(1f)) {}
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Stat("Armor", s.armor.general.toString(), Modifier.weight(1.4f))
+                    Stat("Soak", s.soak.toString(), Modifier.weight(1f))
+                    Stat("Essence", formatEssence(s.essence), Modifier.weight(1f))
+                }
+                val extras = buildList {
+                    add("Overflow ${s.cmOverflow}")
+                    if (s.armor.encumbrance != 0) add("Encumbrance ${s.armor.encumbrance}")
+                    s.armor.byType.filter { it.second != s.armor.general }.forEach { add("${it.first} ${it.second}") }
+                }
+                Text(extras.joinToString("  ·  "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+
+        Section("Attributes") {
+            if (creation) {
+                // Two to a row, each with its own minus and plus, so the buttons are big enough to hit.
+                s.attributes.chunked(2).forEach { pair ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        pair.forEach { a -> AttributeTile(a, a.name in BUYABLE, vm, Modifier.weight(1f)) }
+                        repeat(2 - pair.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+            } else {
+                // Four to a row reads well on a phone held upright.
+                s.attributes.chunked(4).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { a -> Stat(a.name, a.total.toString(), Modifier.weight(1f)) }
+                        repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+            }
+        }
+
         Section("Limits") {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Stat("Physical", s.limits.physical.toString(), Modifier.weight(1f))
@@ -132,28 +176,8 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
                 Stat("Astral", s.limits.astral.toString(), Modifier.weight(1f))
             }
         }
-        Section("Condition") {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Stat("Physical", s.physicalCM.toString(), Modifier.weight(1f))
-                Stat("Stun", s.stunCM.toString(), Modifier.weight(1f))
-                Stat("Overflow", s.cmOverflow.toString(), Modifier.weight(1f))
-            }
-        }
-        Section("Armor") {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Stat("Armor", s.armor.general.toString(), Modifier.weight(1f))
-                Stat("Soak", s.soak.toString(), Modifier.weight(1f))
-                Stat("Encumbrance", if (s.armor.encumbrance == 0) "none" else s.armor.encumbrance.toString(), Modifier.weight(1f))
-            }
-            val special = s.armor.byType.filter { it.second != s.armor.general }
-            if (special.isNotEmpty()) {
-                Text(
-                    special.joinToString("   ") { "${it.first} ${it.second}" },
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-        Section("Dice pools") {
+
+        Section("Dice pools", collapsible = true, startExpanded = false) {
             s.pools.forEach { (label, value) ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(label)
@@ -169,14 +193,36 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
     }
 }
 
+/** One attribute in creation: its name, the value, and buttons to buy or give back a point. */
+@Composable
+private fun AttributeTile(a: Sheet.AttributeLine, buyable: Boolean, vm: AppViewModel, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text(a.name, Modifier.width(44.dp), fontWeight = FontWeight.Bold)
+        if (buyable) StepButton("−") { vm.changeAttribute(a.name, -1) } else Spacer(Modifier.size(40.dp))
+        Text(a.total.toString(), Modifier.width(32.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        if (buyable) StepButton("+") { vm.changeAttribute(a.name, 1) } else Spacer(Modifier.size(40.dp))
+    }
+}
+
 private fun formatEssence(e: Double) = String.format(java.util.Locale.ROOT, "%.2f", e)
 
 @Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
+private fun Section(
+    title: String, collapsible: Boolean = false, startExpanded: Boolean = true, summary: String? = null,
+    content: @Composable () -> Unit,
+) {
+    var expanded by rememberSaveable(title) { mutableStateOf(startExpanded) }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-            content()
+            Row(
+                Modifier.fillMaxWidth().then(if (collapsible) Modifier.clickable { expanded = !expanded } else Modifier),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                if (summary != null) Text(summary, style = MaterialTheme.typography.titleSmall)
+                if (collapsible) Text(if (expanded) "  ▾" else "  ▸", color = MaterialTheme.colorScheme.primary)
+            }
+            if (expanded) content()
         }
     }
 }
@@ -192,16 +238,27 @@ private fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun Skills(s: Sheet, vm: AppViewModel) {
-    LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val q = query.trim()
+    fun matches(r: SkillResult) = q.isEmpty() || r.name.contains(q, ignoreCase = true)
+    val buy = if (s.karmaLedger != null) vm else null
+    LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        item {
+            OutlinedTextField(
+                query, { query = it }, label = { Text("Search skills") }, singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            )
+        }
         // Skills the character has come first; the rest are listed after, as Chummer does.
-        val (rated, unrated) = s.activeSkills.partition { it.rating > 0 }
-        item { SubHeader("Active skills") }
-        items(rated, key = { "a-" + it.name }) { SkillRow(it, if (s.karmaLedger != null) vm else null) }
-        if (unrated.isNotEmpty()) item { SubHeader("Unrated") }
-        items(unrated, key = { "u-" + it.name }) { SkillRow(it, if (s.karmaLedger != null) vm else null) }
-        if (s.knowledgeSkills.isNotEmpty()) {
+        val (rated, unrated) = s.activeSkills.filter(::matches).partition { it.rating > 0 }
+        if (rated.isNotEmpty()) item { SubHeader("Active skills") }
+        items(rated, key = { "a-" + it.name }) { SkillRow(it, buy) }
+        if (unrated.isNotEmpty()) item { SubHeader(if (rated.isEmpty()) "Active skills" else "Unrated") }
+        items(unrated, key = { "u-" + it.name }) { SkillRow(it, buy) }
+        val knowledge = s.knowledgeSkills.filter(::matches)
+        if (knowledge.isNotEmpty()) {
             item { SubHeader("Knowledge and languages") }
-            items(s.knowledgeSkills.sortedByDescending { it.rating }, key = { "k-" + it.name }) { SkillRow(it, null) }
+            items(knowledge.sortedByDescending { it.rating }, key = { "k-" + it.name }) { SkillRow(it, null) }
         }
     }
 }
@@ -213,17 +270,23 @@ private fun SubHeader(text: String) {
 
 @Composable
 private fun SkillRow(r: SkillResult, buy: AppViewModel?) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(r.name)
             Text(
-                listOf(r.attribute, if (r.rating == 0 && r.canDefault) "default" else if (r.rating == 0) "cannot default" else "").filter { it.isNotBlank() }.joinToString("  "),
-                style = MaterialTheme.typography.labelSmall,
+                listOf(r.attribute, if (r.rating == 0 && r.canDefault) "default" else if (r.rating == 0) "cannot default" else "")
+                    .filter { it.isNotBlank() }.joinToString("  "),
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (buy != null) Stepper({ buy.changeSkill(r.name, -1) }, { buy.changeSkill(r.name, 1) })
-        Text("${r.rating}", Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.bodyMedium)
-        Text("${r.pool}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+        if (buy != null) {
+            StepButton("−", 36) { buy.changeSkill(r.name, -1) }
+            Text("${r.rating}", Modifier.width(20.dp), textAlign = TextAlign.Center)
+            StepButton("+", 36) { buy.changeSkill(r.name, 1) }
+        } else {
+            Text("${r.rating}", Modifier.padding(horizontal = 12.dp))
+        }
+        Text("${r.pool}", Modifier.width(36.dp), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.End)
     }
 }
 
@@ -415,16 +478,13 @@ private fun Life(g: chummer.core.engine.SheetSections) {
 /** Where the karma of a character in creation has gone. */
 @Composable
 private fun KarmaSection(l: chummer.core.engine.KarmaLedger) {
-    Section("Karma") {
-        Row2("Budget", l.budget.toString())
+    Section("Karma", collapsible = true, startExpanded = false, summary = "${l.remaining} of ${l.budget}") {
         Row2("Metatype", (-l.metatype).toString())
         Row2("Attributes", (-l.attributes).toString())
         Row2("Skills", (-l.skills).toString())
         Row2("Qualities", (-l.qualities).toString())
-        Row2("  positive / negative karma", "${l.positiveQualities}/${l.qualityLimit}  ${l.negativeQualities}/${l.qualityLimit}")
+        Row2("  positive / negative", "${l.positiveQualities}/${l.qualityLimit}  ${l.negativeQualities}/${l.qualityLimit}")
         if (l.contacts != 0) Row2("Contacts", (-l.contacts).toString())
-        HorizontalDivider()
-        Row2("Remaining", l.remaining.toString(), bold = true)
         if (l.notCounted.isNotEmpty()) {
             Text(
                 "Not counted yet: ${l.notCounted.joinToString()}. The remaining karma is higher than Chummer would show.",
@@ -437,11 +497,8 @@ private fun KarmaSection(l: chummer.core.engine.KarmaLedger) {
 /** The attributes that can be bought with karma in creation. */
 private val BUYABLE = setOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL", "EDG")
 
-/** A small minus and plus pair for buying and giving back points. */
+/** A round-ish text button for buying (+) or giving back (-) a point. */
 @Composable
-private fun Stepper(onMinus: () -> Unit, onPlus: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onMinus, modifier = Modifier.size(40.dp)) { Text("−", style = MaterialTheme.typography.titleLarge) }
-        IconButton(onClick = onPlus, modifier = Modifier.size(40.dp)) { Text("+", style = MaterialTheme.typography.titleLarge) }
-    }
+private fun StepButton(label: String, size: Int = 40, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(size.dp)) { Text(label, style = MaterialTheme.typography.titleLarge) }
 }

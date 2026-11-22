@@ -3,7 +3,7 @@
     <application
         android:allowBackup="false"
         android:label="hgCOMMLINK"
-        android:theme="@android:style/Theme.DeviceDefault.DayNight">
+        android:theme="@style/Theme.HgCommlink">
         <activity
             android:name=".MainActivity"
             android:exported="true"
