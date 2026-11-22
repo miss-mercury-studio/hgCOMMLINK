@@ -61,8 +61,8 @@ class CritterPowerEditor(private val file: CharacterFile, private val data: Game
         if (rows().any { it.text("name")?.trim() == name }) return null
         val ratingText = d("rating")
         val max = if (ratingText.equals("True", true)) 12 else ratingText.toIntOrNull() ?: 0
-        if (rating < 0 || (max == 0 && rating != 0) || rating > max) return null
-        if (ratingText.equals("True", true) && rating < 1) return null
+        if (!given && (rating < 0 || (max == 0 && rating != 0) || rating > max)) return null
+        if (!given && ratingText.equals("True", true) && rating < 1) return null
         val doc = file.doc
         fun el(tag: String, text: String? = null): Element = doc.createElement(tag).also { if (!text.isNullOrEmpty()) it.textContent = text }
         val guid = UUID.randomUUID().toString()

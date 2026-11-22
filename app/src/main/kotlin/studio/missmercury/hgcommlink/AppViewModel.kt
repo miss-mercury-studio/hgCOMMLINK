@@ -383,6 +383,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun talentSkillChoices(talent: chummer.core.engine.TalentOption) = gameData.talentSkillChoices(talent)
     fun heritageOffered(letter: String, metatype: String, variant: String) = gameData.heritageOffered(letter, metatype, variant)
 
+    suspend fun critterOptions(): List<chummer.core.engine.CritterOption> = io { gameData.newCharacterOptions(); gameData.critterOptions() }
+
+    fun createCritter(name: String, critterId: String, force: Int) = viewModelScope.launch {
+        try {
+            val file = io {
+                val profile = gameData.newCharacterOptions().profiles.first()
+                repo.saveNew(gameData.createCritter(profile, name, critterId, force), name.ifBlank { "New critter" })
+            }
+            refresh()
+            openFile(file)
+        } catch (e: Throwable) {
+            message = "Could not create the critter: ${e.message ?: e.javaClass.simpleName}"
+        }
+    }
+
     fun createCharacter(profile: chummer.core.data.CharacterSettings, name: String, alias: String, metatypeId: String, variantId: String? = null, priorities: chummer.core.engine.PriorityChoice? = null) {
         viewModelScope.launch {
             try {

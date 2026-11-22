@@ -114,6 +114,7 @@ private fun App(vm: AppViewModel) {
     val ctx = LocalContext.current
     val open = vm.open
     var showNew by remember { mutableStateOf(false) }
+    var showCritter by remember { mutableStateOf(false) }
 
     LaunchedEffect(vm.message) {
         vm.message?.let {
@@ -208,6 +209,7 @@ private fun App(vm: AppViewModel) {
             if (open == null) {
                 Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TerminalButton("New", { showNew = true }, Modifier.weight(1f), filled = true)
+                    TerminalButton("Critter", { showCritter = true }, Modifier.weight(1f))
                     TerminalButton("Import", { importPicker.launch(arrayOf("*/*")) }, Modifier.weight(1f))
                 }
             }
@@ -215,6 +217,7 @@ private fun App(vm: AppViewModel) {
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             if (showNew) NewCharacterDialog(vm) { showNew = false }
+            if (showCritter) NewCritterDialog(vm) { showCritter = false }
             if (open != null) SheetScreen(open, vm) else CharacterList(vm)
         }
     }
@@ -384,5 +387,37 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** Start a critter (a spirit, a free spirit, an infected...): pick one from the critter data and its Force. It starts as a finished character. */
+@Composable
+private fun NewCritterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
+    val options = produceState<List<chummer.core.engine.CritterOption>?>(null) { value = try { vm.critterOptions() } catch (e: Throwable) { emptyList() } }.value
+    var name by remember { mutableStateOf("") }
+    var chosen by remember { mutableStateOf<chummer.core.engine.CritterOption?>(null) }
+    var force by remember { mutableStateOf(3) }
+    var picking by remember { mutableStateOf(false) }
+    TerminalSheet("New critter", onDismiss) { close ->
+        when {
+            options == null -> TerminalLine("LOADING_GAME_DATA", Modifier.padding(vertical = 20.dp))
+            else -> Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                TerminalField(name, { name = it }, "name")
+                TerminalButton(chosen?.name ?: "Choose a critter…", { picking = true }, Modifier.fillMaxWidth())
+                if (chosen?.forceBased != false) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Force $force", Modifier.weight(1f))
+                    StepButton("−", 44) { if (force > 1) force-- }
+                    StepButton("+", 44) { if (force < 12) force++ }
+                }
+                Text("A critter starts as a finished character: its attributes follow its Force, its powers and skills come with it.", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+                Row(Modifier.padding(top = 4.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Create", { chosen?.let { vm.createCritter(name.trim(), it.id, if (it.forceBased) force else 0) }; close() }, Modifier.weight(1f), filled = true, enabled = chosen != null)
+                }
+            }
+        }
+    }
+    if (picking && options != null) {
+        PickerSheet("Choose a critter", options.map { PickItem(it.id, it.name, listOf(it.category, if (it.forceBased) "Force" else "").filter { x -> x.isNotBlank() }.joinToString("  ·  "), it.category) }, { id -> chosen = options.first { it.id == id } }) { picking = false }
     }
 }

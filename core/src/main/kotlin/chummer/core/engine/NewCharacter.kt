@@ -3,6 +3,7 @@ package chummer.core.engine
 import chummer.core.CharacterFile
 import chummer.core.CharacterIo
 import chummer.core.DataPack
+import chummer.core.Expr
 import chummer.core.child
 import chummer.core.children
 import chummer.core.data.CharacterSettings
@@ -25,6 +26,8 @@ class NewCharacterRequest(
     val settingsHash: Int? = null,
     /** Names of the custom data folders the settings enable and that are present, in load order. */
     val customDataNames: List<String> = emptyList(),
+    /** The Force of a critter (spirit, free spirit...) whose attributes are formulas in F; 0 for everything else. */
+    val force: Int = 0,
 )
 
 /** The priority letters for a Priority or Sum-to-Ten character, and the talent chosen at the talent letter (for example `Magician`). */
@@ -84,6 +87,8 @@ object NewCharacter {
         // A variant has its own limits, cost, bonus and qualities; the base metatype supplies the name and category.
         val source = variant ?: metatype
         fun meta(tag: String) = source.child(tag)?.textContent?.trim().orEmpty()
+        // A critter's attributes are formulas in its Force (`F+3`, `F/2`, `(F*2)+4`); every other metatype has plain numbers.
+        fun num(text: String): Int = text.toIntOrNull() ?: Expr.evalOrNull(text, mapOf("F" to request.force.toDouble(), "Force" to request.force.toDouble()))?.let { standardRound(it) } ?: 0
 
         set("settings", settings.id)
         if (request.settingsHash != null) set("settingshashcode", request.settingsHash.toString())
@@ -106,9 +111,9 @@ object NewCharacter {
         val rows = root.child("attributes")!!
         for (name in ATTRIBUTES) {
             val prefix = if (name == "MAGAdept") "mag" else name.lowercase()
-            val min = meta("${prefix}min").toIntOrNull() ?: 0
-            val max = meta("${prefix}max").toIntOrNull() ?: 0
-            val aug = meta("${prefix}aug").toIntOrNull() ?: 0
+            val min = num(meta("${prefix}min"))
+            val max = num(meta("${prefix}max"))
+            val aug = num(meta("${prefix}aug"))
             val total = if (max == 0) 0 else maxOf(min, 1)
             totals[name] = total
             rows.appendChild(element("attribute").also { a ->
@@ -151,7 +156,10 @@ object NewCharacter {
         // the powers it gives and free qualities (those marked removable can be bought off later, as Chummer keeps them apart).
         val editor = CharacterEditor(character, data)
         editor.grantMetatypeBonus(source.child("bonus"), (request.metavariantId ?: request.metatypeId).lowercase(), metatype.child("name")?.textContent?.trim().orEmpty())
-        for (p in source.child("powers")?.children("power").orEmpty()) editor.addMetatypePower(p.textContent.trim())
+        for (p in source.child("powers")?.children("power").orEmpty()) {
+            val rating = p.getAttribute("rating").ifEmpty { null }?.let(::num) ?: 0
+            editor.addMetatypePower(p.textContent.trim(), rating, p.getAttribute("select"))
+        }
         for (group in listOf("positive", "negative")) {
             for (q in source.child("qualities")?.child(group)?.children("quality").orEmpty()) {
                 val wanted = q.textContent.trim()
@@ -163,6 +171,18 @@ object NewCharacter {
             }
         }
 
+        // A critter (a spirit, a free spirit, an infected...) from `critters.xml`: it is a finished character, the skills its entry lists are
+        // free levels in its Force, and it needs no karma or nuyen.
+        if (data[request.metatypeId]?.file == "critters.xml") {
+            set("critter", "True"); set("created", "True"); set("karma", "0"); set("nuyen", "0")
+            val improvements = root.child("improvements") ?: element("improvements").also { root.appendChild(it) }
+            for (sk in source.child("skills")?.children("skill").orEmpty()) {
+                val rating = sk.getAttribute("rating").ifEmpty { null }?.let(::num) ?: continue
+                improvements.appendChild(ImprovementWriter.toElement(doc, Improvement(
+                    "SkillLevel", "Metatype", sk.textContent.trim(), "", "", rating.toDouble(), 0.0, 0.0, 0.0, 0.0, 1.0, false, true, false, "",
+                )))
+            }
+        }
         // Values Chummer stores for a character at rest.
         val bod = totals.getValue("BOD")
         val wil = totals.getValue("WIL")
@@ -258,4 +278,15 @@ object NewCharacter {
         root.child("karma")!!.textContent = KarmaLedger.of(character, settings, data).remaining.toString()
         return character
     }
+}
+
+/** A critter that can be created: its name, its category (Spirits, Paranormal Critters...), and whether its attributes depend on a Force. */
+data class CritterOption(val id: String, val name: String, val category: String, val forceBased: Boolean)
+
+object CritterCatalog {
+    fun list(data: DataPack): List<CritterOption> = data.byId.entries.filter { it.value.file == "critters.xml" && it.value.element.tagName == "metatype" && it.value.element.child("hide") == null }.map { (id, e) ->
+        val el = e.element
+        val formulas = listOf("bodmin", "agimin", "strmin", "wilmin").mapNotNull { el.child(it)?.textContent?.trim() }
+        CritterOption(id, el.child("name")?.textContent?.trim().orEmpty(), el.child("category")?.textContent?.trim().orEmpty(), formulas.any { it.toIntOrNull() == null })
+    }.sortedWith(compareBy({ it.category }, { it.name.lowercase() }))
 }

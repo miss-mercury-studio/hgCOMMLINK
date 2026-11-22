@@ -211,6 +211,12 @@ class GameDataStore(private val context: Context) {
     }
 
     /** The talents a priority letter offers (value and name), and whether a metatype is offered at a heritage letter. */
+    fun critterOptions(): List<chummer.core.engine.CritterOption> = catalog("critter", chummer.core.engine.CritterCatalog::list)
+    fun createCritter(profile: CharacterSettings, name: String, critterId: String, force: Int): CharacterFile {
+        val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(profile.customData)
+        val request = NewCharacterRequest(name = name, metatypeId = critterId, force = force, customDataNames = resolved.dirs.map { it.name })
+        return NewCharacter.createKarma(packFor(resolved.dirs), profile, request)
+    }
     fun priorityTalents(letter: String): List<chummer.core.engine.TalentOption> = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).talents(letter) }.orEmpty() }
     fun talentSkillChoices(talent: chummer.core.engine.TalentOption): List<String> = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).skillChoices(talent) }.orEmpty() }
     fun martialArtOptions(): List<chummer.core.engine.MartialArtOption> = catalog("martial", chummer.core.engine.MartialArtCatalog::arts)
