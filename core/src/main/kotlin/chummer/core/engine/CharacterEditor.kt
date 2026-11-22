@@ -292,7 +292,7 @@ class CharacterEditor(
 
     /** Remove the quality or spell with this GUID and every improvement it granted. Returns false if there is none. */
     fun removeItem(guid: String): Boolean {
-        val item = (root.children("qualities") + root.children("spells")).flatMap { it.children() }
+        val item = (root.children("qualities") + root.children("spells") + root.children("complexforms")).flatMap { it.children() }
             .firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: return false
         item.parentNode.removeChild(item)
         removeImprovementsOf(guid)
@@ -332,6 +332,22 @@ class CharacterEditor(
         add("grade", "0")
         grantBonus(entry.child("bonus"), BonusContext("Spell", guid, 1, extra, name, translate, objects = EditorObjects(file, data)))
         container("spells").appendChild(spell)
+        return guid
+    }
+
+    /** Add a complex form from the game data, in the layout Chummer saves. Returns the new item's GUID. */
+    fun addComplexForm(entryId: String, extra: String = ""): String {
+        val entry = data[entryId]?.element ?: error("No complex form with id $entryId in the game data")
+        require(entry.tagName == "complexform") { "Not a complex form" }
+        val guid = UUID.randomUUID().toString()
+        val name = entryText(entry, "name").orEmpty()
+        val form = element("complexform")
+        fun add(tag: String, text: String? = null) = form.appendChild(element(tag, text))
+        add("guid", guid); add("name", name); add("target", entryText(entry, "target")); add("duration", entryText(entry, "duration"))
+        add("fv", entryText(entry, "fv")); add("extra", extra); add("source", entryText(entry, "source")); add("page", entryText(entry, "page"))
+        add("notes"); add("grade", "0")
+        grantBonus(entry.child("bonus"), BonusContext("ComplexForm", guid, 1, extra, name, translate, objects = EditorObjects(file, data)))
+        container("complexforms").appendChild(form)
         return guid
     }
 

@@ -257,6 +257,22 @@ class CareerAdvancement(
         return guid
     }
 
+    // ---- complex forms
+
+    /** The karma price of learning a complex form (Chummer's `ComplexFormKarmaCost`). */
+    fun complexFormCost() = ComplexForms.price(k("karmanewcomplexform", 4), improvements)
+
+    /** Learn a complex form with karma. Null when there is no room (twice Resonance plus bonuses), not enough karma, or it is already known. */
+    fun addComplexForm(entryId: String, extra: String = "", now: LocalDateTime = LocalDateTime.now()): String? {
+        val cost = complexFormCost()
+        if (cost > log.karma || ComplexForms.room(file, data, settings) <= 0) return null
+        val name = data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty()
+        if (root.child("complexforms")?.children("complexform").orEmpty().any { it.text("name")?.trim() == name && it.text("extra")?.trim().orEmpty() == extra }) return null
+        val guid = CharacterEditor(file, data, settings = settings).addComplexForm(entryId, extra)
+        log.add("Karma", -cost.toDouble(), "Learned Complex Form $name", "AddComplexForm", objectId = guid, now = now)
+        return guid
+    }
+
     // ---- gear
 
     /** What a gear purchase costs in nuyen, or null when the entry is unknown or its price formula cannot be read. */

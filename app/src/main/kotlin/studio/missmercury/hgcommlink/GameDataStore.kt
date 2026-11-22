@@ -63,6 +63,9 @@ class GameDataStore(private val context: Context) {
     fun knowledgeOptions(): List<chummer.core.engine.KnowledgeOption> =
         synchronized(this) { pack?.let(chummer.core.engine.KnowledgeCatalog::list).orEmpty() }
 
+    fun complexFormOptions(): List<chummer.core.engine.ComplexFormOption> =
+        synchronized(this) { pack?.let(chummer.core.engine.ComplexForms::catalog).orEmpty() }
+
     fun spellOptions(): List<chummer.core.engine.SpellOption> =
         synchronized(this) { pack?.let(chummer.core.engine.SpellCatalog::list).orEmpty() }
 

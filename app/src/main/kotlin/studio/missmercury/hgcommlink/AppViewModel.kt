@@ -308,6 +308,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun careerSpellCost(entryId: String): Int? = open?.takeIf { it.sheet?.isCareer == true }?.let { gameData.career(it.character).spellCost(entryId) }
     fun removeSpell(guid: String) = edit("Removed spell") { it.removeItem(guid) }
 
+    fun complexFormOptions() = gameData.complexFormOptions()
+    fun addComplexForm(entryId: String, extra: String = "") =
+        if (open?.sheet?.isCareer == true) editCareer("Learned complex form", "Cannot learn that complex form (karma, limit, or already known)") { adv, _ -> adv.addComplexForm(entryId, extra) != null }
+        else edit("Added complex form") { it.addComplexForm(entryId, extra); true }
+    fun removeComplexForm(guid: String) = edit("Removed complex form") { it.removeItem(guid) }
+
     /** Buy (+1) or give back (-1) a step of a skill group with karma, in creation. */
     fun changeSkillGroup(name: String, delta: Int) =
         edit(null, blocked = if (delta > 0) "$name is at the creation maximum" else "No karma step in $name to give back") { it.changeSkillGroup(name, delta) }

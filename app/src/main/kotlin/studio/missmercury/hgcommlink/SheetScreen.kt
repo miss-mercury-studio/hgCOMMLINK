@@ -87,6 +87,7 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
                 val tabs = buildList {
                     add("Overview" to "STATS"); add("Skills" to "SKILL")
                     if (sheet.magic != null || sheet.powers != null) add("Magic" to "MAGIC")
+                    if (sheet.complexForms != null) add("Resonance" to "MATRIX")
                     add("Gear" to "GEAR"); add("Ware" to "WARE"); add("Life" to "LIFE"); add("Qualities" to "QUAL")
                 }
                 val current = if (tabs.any { it.first == tabName }) tabName else "Overview"
@@ -95,6 +96,7 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
                         "Overview" -> Overview(sheet, vm)
                         "Skills" -> Skills(sheet, vm)
                         "Magic" -> Magic(sheet, vm)
+                        "Resonance" -> Resonance(sheet, vm)
                         "Gear" -> Gear(sheet.sections, sheet, vm)
                         "Ware" -> Ware(sheet.sections, sheet.essence, sheet, vm)
                         "Life" -> Life(sheet.sections, sheet, vm)
@@ -896,5 +898,48 @@ private fun FinishCard(review: chummer.core.engine.CreationReview, vm: AppViewMo
                 }
             }
         }
+    }
+}
+
+/** A technomancer's complex forms: how many are free, how many fit, and what one more costs. */
+@Composable
+private fun Resonance(s: Sheet, vm: AppViewModel) {
+    val section = s.complexForms ?: return
+    val career = s.isCareer
+    var adding by remember { mutableStateOf(false) }
+    var choosing by remember { mutableStateOf<String?>(null) }
+    val full = section.forms.size >= section.limit
+    Column(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            item {
+                Text("// COMPLEX FORMS", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                Small(
+                    "${section.forms.size} of ${section.limit} known" + if (!career) "  ·  ${section.free} free, then ${section.price} karma each" else "  ·  ${section.price} karma each",
+                )
+            }
+            if (section.forms.isEmpty()) item { Text("No complex forms.", style = MaterialTheme.typography.bodySmall) }
+            items(section.forms, key = { it.guid }) { f ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(f.name + if (f.extra.isNotBlank()) " (${f.extra})" else "", fontWeight = FontWeight.Bold)
+                        Small(listOf("target ${f.target}", "duration ${f.duration}", "fade ${f.fade}").joinToString("  ·  "))
+                    }
+                    if (!career) StepButton("×", 36) { vm.removeComplexForm(f.guid) }
+                }
+            }
+        }
+        PinnedAction(if (full) "Complex form limit reached" else "+ Add complex form") { if (!full) adding = true }
+    }
+    if (adding) {
+        val options = remember { vm.complexFormOptions().map { PickItem(it.id, it.name, listOf("target ${it.target}", "duration ${it.duration}", "fade ${it.fade}", it.source).filter { x -> x.isNotBlank() }.joinToString("  ·  ")) } }
+        PickerSheet("Add a complex form", options, {
+            val o = vm.complexFormOptions().first { x -> x.id == it }
+            if (o.needsChoice) choosing = it else vm.addComplexForm(it)
+        }) { adding = false }
+    }
+    choosing?.let { id ->
+        // Forms named "[Matrix Attribute]" are learned for one of the four attributes.
+        val attrs = listOf("Attack", "Sleaze", "Data Processing", "Firewall").map { PickItem(it, it, "") }
+        PickerSheet("Which Matrix attribute?", attrs, { vm.addComplexForm(id, it) }) { choosing = null }
     }
 }

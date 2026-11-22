@@ -40,8 +40,9 @@ data class KarmaLedger(
     val nuyen: Int = 0,
     /** Martial arts: each style costs its karma, and every technique after the first costs the settings' technique price. */
     val martialArts: Int = 0,
+    val complexForms: Int = 0,
 ) {
-    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen + martialArts
+    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen + martialArts + complexForms
     val remaining get() = budget - spent
     val knowledgePointsLeft get() = knowledgePoints - knowledgePointsUsed
 
@@ -269,7 +270,7 @@ data class KarmaLedger(
             }
 
             for ((tag, label) in listOf(
-                "foci" to "foci", "complexforms" to "complex forms", "aiprograms" to "programs",
+                "foci" to "foci", "aiprograms" to "programs",
                 "initiationgrades" to "initiation", "critterpowers" to "critter powers",
                 "metamagics" to "metamagics", "mentorspirits" to "mentor spirits",
             )) if (c.root.child(tag)?.children().orEmpty().isNotEmpty()) notCounted += label
@@ -279,12 +280,16 @@ data class KarmaLedger(
                 martialArts += m.text("cost")?.trim()?.toIntOrNull() ?: 7
                 martialArts += maxOf((m.child("martialarttechniques")?.children("martialarttechnique")?.size ?: 0) - 1, 0) * k("karmamaneuver", 5)
             }
+            // Complex forms: the ones past the free count (`cfplimit`) cost karma each (Chummer counts those of grade 0).
+            val formPrice = ComplexForms.price(k("karmanewcomplexform", 4), set)
+            val formsUsed = c.root.child("complexforms")?.children("complexform").orEmpty().count { (it.text("grade")?.trim()?.toIntOrNull() ?: 0) == 0 }
+            val complexForms = maxOf(0, formsUsed - (c.root.text("cfplimit")?.trim()?.toIntOrNull() ?: 0)) * formPrice
             val nuyenKarma = (c.root.text("nuyenbp")?.trim()?.toDoubleOrNull()?.toInt() ?: 0)
                 .coerceIn(0, if (settings.bool("unrestrictednuyen")) Int.MAX_VALUE else settings.int("nuyenmaxbp", 10))
 
             return KarmaLedger(
                 budget, metatype, attributes, skills, qualities, contacts, notCounted, positive, negative,
-                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma, martialArts,
+                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma, martialArts, complexForms,
             )
         }
     }
