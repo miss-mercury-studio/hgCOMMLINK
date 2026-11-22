@@ -135,6 +135,12 @@ class GameDataStore(private val context: Context) {
     /** Settings profiles copied from the user's folder (see CharacterRepository.syncSideFiles). */
     val userSettingsDir: File get() = File(context.filesDir, "user-settings")
 
+    /**
+     * Profiles that ship with the app, for characters that name one Chummer does not ship (older versions called theirs `default.xml`). They are
+     * looked up after the user's own files, so a profile of the same name in the characters folder wins, and they are not offered for new characters.
+     */
+    private val bundledSettingsDir: File get() = unpack("chummer-profiles", "chummer-profiles")
+
     /** Custom data files copied from the user's folder. */
     val userCustomDir: File get() = File(context.filesDir, "user-customdata")
 
@@ -147,11 +153,12 @@ class GameDataStore(private val context: Context) {
     fun settingsFor(c: CharacterFile): CharacterSettings {
         val ref = c.root.text("settings").orEmpty()
         val builtIn = File(dataDir(), "settings.xml")
-        val stamp = builtIn.lastModified() + builtIn.length() + (userSettingsDir.listFiles()?.sumOf { it.lastModified() + it.length() } ?: 0L)
+        val bundled = bundledSettingsDir
+        val stamp = builtIn.lastModified() + builtIn.length() + (userSettingsDir.listFiles()?.sumOf { it.lastModified() + it.length() } ?: 0L) + (bundled.listFiles()?.sumOf { it.lastModified() + it.length() } ?: 0L)
         synchronized(settingsCache) {
             settingsCache[ref]?.takeIf { it.first == stamp }?.let { return it.second }
         }
-        val found = CharacterSettings.find(ref, builtIn, listOf(userSettingsDir))
+        val found = CharacterSettings.find(ref, builtIn, listOf(userSettingsDir, bundled))
         synchronized(settingsCache) { settingsCache[ref] = stamp to found }
         return found
     }
