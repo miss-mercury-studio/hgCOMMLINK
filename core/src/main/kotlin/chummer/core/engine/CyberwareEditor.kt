@@ -159,7 +159,7 @@ class CyberwareEditor(private val file: CharacterFile, private val data: GameDat
 
         val bonus = entry.child("bonus")
         if (bonus != null && bonus.children().isNotEmpty()) {
-            val result = BonusHandlers.apply(bonus, BonusContext(if (bio) "Bioware" else "Cyberware", guid, maxOf(chosen, 1), "", d("name")))
+            val result = BonusHandlers.apply(bonus, BonusContext(if (bio) "Bioware" else "Cyberware", guid, maxOf(chosen, 1), "", d("name"), objects = EditorObjects(file, data)))
             val imps = root.child("improvements") ?: el("improvements").also { root.appendChild(it) }
             for (imp in result.improvements) imps.appendChild(ImprovementWriter.toElement(doc, imp))
         }

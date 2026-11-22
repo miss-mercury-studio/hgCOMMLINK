@@ -296,7 +296,6 @@ fun NuyenCard(l: chummer.core.engine.NuyenLedger, vm: AppViewModel) {
                 StepButton("+", 44) { vm.changeNuyenBp(1) }
             }
             if (l.unreadable.isNotEmpty()) Text("Prices not counted yet: " + l.unreadable.take(4).joinToString(), style = MaterialTheme.typography.labelSmall, color = DrainAmber)
-            Text("Lifestyle and vehicle costs are not in this total yet.", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
         }
     }
 }

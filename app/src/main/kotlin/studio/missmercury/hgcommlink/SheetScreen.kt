@@ -534,7 +534,11 @@ private fun AddQualityDialog(vm: AppViewModel, onDismiss: () -> Unit) {
         keepOpenFor = { id -> options.first { it.id == id }.needsText },
         onDismiss = onDismiss,
     )
-    needsText?.let { o ->
+    needsText?.takeIf { it.choices.isNotEmpty() }?.let { o ->
+        // The data knows what can be chosen: pick from the list.
+        PickerSheet(o.name, o.choices.map { PickItem(it, it, "") }, onPick = { vm.addQuality(o.id, it); needsText = null; onDismiss() }, note = "Choose one.", onDismiss = { needsText = null })
+    }
+    needsText?.takeIf { it.choices.isEmpty() }?.let { o ->
         TerminalSheet(o.name, onDismiss = { needsText = null }) { close ->
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("This quality asks for a name or a group.", style = MaterialTheme.typography.bodySmall, color = MutedSilver)

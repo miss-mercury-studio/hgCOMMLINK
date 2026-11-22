@@ -22,7 +22,20 @@ class BonusContext(
     val translate: (String) -> String? = { null },
     /** Adds a quality named by a bonus (for example Glamour adds Distinctive Style) and returns its GUID, or null if it cannot. */
     val addQuality: (name: String, extra: String) -> String? = { _, _ -> null },
+    /** Creates the objects some bonuses add to the character (gear, a mentor spirit, a contact); without it those bonuses add nothing. */
+    val objects: BonusObjects? = null,
 )
+
+/** A mentor spirit added to the character: its own GUID, and the id of the data entry it came from (Chummer uses that as the unique name). */
+class MentorRef(val guid: String, val id: String)
+
+/** What a bonus can add to the character besides improvements. Each returns the new object's GUID, or null when it cannot be added. */
+interface BonusObjects {
+    /** Gear named in a bonus; free unless [fullCost]. [parentGuid] is a gear item this one is added under. [sourceGuid] is the item that grants it. */
+    fun addGear(sourceGuid: String, name: String, category: String, rating: Int, qty: Double, fullCost: Boolean, parentGuid: String?): String?
+    fun addMentorSpirit(name: String): MentorRef?
+    fun addContact(loyalty: Int, connection: Int, group: Boolean, readOnly: Boolean): String?
+}
 
 /** The improvements a `<bonus>` node produces, and the child nodes no handler exists for yet. */
 class BonusResult(val improvements: List<Improvement>, val unhandled: List<String>)
@@ -370,6 +383,66 @@ object BonusHandlers {
                 text = text.replace("Rating", ctx.rating.toString())
                 if ((text.toIntOrNull() ?: 0) > 0) text = "+$text"
                 out += improvement(ctx, type, unique, 0.0, text)
+            }
+        }
+
+        // ---- nodes that add objects to the character; the improvements record which object came from which item ----
+
+        // Gear the item brings (free unless the node says `fullcost`), with the gear listed under `children` inside it.
+        put("addgear") { node, ctx, unique, out ->
+            val objects = ctx.objects ?: return@put
+            fun purchase(n: Element, parent: String?): String? {
+                val rating = n.t("rating")?.takeIf { it.isNotEmpty() }?.let { intValue(it, ctx.rating)?.toInt() } ?: 0
+                val qty = n.t("quantity")?.takeIf { it.isNotEmpty() }?.let { value(it, ctx.rating) } ?: 1.0
+                val guid = objects.addGear(ctx.sourceName, n.t("name").orEmpty(), n.t("category").orEmpty(), rating, qty, n.child("fullcost") != null, parent) ?: return null
+                out += improvement(ctx, "Gear", unique, 0.0, guid)
+                return guid
+            }
+            val parent = purchase(node, null)
+            if (parent != null) for (child in node.child("children")?.children().orEmpty()) purchase(child, parent)
+        }
+
+        // A mentor spirit the user picks (the choice is its name).
+        put("selectmentorspirit") { _, ctx, _, out ->
+            val objects = ctx.objects ?: return@put
+            if (ctx.choice.isEmpty()) return@put
+            val mentor = objects.addMentorSpirit(ctx.choice) ?: return@put
+            out += improvement(ctx, "MentorSpirit", mentor.id, 0.0, mentor.guid)
+        }
+
+        // A quality the user picks from those the node lists.
+        put("selectquality") { node, ctx, unique, out ->
+            if (ctx.choice.isEmpty() || node.children("quality").none { it.textContent.trim() == ctx.choice }) return@put
+            val guid = ctx.addQuality(ctx.choice, "") ?: return@put
+            out += improvement(ctx, "SpecificQuality", unique, 0.0, guid)
+        }
+
+        // A contact the item gives, with the loyalty, connection and group flags from the node.
+        put("addcontact") { node, ctx, unique, out ->
+            val objects = ctx.objects ?: return@put
+            val loyalty = node.t("loyalty")?.takeIf { it.isNotEmpty() }?.let { intValue(it, ctx.rating)?.toInt() } ?: 1
+            val connection = node.t("connection")?.takeIf { it.isNotEmpty() }?.let { intValue(it, ctx.rating)?.toInt() } ?: 1
+            val guid = objects.addContact(loyalty, connection, node.child("group") != null, node.child("canwrite") == null) ?: return@put
+            out += improvement(ctx, "AddContact", guid, 0.0, guid)
+            node.t("forcedloyalty")?.takeIf { it.isNotEmpty() }?.let { out += improvement(ctx, "ContactForcedLoyalty", unique, value(it, ctx.rating) ?: 0.0, guid) }
+            if (node.child("free") != null) out += improvement(ctx, "ContactMakeFree", unique, 0.0, guid)
+            if (node.child("forcegroup") != null) out += improvement(ctx, "ContactForceGroup", unique, 0.0, guid)
+        }
+
+        // Attributes the user picks: one Attribute improvement for each `selectattribute` node, in the order the choice lists them
+        // (the choice reads like "AGI, REA (2)").
+        put("selectattributes") { node, ctx, unique, out ->
+            if (ctx.choice.isEmpty()) return@put
+            val picks = ArrayList<String>()
+            for (part in ctx.choice.split(',')) {
+                val m = Regex("""^\s*([A-Za-z]+)\s*(?:\((\d+)\))?\s*$""").find(part) ?: continue
+                repeat(m.groupValues[2].toIntOrNull() ?: 1) { picks += m.groupValues[1] }
+            }
+            node.children("selectattribute").forEachIndexed { i, sel ->
+                val attribute = picks.getOrNull(i) ?: picks.firstOrNull() ?: return@forEachIndexed
+                fun n(tag: String) = sel.t(tag)?.trim()?.toDoubleOrNull() ?: 0.0
+                val name = if (sel.child("affectbase") != null) attribute + "Base" else attribute
+                out += improvement(ctx, "Attribute", unique, 0.0, name, min = n("min"), max = n("max"), augmented = n("val"), augMax = n("aug"))
             }
         }
 

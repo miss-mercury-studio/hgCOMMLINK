@@ -30,7 +30,7 @@ class ArmorWeaponEditor(private val file: CharacterFile, private val data: GameD
     private fun applyBonus(entry: Element, source: String, guid: String, rating: Int, name: String) {
         val bonus = entry.child("bonus") ?: return
         if (bonus.children().isEmpty()) return
-        val result = BonusHandlers.apply(bonus, BonusContext(source, guid, maxOf(rating, 1), "", name))
+        val result = BonusHandlers.apply(bonus, BonusContext(source, guid, maxOf(rating, 1), "", name, objects = EditorObjects(file, data)))
         val imps = root.child("improvements") ?: el("improvements").also { root.appendChild(it) }
         for (imp in result.improvements) imps.appendChild(ImprovementWriter.toElement(doc, imp))
     }

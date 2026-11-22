@@ -115,7 +115,7 @@ class GearEditor(private val file: CharacterFile, private val data: GameData, pr
         // The bonus is applied for the rating chosen.
         val bonus = entry.child("bonus")
         if (bonus != null && bonus.children().isNotEmpty()) {
-            val result = BonusHandlers.apply(bonus, BonusContext("Gear", guid, maxOf(chosen, 1), extra, d("name")))
+            val result = BonusHandlers.apply(bonus, BonusContext("Gear", guid, maxOf(chosen, 1), extra, d("name"), objects = EditorObjects(file, data)))
             val imps = root.child("improvements") ?: el("improvements").also { root.appendChild(it) }
             for (imp in result.improvements) imps.appendChild(ImprovementWriter.toElement(doc, imp))
         }

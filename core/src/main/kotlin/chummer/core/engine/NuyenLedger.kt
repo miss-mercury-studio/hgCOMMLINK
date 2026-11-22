@@ -14,8 +14,8 @@ import org.w3c.dom.Element
  * (`<nuyenbp>`, at most the settings' `nuyenmaxbp`) goes through the settings' karma-to-nuyen expression, and everything the
  * character carries costs nuyen. What is left is [remaining]; Chummer keeps that in `<nuyen>`.
  *
- * [unreadable] lists items whose price formula the evaluator cannot read (they count as free). Lifestyles and vehicles are not
- * priced yet. The prices follow Chummer's formulas as ported for career purchases (checked against Viper's purchase log); a
+ * [unreadable] lists items whose price formula the evaluator cannot read (they count as free). Lifestyles and vehicles are priced too:
+ * Viper's lifestyle and its three vehicles equal the totals Chummer printed (LifestyleVehicleCostTest). The prices follow Chummer's formulas as ported for career purchases (checked against Viper's purchase log); a
  * Chummer-made creation file with gear would confirm the totals.
  */
 data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Double, val spent: Double, val unreadable: List<String>) {
@@ -82,12 +82,73 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
                 return total + gearsIn(w)
             }
 
+            /** A price formula that may name the item's own figures: Rating, Body and "Vehicle Cost". */
+            fun vehicleFormula(text: String, rating: Int, body: Int, vehicleCost: Double, what: String): Double {
+                val t = text.trim()
+                val v = if (t.startsWith("FixedValues(")) CyberwareEditor.formula(t, rating)
+                else chummer.core.Expr.evalOrNull(t.replace("Vehicle Cost", "VehicleCost"), mapOf("Rating" to rating.toDouble(), "Body" to body.toDouble(), "VehicleCost" to vehicleCost))
+                if (v == null) unreadable += what
+                return v ?: 0.0
+            }
+            fun vehicle(v: Element): Double {
+                val own = formula(v.text("cost").orEmpty(), 0, v.text("name").orEmpty())
+                val body = v.text("body")?.trim()?.substringBefore('/')?.toIntOrNull() ?: 0
+                var total = own
+                for (m in v.child("mods")?.children("mod").orEmpty()) {
+                    if (m.text("included")?.trim() == "True") continue
+                    total += vehicleFormula(m.text("cost").orEmpty(), num(m, "rating"), body, own, m.text("name").orEmpty())
+                    total += gearsIn(m)
+                }
+                total += gearsIn(v)
+                for (mount in v.child("weaponmounts")?.children("weaponmount").orEmpty()) {
+                    total += formula(mount.text("cost").orEmpty(), 0, mount.text("name").orEmpty())
+                    for (m in mount.child("mods")?.children("vehiclemod").orEmpty()) if (m.text("included")?.trim() != "True") total += formula(m.text("cost").orEmpty(), num(m, "rating"), m.text("name").orEmpty())
+                    for (w in mount.child("weapons")?.children("weapon").orEmpty()) total += weapon(w)
+                }
+                return total
+            }
+
             var spent = 0.0
+            for (l in c.root.child("lifestyles")?.children("lifestyle").orEmpty()) spent += lifestyleTotal(l)
+            for (v in c.root.child("vehicles")?.children("vehicle").orEmpty()) spent += vehicle(v)
             for (g in c.root.child("gears")?.children("gear").orEmpty()) spent += gear(g)
             for (w in c.root.child("weapons")?.children("weapon").orEmpty()) spent += weapon(w)
             for (a in c.root.child("armors")?.children("armor").orEmpty()) spent += armor(a)
             for (w in c.root.child("cyberwares")?.children("cyberware").orEmpty()) spent += ware(w)
             return NuyenLedger(karma, if (max == Int.MAX_VALUE) -1 else max, budget, spent, unreadable.distinct())
+        }
+
+        /**
+         * A lifestyle's total cost, following Chummer's `CostPreSplit`: the base cost, the multipliers of qualities chosen by the user,
+         * area, comforts and security, entertainment assets and other qualities as flat costs (qualities paid in LP cost no nuyen),
+         * roommates, split with roommates, then times the months bought. Cost adjustments from improvements are not applied.
+         */
+        fun lifestyleTotal(l: Element): Double {
+            fun d(tag: String) = l.text(tag)?.trim()?.toDoubleOrNull() ?: 0.0
+            if (l.text("trustfund")?.trim() == "True") return 0.0
+            val quals = l.child("lifestylequalities")?.children("lifestylequality").orEmpty().filter { it.text("lifestylequalitysource")?.trim() != "BuiltIn" }
+            var cost = d("cost")
+            var multiplier = 1.0
+            for (q in quals) { val m = q.text("basemultiplier")?.trim()?.toDoubleOrNull() ?: 0.0; if (m != 0.0) multiplier *= 1.0 + m / 100.0 }
+            cost *= multiplier
+            val levels = d("area") + d("comforts") + d("security")
+            if (levels != 0.0) cost *= 1.0 + 0.1 * levels
+            cost += d("area") * d("costforearea") + d("comforts") * d("costforcomforts") + d("security") * d("costforsecurity")
+            fun flat(q: Element) = if (q.text("uselpcost")?.trim() == "True") 0.0 else q.text("cost")?.trim()?.toDoubleOrNull() ?: 0.0
+            fun mult(q: Element) = q.text("multiplier")?.trim()?.toDoubleOrNull() ?: 0.0
+            fun type(q: Element) = q.text("lifestylequalitytype")?.trim().orEmpty()
+            val assets = quals.filter { type(it) == "Entertainment" && it.text("category")?.contains("Asset") == true }
+            var m2 = 1.0
+            for (q in assets) if (mult(q) != 0.0) m2 *= 1.0 + mult(q) / 100.0
+            cost = cost * m2 + assets.sumOf { flat(it) }
+            val others = quals.filter { type(it) != "Entertainment" && type(it) != "Contracts" }
+            m2 = 1.0
+            for (q in others) if (mult(q) != 0.0) m2 *= 1.0 + mult(q) / 100.0
+            cost = cost * m2 + others.sumOf { flat(it) }
+            val roommates = d("roommates")
+            if (l.text("splitcostwithroommates")?.trim() == "True") cost /= roommates + 1.0
+            if (roommates > 0) cost *= 1.0 + 0.1 * roommates
+            return maxOf(cost, 0.0) * (l.text("months")?.trim()?.toDoubleOrNull() ?: 1.0)
         }
 
         /** Keep the stored `<nuyen>` equal to what is left, as Chummer does while a character is in creation. */

@@ -48,7 +48,7 @@ data class CreationReview(val problems: List<String>, val warnings: List<String>
                 problems, warnings,
                 notChecked = listOf(
                     "attribute and skill limits per metatype and group", "contact limits", "prototype transhuman and metagenic quality balance",
-                    "cyberware capacity", "drone and vehicle rules", "lifestyle and vehicle costs in the nuyen total",
+                    "cyberware capacity", "drone and vehicle rules",
                 ),
             )
         }

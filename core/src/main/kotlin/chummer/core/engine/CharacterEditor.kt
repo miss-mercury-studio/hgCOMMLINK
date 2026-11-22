@@ -78,7 +78,7 @@ class CharacterEditor(
         add("notes")
         add("notesColor", NOTES_COLOR)
         // The bonus is applied before the quality is listed, so qualities it adds (Glamour adds Distinctive Style) come first.
-        val ctx = BonusContext("Quality", guid, levels, extra, name, translate, addQuality = { n, x ->
+        val ctx = BonusContext("Quality", guid, levels, extra, name, translate, objects = EditorObjects(file, data), addQuality = { n, x ->
             val other = (data as? chummer.core.DataPack)?.byId?.entries?.firstOrNull {
                 it.value.file == "qualities.xml" && it.value.element.tagName == "quality" && it.value.element.child("name")?.textContent?.trim() == n
             }?.key
@@ -302,7 +302,7 @@ class CharacterEditor(
         add("barehandedadept", "False")
         add("improvementsource", "Spell")
         add("grade", "0")
-        grantBonus(entry.child("bonus"), BonusContext("Spell", guid, 1, extra, name, translate))
+        grantBonus(entry.child("bonus"), BonusContext("Spell", guid, 1, extra, name, translate, objects = EditorObjects(file, data)))
         container("spells").appendChild(spell)
         return guid
     }
@@ -448,8 +448,10 @@ data class QualityOption(
     val name: String,
     val category: String,
     val karma: Int,
-    /** The quality asks the user to type something (a name, a contact). */
+    /** The quality asks the user to choose or type something (a name, a skill, a mentor spirit, a tradition). */
     val needsText: Boolean,
+    /** What the user can choose from, when the data says (mentor spirits, skills, traditions, the qualities a node offers); empty means free text. */
+    val choices: List<String> = emptyList(),
     /** Bonus node types with no handler yet; the quality can still be added, but those bonuses will be missing. */
     val unsupported: List<String>,
 )
@@ -463,14 +465,39 @@ object QualityCatalog {
         data.byId.entries.filter { it.value.file == "qualities.xml" && it.value.element.tagName == "quality" }.map { (id, e) ->
             val el = e.element
             val bonusNodes = el.child("bonus")?.children().orEmpty().map { it.tagName.lowercase() }
+            val choices = choicesFor(data, el.child("bonus"))
             QualityOption(
                 id = id, name = el.child("name")?.textContent?.trim().orEmpty(),
                 category = el.child("category")?.textContent?.trim().orEmpty(),
                 karma = el.child("karma")?.textContent?.trim()?.toIntOrNull() ?: 0,
-                needsText = "selecttext" in bonusNodes,
+                needsText = bonusNodes.any { it in CHOICE_NODES },
+                choices = choices,
                 unsupported = bonusNodes.filter { !BonusHandlers.knows(it) },
             )
         }.sortedWith(compareBy({ it.category }, { it.name.lowercase() }))
+
+    /** Bonus nodes that need something from the user. */
+    private val CHOICE_NODES = setOf(
+        "selecttext", "selectskill", "selectweapon", "selectarmor", "selecttradition", "selectmentorspirit", "selectquality",
+        "selectattributes", "hardwires", "selectrestricted",
+    )
+
+    private fun names(data: chummer.core.DataPack, file: String, tag: String, inParent: String? = null): List<String> =
+        data.byId.values.filter { it.file == file && it.element.tagName == tag && (inParent == null || (it.element.parentNode as? Element)?.tagName == inParent) }
+            .mapNotNull { it.name }.distinct().sortedBy { it.lowercase() }
+
+    /** The list to choose from for the first choice node of a bonus, or empty when the user has to type it. */
+    private fun choicesFor(data: chummer.core.DataPack, bonus: Element?): List<String> {
+        val node = bonus?.children().orEmpty().firstOrNull { it.tagName.lowercase() in CHOICE_NODES } ?: return emptyList()
+        return when (node.tagName.lowercase()) {
+            "selectmentorspirit" -> names(data, "mentors.xml", "mentor")
+            "selecttradition" -> TraditionCatalog.list(data).map { it.name }.distinct().sorted()
+            "selectskill", "hardwires" -> names(data, "skills.xml", "skill", "skills")
+            "selectquality" -> node.children("quality").map { it.textContent.trim() }
+            "selectattributes" -> listOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL", "EDG", "MAG", "RES")
+            else -> emptyList()
+        }
+    }
 }
 
 /** A knowledge skill or language that can be added. */

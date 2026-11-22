@@ -8,6 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Element
 import java.io.File
+import java.util.UUID
 
 /**
  * Replays every item's stored `<bonus>` node through [BonusHandlers] and compares the result with the
@@ -27,10 +28,20 @@ class BonusHandlerFixtureTest {
     private fun plain(type: String) = type.removeSuffix("NonRetroactive")
 
     /** Chummer stores a random id as the improved name of a limit modifier, so only the rest can be compared. */
-    private fun nameOf(i: Improvement) = if (i.type == "LimitModifier") "" else i.improvedName
+    private fun nameOf(i: Improvement) = if (i.type == "LimitModifier" || i.type in OBJECT_IDS) "" else i.improvedName
+
+    /** Improvements whose improved name is the random GUID of an object the item added. */
+    private val OBJECT_IDS = setOf("MentorSpirit", "SpecificQuality", "Gear", "AddContact", "ContactForcedLoyalty", "ContactMakeFree", "ContactForceGroup")
+
+    /** Stands in for the editor: it only has to hand out ids, since the test compares improvements. */
+    private object FakeObjects : BonusObjects {
+        override fun addGear(sourceGuid: String, name: String, category: String, rating: Int, qty: Double, fullCost: Boolean, parentGuid: String?) = UUID.randomUUID().toString()
+        override fun addMentorSpirit(name: String) = MentorRef(UUID.randomUUID().toString(), "")
+        override fun addContact(loyalty: Int, connection: Int, group: Boolean, readOnly: Boolean) = UUID.randomUUID().toString()
+    }
 
     private fun key(i: Improvement) =
-        Key(plain(i.type), nameOf(i), i.value, i.rating, i.uniqueName, i.minimum, i.maximum, i.augmented, i.augmentedMaximum, i.source, i.condition)
+        Key(plain(i.type), nameOf(i), i.value, i.rating, if (i.type == "MentorSpirit" || i.type == "AddContact") "" else i.uniqueName, i.minimum, i.maximum, i.augmented, i.augmentedMaximum, i.source, i.condition)
 
     private fun sourceOf(item: Element): String? = when (item.tagName) {
         "quality" -> "Quality"
@@ -80,7 +91,7 @@ class BonusHandlerFixtureTest {
                 val guid = item.text("guid")!!.trim()
                 val rating = item.text("rating")?.trim()?.toIntOrNull()?.takeIf { it > 0 }
                     ?: item.text("levels")?.trim()?.toIntOrNull() ?: 1
-                val result = BonusHandlers.apply(bonus, BonusContext(sourceOf(item)!!, guid, rating, choice = item.text("extra")?.trim().orEmpty(), friendlyName = item.text("name")?.trim().orEmpty(), translate = translations::get))
+                val result = BonusHandlers.apply(bonus, BonusContext(sourceOf(item)!!, guid, rating, choice = item.text("extra")?.trim().orEmpty(), friendlyName = item.text("name")?.trim().orEmpty(), translate = translations::get, addQuality = { _, _ -> UUID.randomUUID().toString() }, objects = FakeObjects))
                 itemsChecked++
                 result.unhandled.forEach { unhandled.merge(it.lowercase(), 1, Int::plus) }
                 val want = (stored[guid] ?: emptyList()).map(::key).groupingBy { it }.eachCount()
@@ -114,6 +125,6 @@ class BonusHandlerFixtureTest {
     }
 
     companion object {
-        const val KNOWN_NOT_MATCHING = 147
+        const val KNOWN_NOT_MATCHING = 120
     }
 }
