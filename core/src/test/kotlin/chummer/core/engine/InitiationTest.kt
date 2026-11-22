@@ -103,6 +103,23 @@ class InitiationTest {
     }
 
     @Test
+    fun anEchoWithALimitCanBeTakenThatManyTimes() {
+        val c = career("Technomancer")
+        val adv = CareerAdvancement(c, data, settings)
+        adv.log.manualKarma(200, "Reward")
+        val ed = adv.initiation()
+        val attack = { ed.options().firstOrNull { it.name == "Attack Upgrade" } }
+        adv.initiate()
+        assertNotNull(adv.addMetamagic(attack()!!.id))
+        adv.initiate()
+        // Still on offer for the second take, and then no more (the data's limit is 2).
+        assertNotNull(attack())
+        assertNotNull(adv.addMetamagic(attack()!!.id))
+        assertNull(attack())
+        assertEquals(2, ed.metamagics().count { it.name == "Attack Upgrade" })
+    }
+
+    @Test
     fun aTechnomancerSubmergesAndTakesEchoes() {
         val c = career("Technomancer")
         val adv = CareerAdvancement(c, data, settings)

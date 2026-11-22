@@ -920,6 +920,7 @@ private fun Resonance(s: Sheet, vm: AppViewModel) {
     var adding by remember { mutableStateOf(false) }
     var choosing by remember { mutableStateOf<String?>(null) }
     var addingSprite by remember { mutableStateOf(false) }
+    var editingSprite by remember { mutableStateOf<String?>(null) }
     var initiating by remember { mutableStateOf(false) }
     var pickingMeta by remember { mutableStateOf(false) }
     var pickingArt by remember { mutableStateOf(false) }
@@ -949,7 +950,7 @@ private fun Resonance(s: Sheet, vm: AppViewModel) {
             }
             if (section.sprites.isEmpty()) item { Text("No sprites.", style = MaterialTheme.typography.bodySmall) }
             items(section.sprites, key = { it.guid }) { sp ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clickable { editingSprite = sp.guid }.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(sp.name + if (sp.critterName.isNotBlank()) " \"${sp.critterName}\"" else "", fontWeight = FontWeight.Bold)
                         Small("level ${sp.force}  ·  ${sp.services} tasks  ·  ${if (sp.bound) "registered" else "not registered"}")
@@ -977,6 +978,7 @@ private fun Resonance(s: Sheet, vm: AppViewModel) {
         if (pickingArt) ArtPicker(vm) { pickingArt = false }
         more?.let { GradeItemPicker(it, sec, vm) { more = null } }
     }
+    section.sprites.firstOrNull { it.guid == editingSprite }?.let { SpriteSheet(it, section.spriteMax, career, vm) { editingSprite = null } }
     if (addingSprite) {
         val options = remember { vm.spriteOptions().map { PickItem(it.id, it.name, "level ${section.spriteMax}  ·  ${it.source}") } }
         PickerSheet("Add a sprite", options, { vm.addSprite(it, "") }) { addingSprite = false }
@@ -985,5 +987,29 @@ private fun Resonance(s: Sheet, vm: AppViewModel) {
         // Forms named "[Matrix Attribute]" are learned for one of the four attributes.
         val attrs = listOf("Attack", "Sleaze", "Data Processing", "Firewall").map { PickItem(it, it, "") }
         PickerSheet("Which Matrix attribute?", attrs, { vm.addComplexForm(id, it) }) { choosing = null }
+    }
+}
+
+/** A sprite's name, level, tasks owed and registration. */
+@Composable
+private fun SpriteSheet(sp: chummer.core.engine.SpriteLine, maxLevel: Int, career: Boolean, vm: AppViewModel, onDismiss: () -> Unit) {
+    var name by remember { mutableStateOf(sp.critterName) }
+    var level by remember { mutableStateOf(sp.force) }
+    var tasks by remember { mutableStateOf(sp.services) }
+    var registered by remember { mutableStateOf(if (sp.bound) "Yes" else "No") }
+    TerminalSheet(sp.name, onDismiss) { close ->
+        TerminalField(name, { name = it }, "name")
+        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Level $level of $maxLevel", Modifier.weight(1f))
+            StepButton("-", 44) { if (level > 1) level-- }
+            StepButton("+", 44) { if (level < maxLevel) level++ }
+        }
+        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Tasks owed $tasks", Modifier.weight(1f))
+            StepButton("-", 44) { if (tasks > 0) tasks-- }
+            StepButton("+", 44) { tasks++ }
+        }
+        if (career) ChoiceChips("Registered", listOf("Yes" to "Yes", "No" to "No"), registered, { registered = it })
+        TerminalButton("Save", { vm.updateSprite(sp.guid, name.trim(), level, tasks, registered == "Yes"); close() }, Modifier.fillMaxWidth().padding(vertical = 12.dp), filled = true)
     }
 }

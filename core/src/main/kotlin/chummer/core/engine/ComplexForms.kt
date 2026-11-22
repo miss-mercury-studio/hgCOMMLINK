@@ -119,6 +119,26 @@ class SpriteEditor(private val file: CharacterFile, private val data: GameData, 
         return guid
     }
 
+    /**
+     * Change a sprite: its name, level (1 up to the highest allowed), tasks owed, and whether it is registered. In creation every sprite stays
+     * registered. Registering one more than the limit allows is refused. False when nothing was changed.
+     */
+    fun update(guid: String, critterName: String? = null, force: Int? = null, services: Int? = null, bound: Boolean? = null): Boolean {
+        val s = root.child("spirits")?.children("spirit")?.firstOrNull { it.text("guid")?.trim().equals(guid, true) && it.text("type")?.trim() == "Sprite" } ?: return false
+        if (force != null && (force < 1 || force > maxLevel())) return false
+        if (services != null && services < 0) return false
+        val wasBound = s.text("bound")?.trim().equals("True", true)
+        if (bound != null && bound != wasBound) {
+            if (!created && !bound) return false
+            if (bound && registered() >= registeredLimit()) return false
+        }
+        critterName?.let { s.child("crittername")?.textContent = it }
+        force?.let { s.child("force")?.textContent = it.toString() }
+        services?.let { s.child("services")?.textContent = it.toString() }
+        bound?.let { s.child("bound")?.textContent = if (it) "True" else "False" }
+        return true
+    }
+
     fun remove(guid: String): Boolean {
         val s = root.child("spirits")?.children("spirit")?.firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: return false
         s.parentNode.removeChild(s)

@@ -6,6 +6,7 @@ import chummer.core.children
 import chummer.core.data.CharacterSettings
 import chummer.core.text
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -104,6 +105,21 @@ class ComplexFormTest {
         assertTrue(sprites.remove(guid))
         assertEquals(made - 1, sprites.sprites().size)
         assertEquals(made - 1, Sheet.build(c, data, settings).complexForms!!.sprites.size)
+    }
+
+    @Test
+    fun aSpriteCanBeRenamedAndItsLevelAndTasksChanged() {
+        val c = technomancer()
+        val sprites = SpriteEditor(c, data, settings)
+        val machine = sprites.options().first { it.name == "Machine Sprite" }.id
+        val guid = sprites.add(machine, "", force = 2)!!
+        assertTrue(sprites.update(guid, critterName = "Purphoros", force = 3, services = 4))
+        assertEquals(listOf(SpriteLine(guid, "Machine Sprite", "Purphoros", 3, 4, true)), sprites.sprites())
+        // Too strong, negative tasks, and unregistering in creation are refused.
+        assertFalse(sprites.update(guid, force = sprites.maxLevel() + 1))
+        assertFalse(sprites.update(guid, services = -1))
+        assertFalse(sprites.update(guid, bound = false))
+        assertFalse(sprites.update("nope", force = 1))
     }
 }
 

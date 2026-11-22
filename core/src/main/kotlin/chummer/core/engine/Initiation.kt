@@ -102,6 +102,11 @@ class InitiationEditor(private val file: CharacterFile, private val data: GameDa
     private fun sourceFile() = if (technomancer) "echoes.xml" else "metamagic.xml"
     private fun tag() = if (technomancer) "echo" else "metamagic"
 
+    /** How many times a metamagic or echo can be taken: an echo's `limit` (some can be taken twice), otherwise once. */
+    private fun limitOf(entry: Element) = if (technomancer) maxOf(entry.text("limit")?.trim()?.toIntOrNull() ?: 1, 1) else 1
+
+    private fun taken(name: String) = metamagicElements().count { it.text("name")?.trim() == name }
+
     private fun known() = metamagicElements().map { it.text("name")?.trim().orEmpty() }.toSet()
     private fun hasArt(name: String) = root.child("arts")?.children("art").orEmpty().any { it.text("name")?.trim() == name }
     private fun hasQuality(name: String) = root.child("qualities")?.children("quality").orEmpty().any { it.text("name")?.trim() == name }
@@ -133,7 +138,7 @@ class InitiationEditor(private val file: CharacterFile, private val data: GameDa
         return pack.byId.entries.filter { it.value.file == sourceFile() && it.value.element.tagName == tag() }.mapNotNull { (id, e) ->
             val el = e.element
             val name = el.text("name")?.trim().orEmpty()
-            if (name in known()) return@mapNotNull null
+            if (taken(name) >= limitOf(el)) return@mapNotNull null
             if (!technomancer && magician != adept) {
                 // A pure magician sees the magician ones, a pure adept the adept ones.
                 val wanted = if (magician) "magician" else "adept"
@@ -148,7 +153,7 @@ class InitiationEditor(private val file: CharacterFile, private val data: GameDa
         val entry = data[entryId]?.element ?: return null
         if (entry.tagName != tag() || grade < 1 || grade > grade()) return null
         val name = entry.child("name")?.textContent?.trim().orEmpty()
-        if (name in known() || met(entry.child("required")).isNotEmpty()) return null
+        if (taken(name) >= limitOf(entry) || met(entry.child("required")).isNotEmpty()) return null
         val paid = costsKarma(grade)
         val doc = file.doc
         fun el(t: String, text: String? = null) = doc.createElement(t).also { if (!text.isNullOrEmpty()) it.textContent = text }
