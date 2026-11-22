@@ -147,13 +147,11 @@ object NewCharacter {
             w.child("parentid")?.textContent = UUID.randomUUID().toString()
         }
 
-        // What the metatype grants: its own bonus (armor, reach and so on, with the metatype as the source) and free qualities.
-        val improvements = root.child("improvements")!!
-        source.child("bonus")?.let { bonus ->
-            BonusHandlers.apply(bonus, BonusContext("Metatype", (request.metavariantId ?: request.metatypeId).lowercase(), 1))
-                .improvements.forEach { improvements.appendChild(ImprovementWriter.toElement(doc, it)) }
-        }
+        // What the metatype grants: its own bonus (armor, reach, the magic or critter switches, natural weapons, with the metatype as the source),
+        // the powers it gives and free qualities (those marked removable can be bought off later, as Chummer keeps them apart).
         val editor = CharacterEditor(character, data)
+        editor.grantMetatypeBonus(source.child("bonus"), (request.metavariantId ?: request.metatypeId).lowercase(), metatype.child("name")?.textContent?.trim().orEmpty())
+        for (p in source.child("powers")?.children("power").orEmpty()) editor.addMetatypePower(p.textContent.trim())
         for (group in listOf("positive", "negative")) {
             for (q in source.child("qualities")?.child(group)?.children("quality").orEmpty()) {
                 val wanted = q.textContent.trim()
@@ -161,7 +159,7 @@ object NewCharacter {
                     it.value.file == "qualities.xml" && it.value.element.tagName == "quality" &&
                         it.value.element.child("name")?.textContent?.trim() == wanted
                 } ?: error("Metatype quality $wanted is not in the game data")
-                editor.addQuality(entry.key, qualitySource = "Metatype")
+                editor.addQuality(entry.key, qualitySource = if (q.getAttribute("removable").equals("True", true)) "MetatypeRemovable" else "Metatype")
             }
         }
 

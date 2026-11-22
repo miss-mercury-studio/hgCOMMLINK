@@ -160,6 +160,22 @@ class GameDataStore(private val context: Context) {
     data class MetatypeOption(val id: String, val name: String, val variants: List<Pair<String, String>>)
     data class NewCharacterOptions(val profiles: List<CharacterSettings>, val metatypes: List<MetatypeOption>)
 
+    /** The base metatypes a settings profile offers: its custom data may hide some (a `<hide />` marker), so the list follows the chosen profile. */
+    fun metatypesFor(profile: CharacterSettings): List<MetatypeOption> {
+        val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(profile.customData)
+        return packFor(resolved.dirs).byId.values
+            .filter { it.file == "metatypes.xml" && it.element.tagName == "metatype" && it.element.child("hide") == null }
+            .map { e ->
+                MetatypeOption(
+                    e.element.child("id")?.textContent?.trim().orEmpty(), e.element.child("name")?.textContent?.trim().orEmpty(),
+                    e.element.child("metavariants")?.children("metavariant").orEmpty().filter { it.child("hide") == null }.map { v ->
+                        (v.child("id")?.textContent?.trim().orEmpty()) to (v.child("name")?.textContent?.trim().orEmpty())
+                    },
+                )
+            }
+            .sortedBy { it.name.lowercase() }
+    }
+
     /** Karma-build profiles and the base metatypes to offer when starting a character. Loads the game data. */
     fun newCharacterOptions(): NewCharacterOptions {
         val profiles = CharacterSettings.available(File(dataDir(), "settings.xml"), listOf(userSettingsDir)).filter { it.buildMethod in setOf("Karma", "Priority", "SumtoTen") }

@@ -21,7 +21,7 @@ data class CritterPowerLine(val guid: String, val name: String, val extra: Strin
 /**
  * Critter powers (shapeshifters, free spirits, infected, drakes...), in the layout Chummer saves them, with the improvements of their bonus
  * kept under the `CritterPower` source and the power's GUID. Each costs its `karma` (Chummer's ledger sums them; in career the price is paid
- * when the power is bought). Powers the metatype gives (grade other than 0) are free and cannot be removed here.
+ * when the power is bought). Powers the metatype gives are free, do not count towards the limit and cannot be removed here.
  */
 class CritterPowerEditor(private val file: CharacterFile, private val data: GameData) {
     private val root get() = file.root
@@ -53,7 +53,7 @@ class CritterPowerEditor(private val file: CharacterFile, private val data: Game
     }
 
     /** Add a power; its karma price is for the caller to pay. Null for an unknown or already known power, or a rating out of range. */
-    fun add(entryId: String, rating: Int = 0, extra: String = ""): String? {
+    fun add(entryId: String, rating: Int = 0, extra: String = "", given: Boolean = false): String? {
         val entry = data[entryId]?.element ?: return null
         if (entry.tagName != "power") return null
         fun d(tag: String) = entry.child(tag)?.textContent?.trim().orEmpty()
@@ -71,7 +71,7 @@ class CritterPowerEditor(private val file: CharacterFile, private val data: Game
         for ((tag, v) in listOf(
             "guid" to guid, "name" to name, "extra" to shownExtra, "rating" to rating.toString(), "category" to d("category"), "type" to d("type"), "action" to d("action"),
             "range" to d("range"), "duration" to d("duration"), "grade" to "0", "source" to d("source"), "page" to d("page"), "karma" to (d("karma").toIntOrNull() ?: 0).toString(),
-            "points" to "0", "counttowardslimit" to "True",
+            "points" to "0", "counttowardslimit" to if (given) "False" else "True",
         )) p.appendChild(el(tag, v))
         p.appendChild(el("bonus")); p.appendChild(el("notes"))
         (root.child("critterpowers") ?: el("critterpowers").also { root.appendChild(it) }).appendChild(p)
@@ -86,7 +86,8 @@ class CritterPowerEditor(private val file: CharacterFile, private val data: Game
     /** Take a power out with its improvements. Powers the metatype gave (grade other than 0) stay. */
     fun remove(guid: String): Boolean {
         val p = rows().firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: return false
-        if ((p.text("grade")?.trim()?.toIntOrNull() ?: 0) != 0) return false
+        // A power the metatype gave does not count towards the limit, and stays.
+        if (p.text("counttowardslimit")?.trim().equals("False", true)) return false
         root.child("improvements")?.children("improvement")?.filter { it.text("sourcename")?.trim().equals(guid, true) }?.forEach { it.parentNode.removeChild(it) }
         p.parentNode.removeChild(p)
         return true

@@ -40,6 +40,8 @@ interface BonusObjects {
     /** An adept power added with no levels of its own (free levels follow); null when the character is not an adept or the power is unknown. */
     fun addPower(name: String): PowerRef?
     fun addContact(loyalty: Int, connection: Int, group: Boolean, readOnly: Boolean): String?
+    /** A melee weapon the bonus gives (a bite, claws): the `naturalweapon` node and the source it comes from; the new weapon's GUID. */
+    fun addNaturalWeapon(node: Element, sourceName: String): String? = null
 }
 
 /** The improvements a `<bonus>` node produces, and the child nodes no handler exists for yet. */
@@ -231,6 +233,11 @@ object BonusHandlers {
         // A change to drain, for all spells or (with a `specific` attribute) one kind.
         put("drainvalue") { node, ctx, unique, out ->
             value(node.textContent.trim(), ctx.rating)?.let { out += improvement(ctx, "DrainValue", unique, it, node.getAttribute("specific")) }
+        }
+        // A natural weapon (bite, claws): a melee weapon in the Critter Powers category, tied to the bonus's source by a Weapon improvement.
+        put("naturalweapon") { node, ctx, unique, out ->
+            val guid = ctx.objects?.addNaturalWeapon(node, ctx.friendlyName.ifEmpty { ctx.sourceName }) ?: return@put
+            out += improvement(ctx, "Weapon", unique, 0.0, guid, rating = 0.0)
         }
         put("specificskill") { node, ctx, unique, out ->
             val addToRating = node.t("applytorating").equals("True", true)

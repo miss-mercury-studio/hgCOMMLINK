@@ -366,6 +366,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun removeKnowledge(guid: String) = edit("Removed skill") { it.removeKnowledgeSkill(guid) }
 
     /** The profiles and metatypes the new character dialog offers. Slow the first time (loads the game data). */
+    suspend fun metatypesFor(profile: chummer.core.data.CharacterSettings): List<GameDataStore.MetatypeOption> = io { gameData.metatypesFor(profile) }
+
     suspend fun newCharacterOptions(): GameDataStore.NewCharacterOptions = io {
         repo.syncSideFiles(gameData.userSettingsDir, gameData.userCustomDir)
         gameData.newCharacterOptions()

@@ -136,7 +136,7 @@ data class Sheet(
             val s = c.summary()
             val shown = ORDER.mapNotNull { n ->
                 val a = attrs[n] ?: return@mapNotNull null
-                if ((n == "MAG" && !magic) || (n == "RES" && !resonance) || n == "DEP") return@mapNotNull null
+                if ((n == "MAG" && !magic) || (n == "RES" && !resonance) || (n == "DEP" && !flag(c, "depenabled"))) return@mapNotNull null
                 AttributeLine(n, a.totalValue, a.totalMaximum)
             }
             val res = d.resistances()

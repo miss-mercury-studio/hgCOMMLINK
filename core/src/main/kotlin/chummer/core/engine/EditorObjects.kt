@@ -62,6 +62,25 @@ class EditorObjects(private val file: CharacterFile, private val data: GameData)
         return PowerRef(name, "")
     }
 
+    override fun addNaturalWeapon(node: Element, sourceName: String): String? {
+        fun t(tag: String, default: String) = node.child(tag)?.textContent?.trim()?.ifEmpty { null } ?: default
+        val guid = UUID.randomUUID().toString()
+        val w = el("weapon")
+        for ((tag, v) in listOf(
+            "sourceid" to "00000000-0000-0000-0000-000000000000", "guid" to guid, "name" to t("name", sourceName), "category" to "Critter Powers", "type" to "Melee",
+            "spec" to "", "spec2" to "", "reach" to t("reach", "0"), "damage" to t("damage", "({STR})S").replace("{", "").replace("}", ""), "ap" to t("ap", "0"), "mode" to "0", "rc" to "0",
+            "ammo" to "", "cyberware" to "False", "ammocategory" to "", "ammoname" to "", "sizecategory" to "", "firingmode" to "Skill", "clips" to "", "conceal" to "0",
+            "avail" to "0", "cost" to "0", "useskill" to t("useskill", ""), "range" to "", "alternaterange" to "", "rangemultiply" to "1", "fullburst" to "10", "suppressive" to "20",
+            "source" to t("source", "SR5"), "page" to t("page", "0"), "parentid" to sourceName, "allowaccessory" to "True", "weaponname" to "", "included" to "False",
+            "equipped" to "True", "requireammo" to "True", "accuracy" to t("accuracy", "Physical"), "mount" to "", "extramount" to "", "location" to "", "notes" to "",
+            "discountedcost" to "False", "active" to "False", "homenode" to "False", "devicerating" to "", "programlimit" to "", "overclocked" to "None", "attack" to "",
+            "sleaze" to "", "dataprocessing" to "", "firewall" to "", "attributearray" to "", "modattack" to "", "modsleaze" to "", "moddataprocessing" to "", "modfirewall" to "",
+            "modattributearray" to "", "canswapattributes" to "False", "matrixcmfilled" to "0",
+        )) w.appendChild(el(tag, v))
+        (root.child("weapons") ?: el("weapons").also { root.appendChild(it) }).appendChild(w)
+        return guid
+    }
+
     override fun addContact(loyalty: Int, connection: Int, group: Boolean, readOnly: Boolean): String? {
         val guid = UUID.randomUUID().toString()
         val c = el("contact")

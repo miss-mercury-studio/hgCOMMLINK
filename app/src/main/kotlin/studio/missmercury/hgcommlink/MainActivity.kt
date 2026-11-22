@@ -301,12 +301,13 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
             )
             else -> {
                 val chosenProfile = profile ?: 0
-                val chosenMetatype = metatype ?: options.metatypes.firstOrNull { it.name == "Human" }?.id
+                val metatypes by produceState(options.metatypes, chosenProfile) { value = try { vm.metatypesFor(options.profiles[chosenProfile]) } catch (e: Throwable) { options.metatypes } }
+                val chosenMetatype = (metatype?.takeIf { id -> metatypes.any { it.id == id } }) ?: metatypes.firstOrNull { it.name == "Human" }?.id
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     TerminalField(name, { name = it }, "name")
                     TerminalField(alias, { alias = it }, "street name")
-                    ChoiceChips("Metatype", options.metatypes.map { it.id to it.name }, chosenMetatype, { metatype = it; variant = null })
-                    val variants = options.metatypes.firstOrNull { it.id == chosenMetatype }?.variants.orEmpty()
+                    ChoiceChips("Metatype", metatypes.map { it.id to it.name }, chosenMetatype, { metatype = it; variant = null })
+                    val variants = metatypes.firstOrNull { it.id == chosenMetatype }?.variants.orEmpty()
                     if (variants.isNotEmpty()) {
                         ChoiceChips("Variant", listOf("" to "None") + variants.map { (id, label) -> id to label }, variant ?: "", { variant = it.ifEmpty { null } })
                     }
@@ -353,7 +354,7 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
                         style = MaterialTheme.typography.labelSmall, color = MutedSilver,
                     )
                     if (points) {
-                        val meta = options.metatypes.firstOrNull { it.id == chosenMetatype }
+                        val meta = metatypes.firstOrNull { it.id == chosenMetatype }
                         val variantName = meta?.variants?.firstOrNull { it.first == variant }?.second.orEmpty()
                         val problem = PriorityChoice(heritage, attributes, talentLetter, skillsLetter, resources, "x", method == "SumtoTen").problem()
                             ?: if (!vm.heritageOffered(heritage, meta?.name.orEmpty(), variantName)) "${meta?.name.orEmpty()} is not offered at metatype priority $heritage" else null
@@ -368,7 +369,7 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
                     TerminalButton("Cancel", close, Modifier.weight(1f))
                     val method = options.profiles[chosenProfile].buildMethod
                     val points = method == "Priority" || method == "SumtoTen"
-                    val meta = options.metatypes.firstOrNull { it.id == chosenMetatype }
+                    val meta = metatypes.firstOrNull { it.id == chosenMetatype }
                     val talentValue = talent ?: vm.priorityTalents(talentLetter).firstOrNull()?.value.orEmpty()
                     val chosenTalent = vm.priorityTalents(talentLetter).firstOrNull { it.value == talentValue }
                     val picks = talentSkills.filter { it.isNotEmpty() }
@@ -376,7 +377,7 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
                     val variantName = meta?.variants?.firstOrNull { it.first == variant }?.second.orEmpty()
                     val ok = choice == null || (choice.problem() == null && talentValue.isNotEmpty() && picks.size == (chosenTalent?.pickCount ?: 0) && vm.heritageOffered(heritage, meta?.name.orEmpty(), variantName))
                     TerminalButton("Create", {
-                        val id = metatype ?: options.metatypes.firstOrNull { it.name == "Human" }?.id ?: options.metatypes.first().id
+                        val id = chosenMetatype ?: metatypes.first().id
                         vm.createCharacter(options.profiles[chosenProfile], name.trim(), alias.trim(), id, variant, choice)
                         close()
                     }, Modifier.weight(1f), filled = true, enabled = ok)

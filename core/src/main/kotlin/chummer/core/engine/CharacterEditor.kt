@@ -351,6 +351,16 @@ class CharacterEditor(
         return guid
     }
 
+    /** What a metatype's own bonus does for a new character: its improvements, and the flags and objects they bring (the magic switch, the critter tab, natural weapons). */
+    fun grantMetatypeBonus(bonus: Element?, sourceName: String, friendly: String = sourceName) =
+        grantBonus(bonus, BonusContext("Metatype", sourceName, 1, "", friendly, translate, objects = EditorObjects(file, data)))
+
+    /** A power the metatype gives (Shapeshifters' Shift, a free spirit's powers): added to the critter powers free of karma. */
+    fun addMetatypePower(name: String): String? {
+        val id = (data as? chummer.core.DataPack)?.byId?.entries?.firstOrNull { it.value.file == "critterpowers.xml" && it.value.element.tagName == "power" && it.value.name == name }?.key ?: return null
+        return CritterPowerEditor(file, data).add(id, given = true)
+    }
+
     private fun grantBonus(bonus: Element?, ctx: BonusContext) {
         if (bonus == null || bonus.children().isEmpty()) return
         val result = BonusHandlers.apply(bonus, ctx)

@@ -828,7 +828,7 @@ private fun KarmaSection(l: chummer.core.engine.KarmaLedger, review: chummer.cor
 }
 
 /** The attributes that can be bought with karma in creation. */
-private val BUYABLE = setOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL", "EDG", "MAG")
+private val BUYABLE = setOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL", "EDG", "MAG", "RES", "DEP")
 
 /** Tradition and spells of a character with magic. */
 @Composable
