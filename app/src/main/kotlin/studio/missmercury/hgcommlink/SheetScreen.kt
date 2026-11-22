@@ -699,6 +699,7 @@ private fun Life(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     val creating = s.creationBuy != null
     var addingArt by remember { mutableStateOf(false) }
     var addingCritter by remember { mutableStateOf(false) }
+    var addingProgram by remember { mutableStateOf(false) }
     var ratingFor by remember { mutableStateOf<chummer.core.engine.CritterPowerOption?>(null) }
     var addingTechnique by remember { mutableStateOf<chummer.core.engine.SheetSections.MartialArtLine?>(null) }
     Column(Modifier.fillMaxSize()) {
@@ -713,6 +714,21 @@ private fun Life(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         if (g.lifestyles.isNotEmpty()) item { SubHeader("Lifestyle") }
         items(g.lifestyles) { l ->
             Column { Row2(l.name, "${l.type}  ¥${l.monthly}/mo"); Small(l.notes) }
+        }
+        s.aiPrograms?.let { progs ->
+            item { SubHeader("Programs") }
+            if (progs.isEmpty()) item { Text("No programs.", style = MaterialTheme.typography.bodySmall) }
+            items(progs.size) { i ->
+                val p = progs[i]
+                Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(p.name + if (p.extra.isNotBlank()) " (${p.extra})" else "", fontWeight = FontWeight.Bold)
+                        Small(if (p.advanced) "advanced program" else "program")
+                    }
+                    StepButton("×", 36) { vm.removeAiProgram(p.guid) }
+                }
+            }
+            item { TerminalButton("+ Program", { addingProgram = true }, Modifier.fillMaxWidth().padding(vertical = 6.dp)) }
         }
         s.critterPowers?.let { cp ->
             item { SubHeader("Critter powers") }
@@ -745,6 +761,16 @@ private fun Life(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         }
     }
     if (canBuy) PinnedAction("+ Martial art") { addingArt = true }
+    }
+    if (addingProgram) {
+        val options = remember { vm.aiProgramOptions() }
+        PickerSheet(
+            "Add a program",
+            options.map { PickItem(it.id, it.name, listOf(if (it.advanced) "advanced" else it.category, it.needs.takeIf { n -> n.isNotBlank() }).filterNotNull().joinToString("  ·  "), if (it.advanced) "Advanced Programs" else "Programs", warn = it.needs.isNotBlank()) },
+            { id -> if (options.firstOrNull { it.id == id }?.needs.isNullOrBlank()) vm.addAiProgram(id) },
+            note = "A program costs ${vm.aiProgramCost(false)} karma, an advanced one ${vm.aiProgramCost(true)}.",
+            keepOpenFor = { id -> options.firstOrNull { it.id == id }?.needs?.isNotBlank() == true },
+        ) { addingProgram = false }
     }
     if (addingCritter) {
         val options = remember { vm.critterPowerOptions() }

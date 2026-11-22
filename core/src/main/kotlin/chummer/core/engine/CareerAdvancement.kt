@@ -331,6 +331,24 @@ class CareerAdvancement(
         return guid
     }
 
+    // ---- A.I. programs
+
+    fun aiPrograms() = AiProgramEditor(file, data)
+
+    /** What a program costs now: the settings' price (and cost improvements) for a normal or an advanced one. */
+    fun aiProgramCost(advanced: Boolean) = aiProgramPrice(k(if (advanced) "karmanewaiadvancedprogram" else "karmanewaiprogram", if (advanced) 8 else 5), improvements, advanced)
+
+    /** Learn a program for karma (Chummer's career dialog). Null when it is known, its requirement is missing, or the karma falls short. */
+    fun addAiProgram(entryId: String, extra: String = "", now: LocalDateTime = LocalDateTime.now()): String? {
+        val entry = data[entryId]?.element ?: return null
+        val advanced = entry.child("category")?.textContent?.trim() == "Advanced Programs"
+        val cost = aiProgramCost(advanced)
+        if (cost > log.karma) return null
+        val guid = aiPrograms().add(entryId, extra) ?: return null
+        log.add("Karma", -cost.toDouble(), "Learned Program " + entry.child("name")?.textContent?.trim().orEmpty(), "AddAIProgram", objectId = guid, now = now)
+        return guid
+    }
+
     // ---- complex forms
 
     /** The karma price of learning a complex form (Chummer's `ComplexFormKarmaCost`). */

@@ -44,8 +44,9 @@ data class KarmaLedger(
     val foci: Int = 0,
     val initiation: Int = 0,
     val critterPowers: Int = 0,
+    val aiPrograms: Int = 0,
 ) {
-    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen + martialArts + complexForms + foci + initiation + critterPowers
+    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen + martialArts + complexForms + foci + initiation + critterPowers + aiPrograms
     val remaining get() = budget - spent
     val knowledgePointsLeft get() = knowledgePoints - knowledgePointsUsed
 
@@ -286,7 +287,7 @@ data class KarmaLedger(
             }
 
             for ((tag, label) in listOf(
-                "stackedfoci" to "stacked foci", "aiprograms" to "programs",
+                "stackedfoci" to "stacked foci", 
                 
                 "mentorspirits" to "mentor spirits",
             )) if (c.root.child(tag)?.children().orEmpty().isNotEmpty()) notCounted += label
@@ -321,12 +322,13 @@ data class KarmaLedger(
                     maxOf(metamagicRows.count { it.text("grade")?.trim()?.toIntOrNull() == n } - 1, 0) * k("karmametamagic", 15)
             }
             val critterPowers = c.root.child("critterpowers")?.children("critterpower").orEmpty().sumOf { it.text("karma")?.trim()?.toIntOrNull() ?: 0 }
+            val aiPrograms = AiProgramEditor.creationKarma(c, aiProgramPrice(k("karmanewaiprogram", 5), set, false), aiProgramPrice(k("karmanewaiadvancedprogram", 8), set, true))
             val nuyenKarma = (c.root.text("nuyenbp")?.trim()?.toDoubleOrNull()?.toInt() ?: 0)
                 .coerceIn(0, if (settings.bool("unrestrictednuyen")) Int.MAX_VALUE else settings.int("nuyenmaxbp", 10))
 
             return KarmaLedger(
                 budget, metatype, attributes, skills, qualities, contacts, notCounted, positive, negative,
-                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma, martialArts, complexForms, foci, initiation, critterPowers,
+                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma, martialArts, complexForms, foci, initiation, critterPowers, aiPrograms,
             )
         }
     }

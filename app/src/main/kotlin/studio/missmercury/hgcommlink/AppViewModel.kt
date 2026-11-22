@@ -346,6 +346,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun critterPowerOptions() = open?.let { gameData.career(it.character).critterPowers().options() }.orEmpty()
     fun addCritterPower(id: String, rating: Int) = if (open?.sheet?.isCareer == true) editCareer("Critter power bought", "Cannot add that (karma, rating, or already known)") { adv, _ -> adv.addCritterPower(id, rating) != null } else editCareer("Critter power added", "Cannot add that (rating, or already known)") { adv, _ -> adv.critterPowers().add(id, rating) != null }
     fun removeCritterPower(guid: String) = editCareer("Critter power removed", "Nothing changed") { adv, _ -> adv.critterPowers().remove(guid) }
+    fun aiProgramOptions() = open?.let { gameData.career(it.character).aiPrograms().options() }.orEmpty()
+    fun aiProgramCost(advanced: Boolean) = open?.let { gameData.career(it.character).aiProgramCost(advanced) } ?: 0
+    fun addAiProgram(id: String) = editCareer("Program added", "Cannot add that (karma, or it needs another program)") { adv, _ -> if (open?.sheet?.isCareer == true) adv.addAiProgram(id) != null else adv.aiPrograms().add(id) != null }
+    fun removeAiProgram(guid: String) = editCareer("Program removed", "Nothing changed") { adv, _ -> adv.aiPrograms().remove(guid) }
     fun spriteOptions() = open?.let { gameData.career(it.character).sprites().options() }.orEmpty()
     fun addSprite(entryId: String, name: String) = editCareer("Sprite added", "Cannot add that sprite (limit, or level)") { adv, _ -> adv.sprites().add(entryId, name) != null }
     fun removeSprite(guid: String) = editCareer("Sprite removed", "Nothing changed") { adv, _ -> adv.sprites().remove(guid) }
