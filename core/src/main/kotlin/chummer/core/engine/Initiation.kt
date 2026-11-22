@@ -21,6 +21,8 @@ data class InitiationSection(
     val technomancer: Boolean, val grade: Int, val maxGrade: Int, val nextCost: Int, val metamagics: List<MetamagicLine>,
     /** The price of a metamagic beyond the first one of its grade. */
     val extraMetamagicCost: Int,
+    /** Arts taken (free). */
+    val arts: List<MetamagicLine> = emptyList(),
 )
 
 /**
@@ -74,6 +76,7 @@ class InitiationEditor(private val file: CharacterFile, private val data: GameDa
         val isRes = g.text("res")?.trim().equals("True", true)
         if (grades().any { (it.text("grade")?.trim()?.toIntOrNull() ?: 0) > n && (it.text("res")?.trim().equals("True", true)) == isRes }) return false
         for (m in metamagicElements().filter { it.text("grade")?.trim()?.toIntOrNull() == n }) removeMetamagic(m.text("guid").orEmpty())
+        for (a in artElements().filter { it.text("grade")?.trim()?.toIntOrNull() == n }) removeArt(a.text("guid").orEmpty())
         g.parentNode.removeChild(g)
         root.child(if (isRes) "submersiongrade" else "initiategrade")?.textContent = (n - 1).toString()
         return true
@@ -185,5 +188,52 @@ class InitiationEditor(private val file: CharacterFile, private val data: GameDa
         }
     }
 
-    fun section() = InitiationSection(technomancer, grade(), maxGrade(), nextCost(), metamagics(), extraMetamagicCost())
+    // ---- arts (Street Grimoire): free, any number, each with the grade it was taken at
+
+    private fun artElements() = root.child("arts")?.children("art").orEmpty()
+
+    fun arts(): List<MetamagicLine> = artElements().map {
+        MetamagicLine(it.text("guid").orEmpty().trim(), it.text("name").orEmpty().trim(), it.text("grade")?.trim()?.toIntOrNull() ?: 0, false)
+    }
+
+    /** The arts on offer (the ones the character has are left out), with what each still needs. */
+    fun artOptions(): List<MetamagicOption> {
+        val pack = data as? DataPack ?: return emptyList()
+        val have = artElements().map { it.text("name")?.trim().orEmpty() }.toSet()
+        return pack.byId.entries.filter { it.value.file == "metamagic.xml" && it.value.element.tagName == "art" }.mapNotNull { (id, e) ->
+            val name = e.element.text("name")?.trim().orEmpty()
+            if (name in have) null else MetamagicOption(id, name, e.element.text("source")?.trim().orEmpty(), e.element.text("page")?.trim().orEmpty(), met(e.element.child("required")))
+        }.sortedBy { it.name.lowercase() }
+    }
+
+    /** Add an art for [grade] (the latest by default). Arts cost nothing (Chummer's karma branch for them is commented out). */
+    fun addArt(entryId: String, grade: Int = grade()): String? {
+        val entry = data[entryId]?.element ?: return null
+        if (entry.tagName != "art" || grade < 1 || grade > grade()) return null
+        val name = entry.child("name")?.textContent?.trim().orEmpty()
+        if (artElements().any { it.text("name")?.trim() == name } || met(entry.child("required")).isNotEmpty()) return null
+        val doc = file.doc
+        fun el(t: String, text: String? = null) = doc.createElement(t).also { if (!text.isNullOrEmpty()) it.textContent = text }
+        val guid = UUID.randomUUID().toString()
+        val a = el("art")
+        for ((t, v) in listOf("guid" to guid, "name" to name, "source" to entry.child("source")?.textContent?.trim().orEmpty(), "page" to entry.child("page")?.textContent?.trim().orEmpty(), "grade" to grade.toString()))
+            a.appendChild(el(t, v))
+        a.appendChild(el("bonus")); a.appendChild(el("improvementsource", "Metamagic")); a.appendChild(el("notes"))
+        (root.child("arts") ?: el("arts").also { root.appendChild(it) }).appendChild(a)
+        entry.child("bonus")?.takeIf { it.children().isNotEmpty() }?.let { bonus ->
+            val result = BonusHandlers.apply(bonus, BonusContext("Metamagic", guid, 1, "", name, objects = EditorObjects(file, data)))
+            val imps = root.child("improvements") ?: el("improvements").also { root.appendChild(it) }
+            for (imp in result.improvements) imps.appendChild(ImprovementWriter.toElement(doc, imp))
+        }
+        return guid
+    }
+
+    fun removeArt(guid: String): Boolean {
+        val a = artElements().firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: return false
+        root.child("improvements")?.children("improvement")?.filter { it.text("sourcename")?.trim().equals(guid, true) }?.forEach { it.parentNode.removeChild(it) }
+        a.parentNode.removeChild(a)
+        return true
+    }
+
+    fun section() = InitiationSection(technomancer, grade(), maxGrade(), nextCost(), metamagics(), extraMetamagicCost(), arts())
 }

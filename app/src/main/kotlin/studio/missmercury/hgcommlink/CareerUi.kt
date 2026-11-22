@@ -418,7 +418,7 @@ fun ArmorGearDialog(armorGuid: String, room: Double, vm: AppViewModel, nuyen: St
 }
 
 /** Initiation (or submersion) as list items: the grade, what the next one costs, and the metamagics (echoes) taken. */
-fun androidx.compose.foundation.lazy.LazyListScope.initiationItems(section: chummer.core.engine.InitiationSection, vm: AppViewModel, onInitiate: () -> Unit, onMetamagic: () -> Unit) {
+fun androidx.compose.foundation.lazy.LazyListScope.initiationItems(section: chummer.core.engine.InitiationSection, vm: AppViewModel, onInitiate: () -> Unit, onMetamagic: () -> Unit, onArt: () -> Unit = {}) {
     val word = if (section.technomancer) "Submersion" else "Initiation"
     val thing = if (section.technomancer) "echo" else "metamagic"
     item {
@@ -438,10 +438,24 @@ fun androidx.compose.foundation.lazy.LazyListScope.initiationItems(section: chum
             Text("grade ${m.grade}" + if (m.paid) "  ·  paid with karma" else "", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
         }
     }
+    if (section.arts.isNotEmpty()) {
+        item { Text("Arts", style = MaterialTheme.typography.labelMedium, color = MutedSilver, modifier = Modifier.padding(top = 6.dp)) }
+        items(section.arts.size) { i ->
+            val a = section.arts[i]
+            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(a.name, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Text("grade ${a.grade}", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+                }
+                StepButton("×", 36) { vm.removeArt(a.guid) }
+            }
+        }
+    }
     item {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TerminalButton(if (section.grade >= section.maxGrade) "Grade limit" else "+ Grade", { if (section.grade < section.maxGrade) onInitiate() }, Modifier.weight(1f), enabled = section.grade < section.maxGrade)
             TerminalButton("+ ${thing.replaceFirstChar { it.uppercase() }}", onMetamagic, Modifier.weight(1f), enabled = section.grade > 0)
+            if (!section.technomancer) TerminalButton("+ Art", onArt, Modifier.weight(1f), enabled = section.grade > 0)
         }
     }
 }
@@ -477,4 +491,12 @@ fun MetamagicPicker(section: chummer.core.engine.InitiationSection, vm: AppViewM
         note = if (free) "The first one of grade ${section.grade} is part of the grade." else "A second one of grade ${section.grade} costs ${section.extraMetamagicCost} karma.",
         onDismiss = onDismiss,
     )
+}
+
+/** The arts on offer (free); ones whose requirements are not met show what they need. */
+@Composable
+fun ArtPicker(vm: AppViewModel, onDismiss: () -> Unit) {
+    val options = remember { vm.artOptions() }
+    val items = options.map { PickItem(it.id, it.name, listOf(it.source, it.unmet).filter { x -> x.isNotBlank() }.joinToString("  ·  "), warn = it.unmet.isNotEmpty()) }
+    PickerSheet("Add an art", items, { id -> if (options.firstOrNull { it.id == id }?.unmet.isNullOrEmpty()) vm.addArt(id) }, keepOpenFor = { id -> options.firstOrNull { it.id == id }?.unmet?.isNotEmpty() == true }, note = "Arts cost nothing.", onDismiss = onDismiss)
 }

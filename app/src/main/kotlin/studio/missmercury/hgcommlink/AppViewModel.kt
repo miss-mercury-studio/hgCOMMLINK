@@ -313,6 +313,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun initiate(group: Boolean, ordeal: Boolean, schooling: Boolean) = editCareer("Grade taken", "Cannot take the next grade (limit, karma, or nuyen)") { adv, _ -> adv.initiate(group, ordeal, schooling) != null }
     fun metamagicOptions() = open?.let { gameData.career(it.character).initiation().options() }.orEmpty()
     fun addMetamagic(id: String) = editCareer("Added", "Cannot add that (karma, or its requirements)") { adv, _ -> adv.addMetamagic(id) != null }
+    fun artOptions() = open?.let { gameData.career(it.character).initiation().artOptions() }.orEmpty()
+    fun addArt(id: String) = editCareer("Art added", "Cannot add that art") { adv, _ -> adv.initiation().addArt(id) != null }
+    fun removeArt(guid: String) = editCareer("Art removed", "Nothing changed") { adv, _ -> adv.initiation().removeArt(guid) }
     fun spriteOptions() = open?.let { gameData.career(it.character).sprites().options() }.orEmpty()
     fun addSprite(entryId: String, name: String) = editCareer("Sprite added", "Cannot add that sprite (limit, or level)") { adv, _ -> adv.sprites().add(entryId, name) != null }
     fun removeSprite(guid: String) = editCareer("Sprite removed", "Nothing changed") { adv, _ -> adv.sprites().remove(guid) }

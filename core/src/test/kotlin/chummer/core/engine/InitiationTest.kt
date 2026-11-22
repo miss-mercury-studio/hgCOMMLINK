@@ -117,4 +117,27 @@ class InitiationTest {
         assertEquals("Echo", c.root.child("metamagics")!!.children("metamagic").single().text("improvementsource"))
         assertEquals(1, Sheet.build(c, data, settings).initiation!!.grade)
     }
+
+    @Test
+    fun artsAreFreeAndGoWithTheirGrade() {
+        val c = career("Magician")
+        val adv = CareerAdvancement(c, data, settings)
+        adv.log.manualKarma(100, "Reward")
+        val ed = adv.initiation()
+        assertNull(ed.addArt(ed.artOptions().first().id)) // no grade yet
+        adv.initiate()
+        val art = ed.artOptions().first { it.unmet.isEmpty() }
+        val karma = adv.log.karma
+        val guid = ed.addArt(art.id)!!
+        assertEquals(karma, adv.log.karma)
+        val a = c.root.child("arts")!!.children("art").single()
+        assertEquals(listOf("guid", "name", "source", "page", "grade", "bonus", "improvementsource", "notes"), a.children().map { it.tagName })
+        assertEquals(art.name, a.text("name")); assertEquals("1", a.text("grade"))
+        assertNull(ed.addArt(art.id)) // not twice
+        assertTrue(ed.artOptions().none { it.name == art.name })
+        assertEquals(listOf(guid), Sheet.build(c, data, settings).initiation!!.arts.map { it.guid })
+        // The grade takes its arts with it.
+        assertTrue(adv.log.undo(adv.log.entries().last().guid))
+        assertTrue(ed.arts().isEmpty())
+    }
 }
