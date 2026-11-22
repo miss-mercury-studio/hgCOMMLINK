@@ -94,11 +94,12 @@ class GameDataStore(private val context: Context) {
         val profiles = CharacterSettings.available(File(dataDir(), "settings.xml"), listOf(userSettingsDir)).filter { it.buildMethod == "Karma" }
         val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(profiles.firstOrNull()?.customData.orEmpty())
         val metatypes = packFor(resolved.dirs).byId.values
-            .filter { it.file == "metatypes.xml" && it.element.tagName == "metatype" }
+            // A `<hide />` marker (set by custom data such as a campaign's house rules) keeps a metatype out of the creation list.
+            .filter { it.file == "metatypes.xml" && it.element.tagName == "metatype" && it.element.child("hide") == null }
             .map { e ->
                 MetatypeOption(
                     e.element.child("id")?.textContent?.trim().orEmpty(), e.element.child("name")?.textContent?.trim().orEmpty(),
-                    e.element.child("metavariants")?.children("metavariant").orEmpty().map { v ->
+                    e.element.child("metavariants")?.children("metavariant").orEmpty().filter { it.child("hide") == null }.map { v ->
                         (v.child("id")?.textContent?.trim().orEmpty()) to (v.child("name")?.textContent?.trim().orEmpty())
                     },
                 )

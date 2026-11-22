@@ -55,7 +55,8 @@ import chummer.core.engine.SkillResult
 @Composable
 fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
     val sheet = open.sheet
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    // The tab is remembered by name: tabs can appear (Magic) and the numbers would then point at the wrong one.
+    var tabName by rememberSaveable { mutableStateOf("Overview") }
     Column(Modifier.fillMaxSize()) {
         when {
             sheet == null && open.sheetError == null -> Text("Preparing game data. This takes several seconds the first time, and again whenever custom data changes.", Modifier.padding(24.dp))
@@ -71,10 +72,11 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
                     if (sheet.magic != null) add("Magic")
                     add("Gear"); add("Ware"); add("Life"); add("Qualities")
                 }
-                ScrollableTabRow(selectedTabIndex = tab.coerceAtMost(tabs.size - 1), edgePadding = 0.dp) {
-                    tabs.forEachIndexed { i, t -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) }) }
+                val current = if (tabName in tabs) tabName else "Overview"
+                ScrollableTabRow(selectedTabIndex = tabs.indexOf(current), edgePadding = 0.dp) {
+                    tabs.forEach { t -> Tab(selected = t == current, onClick = { tabName = t }, text = { Text(t) }) }
                 }
-                when (tabs.getOrNull(tab)) {
+                when (current) {
                     "Overview" -> Overview(sheet, vm)
                     "Skills" -> Skills(sheet, vm)
                     "Magic" -> Magic(sheet, vm)
