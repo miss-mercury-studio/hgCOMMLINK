@@ -16,6 +16,8 @@ class NewCharacterRequest(
     val alias: String = "",
     /** The id of a metatype in `metatypes.xml` (a base metatype; variants are not supported yet). */
     val metatypeId: String,
+    /** The id of a metavariant of that metatype (for example Dryad), if any. */
+    val metavariantId: String? = null,
     /**
      * Chummer's hash of the settings profile, as found in a character saved with the same profile. Chummer uses
      * it to notice settings that changed since saving; leave null when unknown (the field is then left empty).
@@ -56,18 +58,23 @@ object NewCharacter {
         }
 
         val metatype = data[request.metatypeId]?.element ?: error("No metatype with id ${request.metatypeId}")
-        require(metatype.tagName == "metatype") { "Metatype variants are not supported yet" }
-        fun meta(tag: String) = metatype.child(tag)?.textContent?.trim().orEmpty()
+        require(metatype.tagName == "metatype") { "Pass the base metatype in metatypeId and a variant in metavariantId" }
+        val variant = request.metavariantId?.let { data[it]?.element ?: error("No metavariant with id $it") }
+        // A variant has its own limits, cost, bonus and qualities; the base metatype supplies the name and category.
+        val source = variant ?: metatype
+        fun meta(tag: String) = source.child(tag)?.textContent?.trim().orEmpty()
 
         set("settings", settings.id)
         if (request.settingsHash != null) set("settingshashcode", request.settingsHash.toString())
         else root.child("settingshashcode")?.textContent = ""
         set("name", request.name)
         set("alias", request.alias)
-        set("metatype", meta("name"))
+        set("metatype", metatype.child("name")?.textContent?.trim().orEmpty())
         set("metatypeid", request.metatypeId.lowercase())
+        set("metavariant", variant?.child("name")?.textContent?.trim().orEmpty())
+        set("metavariantid", request.metavariantId?.lowercase() ?: "00000000-0000-0000-0000-000000000000")
         set("metatypebp", meta("karma").ifEmpty { "0" })
-        set("metatypecategory", meta("category"))
+        set("metatypecategory", metatype.child("category")?.textContent?.trim().orEmpty())
         // The walk, run and sprint fields keep the skeleton's defaults: Chummer does not store the metatype's own values there.
 
         root.child("sources")!!.let { e -> settings.books.forEach { e.appendChild(element("source", it)) } }
@@ -103,35 +110,10 @@ object NewCharacter {
             .filter { it.child("category")?.textContent?.trim() !in HIDDEN_SKILL_CATEGORIES }
             .sortedBy { it.child("name")?.textContent?.trim()?.lowercase().orEmpty() }
         val skillList = root.child("newskills")!!.child("skills")!!
-        for (s in skills) {
-            fun flag(tag: String) = if (s.child(tag)?.textContent?.trim().equals("True", true)) "True" else "False"
-            skillList.appendChild(element("skill").also { e ->
-                e.appendChild(element("guid", UUID.randomUUID().toString()))
-                e.appendChild(element("suid", s.child("id")?.textContent?.trim()))
-                e.appendChild(element("isknowledge", "False"))
-                e.appendChild(element("skillcategory", s.child("category")?.textContent?.trim()))
-                e.appendChild(element("requiresgroundmovement", flag("requiresgroundmovement")))
-                e.appendChild(element("requiresswimmovement", flag("requiresswimmovement")))
-                e.appendChild(element("requiresflymovement", flag("requiresflymovement")))
-                e.appendChild(element("karma", "0"))
-                e.appendChild(element("base", "0"))
-                e.appendChild(element("notes"))
-                e.appendChild(element("notesColor", NOTES_COLOR))
-                e.appendChild(element("name", s.child("name")?.textContent?.trim()))
-                e.appendChild(element("buywithkarma", "False"))
-            })
-        }
+        for (sk in skills) skillList.appendChild(SkillElements.skill(doc, sk))
         val groupList = root.child("newskills")!!.child("groups")!!
         skills.mapNotNull { it.child("skillgroup")?.textContent?.trim()?.ifEmpty { null } }.distinct()
-            .sortedBy { it.lowercase() }.forEach { g ->
-                groupList.appendChild(element("group").also { e ->
-                    e.appendChild(element("karma", "0"))
-                    e.appendChild(element("base", "0"))
-                    e.appendChild(element("isbroken", "False"))
-                    e.appendChild(element("id", UUID.randomUUID().toString()))
-                    e.appendChild(element("name", g))
-                })
-            }
+            .sortedBy { it.lowercase() }.forEach { g -> groupList.appendChild(SkillElements.group(doc, g)) }
 
         // Base lift and carry limits come from the settings' expressions with the starting STR (defaults: STR x 15 and x 10).
         val str = totals.getValue("STR").toDouble()
@@ -146,13 +128,13 @@ object NewCharacter {
 
         // What the metatype grants: its own bonus (armor, reach and so on, with the metatype as the source) and free qualities.
         val improvements = root.child("improvements")!!
-        metatype.child("bonus")?.let { bonus ->
-            BonusHandlers.apply(bonus, BonusContext("Metatype", request.metatypeId.lowercase(), 1))
+        source.child("bonus")?.let { bonus ->
+            BonusHandlers.apply(bonus, BonusContext("Metatype", (request.metavariantId ?: request.metatypeId).lowercase(), 1))
                 .improvements.forEach { improvements.appendChild(ImprovementWriter.toElement(doc, it)) }
         }
         val editor = CharacterEditor(character, data)
         for (group in listOf("positive", "negative")) {
-            for (q in metatype.child("qualities")?.child(group)?.children("quality").orEmpty()) {
+            for (q in source.child("qualities")?.child(group)?.children("quality").orEmpty()) {
                 val wanted = q.textContent.trim()
                 val entry = data.byId.entries.firstOrNull {
                     it.value.file == "qualities.xml" && it.value.element.tagName == "quality" &&

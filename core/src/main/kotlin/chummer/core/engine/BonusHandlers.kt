@@ -20,6 +20,8 @@ class BonusContext(
     val friendlyName: String = "",
     /** Looks up a text from Chummer's language file by key (conditions such as `LimitCondition_...`). */
     val translate: (String) -> String? = { null },
+    /** Adds a quality named by a bonus (for example Glamour adds Distinctive Style) and returns its GUID, or null if it cannot. */
+    val addQuality: (name: String, extra: String) -> String? = { _, _ -> null },
 )
 
 /** The improvements a `<bonus>` node produces, and the child nodes no handler exists for yet. */
@@ -251,6 +253,22 @@ object BonusHandlers {
         // Extra reach, optionally only for the weapon named in the `name` attribute.
         put("reach") { node, ctx, unique, out ->
             value(node.textContent, ctx.rating)?.let { out += improvement(ctx, "Reach", unique, it, node.attr("name").orEmpty()) }
+        }
+
+        // A quality that adds other qualities: each one becomes a quality of the character, and a SpecificQuality
+        // improvement records which (its improved name is the new quality's GUID).
+        put("addqualities") { node, ctx, unique, out ->
+            for (q in node.children("addquality")) {
+                val guid = ctx.addQuality(q.textContent.trim(), q.attr("select").orEmpty()) ?: continue
+                out += improvement(ctx, "SpecificQuality", unique, 0.0, guid)
+            }
+        }
+
+        // Unlocks a group of skills (for example the magical skills for a Magician); the editor adds the skills themselves.
+        put("unlockskills") { node, ctx, unique, out ->
+            val options = node.textContent.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            val chosen = if (options.size == 1) options[0] else ctx.choice.takeIf { it in options } ?: return@put
+            out += improvement(ctx, "SpecialSkills", unique, 0.0, chosen)
         }
 
         put("selectrestricted") { _, ctx, unique, out ->

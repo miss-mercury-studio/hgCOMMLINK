@@ -74,13 +74,20 @@ class NewCharacterTemplateTest {
     }
 
     /** Text of an element tree with the random parts (GUIDs and group ids) blanked, so two files can be compared. */
+    /** Ids that come from the game data (metatypes and the like), as opposed to ids made up when an item is added. */
+    private val dataIds: Set<String> by lazy { DataPack.load(File(src, "Chummer/data")).byId.keys }
+
     private fun canonNoGuids(e: Element, parent: String = ""): String = buildString {
         append('<').append(e.tagName).append('>')
         val kids = e.children()
         if (kids.isEmpty()) {
             // Note colours are a display setting of the Chummer session that saved the file, so they differ between files.
-            val random = e.tagName == "guid" || e.tagName == "parentid" || e.tagName == "notesColor" || (e.tagName == "id" && parent == "group")
-            append(if (random) "*" else e.textContent.trim().replace(Regex("\\s+"), " "))
+            val random = e.tagName == "guid" || e.tagName.startsWith("priority") || e.tagName == "parentid" || e.tagName == "notesColor" || (e.tagName == "id" && parent == "group")
+            // An improvement points at the random id of the quality that made it (sourcename) or that it added (improvedname).
+            val text = e.textContent.trim()
+            val madeUp = parent == "improvement" && (e.tagName == "sourcename" || e.tagName == "improvedname") &&
+                Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}").matches(text) && text.lowercase() !in dataIds
+            append(if (random || madeUp) "*" else text.replace(Regex("\\s+"), " "))
         } else kids.forEach { append(canonNoGuids(it, e.tagName)) }
         append("</").append(e.tagName).append('>')
     }
@@ -358,5 +365,43 @@ class NewCharacterTemplateTest {
         // Group steps can be given back once, and not below zero.
         assertTrue(editor.changeSkillGroup("Firearms", -1))
         assertTrue(!editor.changeSkillGroup("Firearms", -1))
+    }
+
+    /**
+     * Mag_Empty.chum5: an Elf Dryad (variant) Magician, Karma build, tradition Red Magic. Built here from a generated Dryad,
+     * the Magician quality and the tradition. The priority letters are leftovers of the old priority system and are ignored.
+     */
+    @Test
+    fun generatedDryadMagicianMatchesChummersMagEmpty() {
+        val settings = settingsForTemplates()
+        val want = load("Mag_Empty.chum5")
+        val resolved = chummer.core.data.CustomDataLocator(listOf(File(src, "Chummer/customdata"))).resolve(settings.customData)
+        val data = DataPack.load(File(src, "Chummer/data"), resolved.dirs)
+        val elf = data.byId.entries.first { it.value.file == "metatypes.xml" && it.value.element.tagName == "metatype" && it.value.element.child("name")?.textContent?.trim() == "Elf" }
+        val dryadId = want.root.text("metavariantid")!!.trim()
+        val c = NewCharacter.createKarma(
+            data, settings,
+            NewCharacterRequest(
+                metatypeId = elf.key, metavariantId = dryadId,
+                settingsHash = want.root.text("settingshashcode")!!.trim().toInt(), customDataNames = resolved.dirs.map { it.name },
+            ),
+        )
+        val editor = CharacterEditor(c, data, translations::get, settings)
+        fun quality(name: String) = data.byId.entries.first { it.value.file == "qualities.xml" && it.value.element.child("name")?.textContent?.trim() == name }.key
+        editor.addQuality(quality("Magician"))
+        val tradition = data.byId.entries.first { it.value.file == "traditions.xml" && it.value.element.tagName == "tradition" && it.value.element.child("name")?.textContent?.trim() == "Red Magic" }.key
+        editor.setTradition(tradition)
+        // The reference file already has one point of MAG bought with karma.
+        assertTrue(editor.changeAttribute("MAG", 1))
+
+        val a = canonNoGuids(want.root)
+        val b = canonNoGuids(c.root)
+        if (a != b) {
+            val at = a.zip(b).indexOfFirst { it.first != it.second }.let { if (it < 0) minOf(a.length, b.length) else it }
+            println("MAG DIFF at $at:")
+            println("  Chummer: ${a.substring(maxOf(0, at - 200), minOf(a.length, at + 400))}")
+            println("  ours:    ${b.substring(maxOf(0, at - 200), minOf(b.length, at + 400))}")
+        }
+        assertEquals(a, b)
     }
 }

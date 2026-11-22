@@ -45,7 +45,7 @@ class CharacterEditor(
      * user bought, or "Metatype" for a free one the metatype grants (those do not count toward the quality limit).
      * Returns the new item's GUID.
      */
-    fun addQuality(entryId: String, extra: String = "", levels: Int = 1, qualitySource: String = "Selected"): String {
+    fun addQuality(entryId: String, extra: String = "", levels: Int = 1, qualitySource: String = "Selected", karmaOverride: Int? = null, addedBy: String = ""): String {
         val entry = data[entryId]?.element ?: error("No quality with id $entryId in the game data")
         val guid = UUID.randomUUID().toString()
         val name = entryText(entry, "name").orEmpty()
@@ -56,10 +56,10 @@ class CharacterEditor(
         add("guid", guid)
         add("name", name)
         add("extra", extra)
-        add("bp", entryText(entry, "karma") ?: "0")
+        add("bp", (karmaOverride?.toString() ?: entryText(entry, "karma")) ?: "0")
         add("implemented", "True")
         add("contributetobp", entryFlag(entry, "contributetobp", true))
-        add("contributetolimit", if (qualitySource == "Metatype") "False" else entryFlag(entry, "contributetolimit", true))
+        add("contributetolimit", if (qualitySource != "Selected") "False" else entryFlag(entry, "contributetolimit", true))
         add("stagedpurchase", "False")
         add("doublecareer", entryFlag(entry, "doublecareer", true))
         add("canbuywithspellpoints", entryFlag(entry, "canbuywithspellpoints", false))
@@ -70,16 +70,22 @@ class CharacterEditor(
         add("mutant", entryFlag(entry, "mutant", false))
         add("source", entryText(entry, "source").orEmpty())
         add("page", entryText(entry, "page").orEmpty())
-        add("sourcename")
+        add("sourcename", addedBy)
         for (tag in listOf("bonus", "firstlevelbonus", "naturalweapons")) {
             val node = entry.child(tag)
             q.appendChild(if (node != null) doc.importNode(node, true) else element(tag))
         }
         add("notes")
         add("notesColor", NOTES_COLOR)
+        // The bonus is applied before the quality is listed, so qualities it adds (Glamour adds Distinctive Style) come first.
+        val ctx = BonusContext("Quality", guid, levels, extra, name, translate, addQuality = { n, x ->
+            val other = (data as? chummer.core.DataPack)?.byId?.entries?.firstOrNull {
+                it.value.file == "qualities.xml" && it.value.element.tagName == "quality" && it.value.element.child("name")?.textContent?.trim() == n
+            }?.key
+            other?.let { addQuality(it, x, qualitySource = "Improvement", karmaOverride = 0, addedBy = name) }
+        })
+        grantBonus(entry.child("bonus"), ctx)
         container("qualities").appendChild(q)
-
-        grantBonus(entry.child("bonus"), BonusContext("Quality", guid, levels, extra, name, translate))
         return guid
     }
 
@@ -253,6 +259,91 @@ class CharacterEditor(
         val result = BonusHandlers.apply(bonus, ctx)
         val list = container("improvements")
         for (imp in result.improvements) list.appendChild(ImprovementWriter.toElement(doc, imp))
+        applyEffects(result.improvements)
+    }
+
+    private fun setFlag(tag: String) { root.child(tag)?.textContent = "True" }
+
+    /** Things a bonus changes besides improvements: which magic or resonance features are switched on, and the skills they unlock. */
+    private fun applyEffects(improvements: List<Improvement>) {
+        for (i in improvements) {
+            when {
+                i.type == "Attribute" && i.uniqueName == "enableattribute" -> when (i.improvedName) {
+                    "MAG" -> { setFlag("magenabled"); markEssenceAtSpecialStart() }
+                    "RES" -> { setFlag("resenabled"); markEssenceAtSpecialStart() }
+                    "DEP" -> setFlag("depenabled")
+                }
+                i.type == "SpecialTab" -> when (i.improvedName) {
+                    "Magician" -> setFlag("magician")
+                    "Adept" -> setFlag("adept")
+                    "Technomancer" -> setFlag("technomancer")
+                    "Critter" -> setFlag("critter")
+                }
+                i.type == "SpecialSkills" && i.improvedName == "Magician" -> addMagicalSkills()
+            }
+        }
+    }
+
+    /** Chummer remembers the essence at the moment magic or resonance was switched on (it is unset until then). */
+    private fun markEssenceAtSpecialStart() {
+        val e = root.child("essenceatspecialstart") ?: return
+        if (!e.textContent.trim().startsWith("-7922")) return
+        val rules = settings?.toRuleSettings() ?: RuleSettings()
+        val set = ImprovementSet(Improvement.parseAll(root), isCareer = false)
+        val ess = EssenceEngine(set, data, true, rules.essenceDecimals, rules.dontRoundEssenceInternally).essence(6.0, file.augmentations())
+        e.textContent = if (ess == Math.rint(ess)) ess.toLong().toString() else ess.toString()
+    }
+
+    /** The magical active skills (and their skill groups) a Magician gets, inserted in name order. */
+    private fun addMagicalSkills() {
+        val pack = data as? chummer.core.DataPack ?: return
+        val ns = root.child("newskills") ?: return
+        val skillList = ns.child("skills") ?: return
+        val groupList = ns.child("groups") ?: return
+        val have = skillList.children("skill").mapNotNull { it.text("suid")?.trim()?.lowercase() }.toSet()
+        val wanted = pack.byId.values
+            .filter { it.file == "skills.xml" && it.element.tagName == "skill" && (it.element.parentNode as? Element)?.tagName == "skills" }
+            .map { it.element }
+            .filter { it.child("category")?.textContent?.trim() == "Magical Active" }
+            .filter { it.child("exotic")?.textContent?.trim()?.equals("True", true) != true }
+            .filter { it.child("id")?.textContent?.trim()?.lowercase() !in have }
+            .sortedBy { it.child("name")?.textContent?.trim()?.lowercase().orEmpty() }
+        fun insertSorted(list: Element, item: Element, name: String) {
+            val before = list.children().firstOrNull { (it.text("name")?.trim()?.lowercase().orEmpty()) > name.lowercase() }
+            if (before != null) list.insertBefore(item, before) else list.appendChild(item)
+        }
+        for (s in wanted) insertSorted(skillList, SkillElements.skill(doc, s), s.child("name")?.textContent?.trim().orEmpty())
+        val haveGroups = groupList.children("group").mapNotNull { it.text("name")?.trim() }.toSet()
+        wanted.mapNotNull { it.child("skillgroup")?.textContent?.trim()?.ifEmpty { null } }.distinct()
+            .filter { it !in haveGroups }.forEach { g -> insertSorted(groupList, SkillElements.group(doc, g), g) }
+    }
+
+    /**
+     * Choose the character's magical tradition (or, with [type] "RES", technomancer stream) from the game data. Any earlier
+     * choice is replaced. Returns the new GUID.
+     */
+    fun setTradition(entryId: String, type: String = "MAG"): String {
+        val entry = data[entryId]?.element ?: error("No tradition with id $entryId in the game data")
+        val guid = UUID.randomUUID().toString()
+        val t = element("tradition")
+        fun add(tag: String, text: String? = null) = t.appendChild(element(tag, text))
+        add("sourceid", entryId.lowercase())
+        add("guid", guid)
+        add("traditiontype", type)
+        add("name", entryText(entry, "name"))
+        add("extra")
+        add("spiritform", "Materialization")
+        add("drain", entryText(entry, "drain"))
+        add("source", entryText(entry, "source"))
+        add("page", entryText(entry, "page"))
+        val spirits = entry.child("spirits")
+        for (tag in listOf("spiritcombat", "spiritdetection", "spirithealth", "spiritillusion", "spiritmanipulation")) add(tag, spirits?.child(tag)?.textContent?.trim())
+        add("spirits")
+        add("bonus")
+        root.child("tradition")?.let { root.removeChild(it) }
+        val anchor = root.child("totaless")
+        if (anchor != null) root.insertBefore(t, anchor.nextSibling) else root.appendChild(t)
+        return guid
     }
 
     private fun removeImprovementsOf(guid: String) {
@@ -337,4 +428,38 @@ object KnowledgeCatalog {
         data.byId.entries.filter { it.value.file == "skills.xml" && (it.value.element.parentNode as? Element)?.tagName == "knowledgeskills" }.map { (id, e) ->
             KnowledgeOption(id, e.element.child("name")?.textContent?.trim().orEmpty(), e.element.child("category")?.textContent?.trim().orEmpty())
         }.sortedWith(compareBy({ it.category }, { it.name.lowercase() }))
+}
+
+/** The XML Chummer writes for a skill and a skill group, shared by new characters and unlocked skills. */
+internal object SkillElements {
+    fun skill(doc: org.w3c.dom.Document, data: Element): Element {
+        fun el(tag: String, text: String? = null) = doc.createElement(tag).also { if (!text.isNullOrEmpty()) it.textContent = text }
+        fun flag(tag: String) = if (data.child(tag)?.textContent?.trim().equals("True", true)) "True" else "False"
+        return el("skill").also { e ->
+            e.appendChild(el("guid", UUID.randomUUID().toString()))
+            e.appendChild(el("suid", data.child("id")?.textContent?.trim()))
+            e.appendChild(el("isknowledge", "False"))
+            e.appendChild(el("skillcategory", data.child("category")?.textContent?.trim()))
+            e.appendChild(el("requiresgroundmovement", flag("requiresgroundmovement")))
+            e.appendChild(el("requiresswimmovement", flag("requiresswimmovement")))
+            e.appendChild(el("requiresflymovement", flag("requiresflymovement")))
+            e.appendChild(el("karma", "0"))
+            e.appendChild(el("base", "0"))
+            e.appendChild(el("notes"))
+            e.appendChild(el("notesColor", NOTES_COLOR))
+            e.appendChild(el("name", data.child("name")?.textContent?.trim()))
+            e.appendChild(el("buywithkarma", "False"))
+        }
+    }
+
+    fun group(doc: org.w3c.dom.Document, name: String): Element {
+        fun el(tag: String, text: String? = null) = doc.createElement(tag).also { if (!text.isNullOrEmpty()) it.textContent = text }
+        return el("group").also { e ->
+            e.appendChild(el("karma", "0"))
+            e.appendChild(el("base", "0"))
+            e.appendChild(el("isbroken", "False"))
+            e.appendChild(el("id", UUID.randomUUID().toString()))
+            e.appendChild(el("name", name))
+        }
+    }
 }
