@@ -38,8 +38,10 @@ data class KarmaLedger(
     val spells: Int = 0,
     /** Karma put into nuyen (at most the settings' maximum). */
     val nuyen: Int = 0,
+    /** Martial arts: each style costs its karma, and every technique after the first costs the settings' technique price. */
+    val martialArts: Int = 0,
 ) {
-    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen
+    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen + martialArts
     val remaining get() = budget - spent
     val knowledgePointsLeft get() = knowledgePoints - knowledgePointsUsed
 
@@ -95,11 +97,27 @@ data class KarmaLedger(
 
             // Active skills. The price of rating steps from [lower] to [upper]: a new skill's first rating costs the
             // new-skill price, every other step costs its rating times the improve price.
-            fun stepCost(lower: Int, upper: Int): Int {
+            fun skillName(s: CharacterFile.SkillRow) = s.name.ifEmpty { data?.get(s.suid)?.element?.child("name")?.textContent?.trim().orEmpty() }
+            /**
+             * Chummer's `Skill.RangeCost`: the plain price of the steps, changed by the character's cost improvements for this skill and
+             * its category (an add for each step in the improvement's rating range, and a multiplier), whichever apply in creation.
+             */
+            fun stepCost(lower: Int, upper: Int, s: CharacterFile.SkillRow): Int {
                 if (upper <= lower) return 0
                 val levels = triangle(upper) - triangle(lower)
-                return if (lower == 0) (levels - 1) * k("karmaimproveactiveskill", 2) + k("karmanewactiveskill", 2)
+                var cost = if (lower == 0) (levels - 1) * k("karmaimproveactiveskill", 2) + k("karmanewactiveskill", 2)
                 else levels * k("karmaimproveactiveskill", 2)
+                var extra = 0.0
+                var multiplier = 1.0
+                val name = skillName(s)
+                for ((kind, key) in listOf("ActiveSkillKarmaCost" to name, "SkillCategoryKarmaCost" to s.category)) {
+                    for (i in set.matching(kind, key)) if (i.minimum <= lower) {
+                        extra += i.value * (minOf(upper.toDouble(), if (i.maximum == 0.0) Double.MAX_VALUE else i.maximum) - maxOf(lower.toDouble(), i.minimum - 1))
+                    }
+                    for (i in set.matching(kind + "Multiplier", key)) if (i.minimum <= lower) multiplier *= i.value / 100.0
+                }
+                cost = if (multiplier != 1.0) standardRound(cost * multiplier + extra) else cost + standardRound(extra)
+                return cost
             }
             val activeSkills = c.skills().filter { !it.isKnowledge }
             val groups = c.skillGroups()
@@ -124,9 +142,9 @@ data class KarmaLedger(
                 if (total == 0) continue
                 if (g > 0 && data != null) {
                     val groupUpper = activeSkills.filter { groupOf[it.guid] == groupOf[s.guid] }.minOf { it.base + it.karma + g }
-                    skills += stepCost(s.base, groupUpper - g) + stepCost(groupUpper, total)
+                    skills += stepCost(s.base, groupUpper - g, s) + stepCost(groupUpper, total, s)
                 } else {
-                    skills += stepCost(s.base, s.base + s.karma)
+                    skills += stepCost(s.base, s.base + s.karma, s)
                 }
                 if (!PointsLedger.usesPoints(c)) skills += s.specializations.size * k("karmaspecialization", 7)
             }
@@ -143,8 +161,19 @@ data class KarmaLedger(
                 val lower = s.base
                 if (upper > lower) {
                     val improve = k("karmaimproveknowledgeskill", 1)
-                    knowledge += (triangle(upper) - triangle(lower)) * improve
-                    if (lower == 0) knowledge += k("karmanewknowledgeskill", 1) - improve
+                    var cost = (triangle(upper) - triangle(lower)).toDouble() * improve
+                    // The first level bought with karma costs the new-skill price.
+                    if (lower == 0) cost += k("karmanewknowledgeskill", 1) - improve
+                    var extra = 0.0
+                    var multiplier = 1.0
+                    for ((kind, key) in listOf("KnowledgeSkillKarmaCost" to s.name, "SkillCategoryKarmaCost" to s.category)) {
+                        for (i in set.matching(kind, key)) if (i.minimum <= upper) {
+                            extra += i.value * (minOf(upper.toDouble(), if (i.maximum == 0.0) Double.MAX_VALUE else i.maximum) - maxOf(lower.toDouble(), i.minimum - 1))
+                        }
+                        for (i in set.matching(kind + "Multiplier", key)) if (i.minimum <= upper) multiplier *= i.value / 100.0
+                    }
+                    if (multiplier != 1.0) cost *= multiplier
+                    knowledge += maxOf(standardRound(cost + extra), 0)
                 }
                 if (s.specializations.isNotEmpty() && "knowledge specializations" !in notCounted) notCounted += "knowledge specializations"
             }
@@ -175,7 +204,7 @@ data class KarmaLedger(
             }
             // The karma negative qualities give back is capped at the quality limit when the settings say qualities beyond it earn nothing.
             val qualityLimit = settings.int("qualitykarmalimit", 25)
-            qualities -= if (settings.bool("exceednegativequalitiesnobonus") && negative > qualityLimit) qualityLimit else negative
+            qualities -= if (negative > qualityLimit && positive <= qualityLimit) qualityLimit else negative
 
             // Contacts: connection plus loyalty points beyond the free contact points cost karma.
             val contactRows = c.root.child("contacts")?.children("contact").orEmpty()
@@ -241,15 +270,21 @@ data class KarmaLedger(
 
             for ((tag, label) in listOf(
                 "foci" to "foci", "complexforms" to "complex forms", "aiprograms" to "programs",
-                "martialarts" to "martial arts", "initiationgrades" to "initiation", "critterpowers" to "critter powers",
+                "initiationgrades" to "initiation", "critterpowers" to "critter powers",
                 "metamagics" to "metamagics", "mentorspirits" to "mentor spirits",
             )) if (c.root.child(tag)?.children().orEmpty().isNotEmpty()) notCounted += label
+            var martialArts = 0
+            for (m in c.root.child("martialarts")?.children("martialart").orEmpty()) {
+                if (m.text("isquality")?.trim().equals("True", true)) continue
+                martialArts += m.text("cost")?.trim()?.toIntOrNull() ?: 7
+                martialArts += maxOf((m.child("martialarttechniques")?.children("martialarttechnique")?.size ?: 0) - 1, 0) * k("karmamaneuver", 5)
+            }
             val nuyenKarma = (c.root.text("nuyenbp")?.trim()?.toDoubleOrNull()?.toInt() ?: 0)
                 .coerceIn(0, if (settings.bool("unrestrictednuyen")) Int.MAX_VALUE else settings.int("nuyenmaxbp", 10))
 
             return KarmaLedger(
                 budget, metatype, attributes, skills, qualities, contacts, notCounted, positive, negative,
-                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma,
+                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma, martialArts,
             )
         }
     }

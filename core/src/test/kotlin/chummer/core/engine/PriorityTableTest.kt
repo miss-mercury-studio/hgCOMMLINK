@@ -72,7 +72,13 @@ class PriorityTableTest {
         var checked = 0
         for ((f, c) in fixtures) {
             if (c.root.text("created")?.trim() == "True" || c.root.text("appversion")?.startsWith("5.202") != true) continue
-            val settings = chummer.core.data.CharacterSettings.find(c.root.text("settings").orEmpty(), File(src, "Chummer/data/settings.xml"), emptyList())
+            val loaded = chummer.core.data.CharacterSettings.find(c.root.text("settings").orEmpty(), File(src, "Chummer/data/settings.xml"), emptyList())
+            // The fixtures were saved with a profile (default.xml) that is not shipped; their numbers only add up when specializations
+            // on skills bought with karma may be paid with skill points, so the test uses that setting.
+            val settings = chummer.core.data.CharacterSettings(
+                loaded.id, loaded.name, loaded.values + ("allowpointbuyspecializationsonkarmaskills" to "True"), loaded.books, loaded.customData,
+                loaded.bannedWareGrades, loaded.redlinerExclusion, loaded.karmaCost,
+            )
             val ledger = KarmaLedger.of(c, settings, data)
             val stored = c.root.text("karma")?.trim()?.toIntOrNull()
             checked++
@@ -85,10 +91,13 @@ class PriorityTableTest {
 
     companion object {
         /**
-         * 10 of the 26 creation fixtures match Chummer's remaining karma exactly (Apex Predator among them). The others lack things
-         * not built yet (mentor spirits, foci, martial arts, complex forms, the exact rule for qualities beyond the limit) or depend on the profile
-         * `default.xml` they were saved with, which is not shipped (whether qualities beyond the limit earn or cost anything).
+         * 18 of the 26 creation fixtures match Chummer's remaining karma exactly. The other 8 lack things not built yet: foci and mentor
+         * spirit advantages (Gangerbean, Miko, Ocelot, Ushi, prime), complex forms and a Resonance attribute the engine reads wrongly
+         * (Bastion, Yeti), a mystic adept's power points (resub). Two rules were read from the data, not from Chummer's source: the
+         * fixtures only add up when specializations on skills bought with karma can be paid with skill points (the profile `default.xml`
+         * they were saved with is not shipped, so the test sets that option), and a negative quality refund is capped at the quality
+         * limit when the positive qualities stay within it.
          */
-        const val KNOWN_DIFFERENCES = 16
+        const val KNOWN_DIFFERENCES = 8
     }
 }
