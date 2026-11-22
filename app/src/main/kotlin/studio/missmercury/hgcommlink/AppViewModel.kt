@@ -240,10 +240,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun wareOptions() = gameData.wareOptions()
     fun wareGrades(bioware: Boolean): List<String> = open?.let { gameData.wareGrades(bioware, it.character) }.orEmpty()
-    fun wareCost(id: String, grade: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareCost(id, grade, rating) }
-    fun wareEssence(id: String, grade: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareEssence(id, grade, rating) }
+    fun wareCost(id: String, grade: String, rating: Int?, parentGuid: String? = null) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareCost(id, grade, rating, parentGuid) }
+    fun wareEssence(id: String, grade: String, rating: Int?, parentGuid: String? = null) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareEssence(id, grade, rating, parentGuid) }
     fun buyWare(id: String, grade: String, rating: Int?, parentGuid: String? = null) = editCareer("Installed", "Cannot install that (nuyen, essence or capacity)") { adv, _ -> adv.buyWare(id, grade, rating, parentGuid) != null }
-    fun pluginOptions(parentSourceId: String) = gameData.pluginOptions(parentSourceId)
+    fun pluginOptions(parentGuid: String) = open?.let { gameData.career(it.character).pluginOptions(parentGuid) }.orEmpty()
     fun loadAmmo(weaponGuid: String, ammoGuid: String) = editCareer("Ammo loaded", "Cannot load that (no empty clip, or wrong ammunition)") { adv, _ -> adv.loadAmmo(weaponGuid, ammoGuid) }
 
     fun unloadAmmo(weaponGuid: String) = editCareer("Ammo unloaded", "Nothing to unload") { adv, _ -> adv.unloadAmmo(weaponGuid) }

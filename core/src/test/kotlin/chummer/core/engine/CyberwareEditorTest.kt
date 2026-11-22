@@ -153,4 +153,31 @@ class CyberwareEditorTest {
         assertEquals(before, adv.log.nuyen, 0.001)
         assertEquals(8.0, adv.pluginCapacity()[parent]!!, 0.001)
     }
+
+    @Test
+    fun limbUpgradesGetTheirRatingRangeFromTheLimbAndTheCharacter() {
+        val c = viper()
+        val adv = CareerAdvancement(c, data, settings)
+        adv.log.manualNuyen(500000.0, "Test reward")
+        fun id(name: String) = data.byId.entries.first { it.value.file == "cyberware.xml" && it.value.name == name }.key
+        val arm = adv.buyWare(id("Synthetic Full Arm"), "Used")!!
+        val ed = CyberwareEditor(c, data)
+        val entry = data[id("Customized Agility")]!!.element
+        val (min, max) = ed.range(entry, ed.findWare(arm))
+        assertEquals(4, min) // the limb's own 3, plus 1
+        assertTrue("max $max", max >= 6)
+        // The picker offers the limits; the price follows from them: (Rating - MinRating + 1) * 5000.
+        val option = adv.pluginOptions(arm).first { it.name == "Customized Agility" }
+        assertEquals(4, option.minRating)
+        assertEquals(max, option.maxRating)
+        assertEquals(5000.0, adv.wareCost(id("Customized Agility"), "Standard", 4, arm)!!, 0.01)
+        assertEquals(15000.0, adv.wareCost(id("Customized Agility"), "Standard", 6, arm)!!, 0.01)
+        val before = adv.log.nuyen
+        val guid = adv.buyWare(id("Customized Agility"), "Used", 6, arm)!!
+        assertEquals(before - adv.wareCost(id("Customized Agility"), "Used", 6, arm)!!, adv.log.nuyen, 0.01)
+        val made = ed.findWare(guid)!!
+        assertEquals("6", made.text("rating"))
+        assertEquals("MinimumAGI+1", made.text("minrating"))
+        assertEquals("MaximumAGI", made.text("maxrating"))
+    }
 }

@@ -37,8 +37,8 @@ class CyberwareEditor(private val file: CharacterFile, private val data: GameDat
         }
 
         /** A formula such as `FixedValues(4000,6000,10000)` picks the entry for the rating; anything else is plain arithmetic. */
-        fun formula(text: String, rating: Int): Double? {
-            val t = text.trim()
+        fun formula(text: String, rating: Int, minRating: Int = 0): Double? {
+            val t = text.trim().replace("MinRating", minRating.toString())
             if (t.isEmpty()) return 0.0
             Regex("""^FixedValues\((.*)\)$""").find(t)?.let { m ->
                 val values = m.groupValues[1].split(',').map { it.trim().removePrefix("[").removeSuffix("]") }
@@ -55,24 +55,51 @@ class CyberwareEditor(private val file: CharacterFile, private val data: GameDat
     private fun isBio(entry: Element) = entry.tagName == "bioware"
 
     /** Rating used for a new item: the lowest the entry allows, or the one asked for within the range. */
-    fun ratingFor(entry: Element, rating: Int?): Int {
-        val max = entry.child("rating")?.textContent?.trim()?.toIntOrNull() ?: 0
-        val min = entry.child("minrating")?.textContent?.trim()?.toIntOrNull() ?: 0
+    fun ratingFor(entry: Element, rating: Int?, parent: Element? = null): Int {
+        val (min, max) = range(entry, parent)
         return if (max <= 0) 0 else (rating ?: maxOf(min, 1)).coerceIn(maxOf(min, 1), max)
     }
 
+    /**
+     * The lowest and highest rating an entry allows. A cyberlimb's attribute upgrades give their limits as `{AGIMinimum}+1` and
+     * `{AGIMaximum}`: the minimum is the limb's own value (3 unless the limb says otherwise), the maximum the character's limit.
+     */
+    fun range(entry: Element, parent: Element? = null): Pair<Int, Int> {
+        fun resolve(text: String): Int {
+            var t = text.trim()
+            if (t.isEmpty()) return 0
+            if ('{' in t) {
+                val limb = generateSequence(parent) { it.parentNode?.parentNode as? Element }
+                    .firstOrNull { it.tagName == "cyberware" && (it.text("limbslot").orEmpty().isNotBlank() || it.text("category") == "Cyberlimb") }
+                val attrs = AttributeEngine.forFile(file)
+                val values = mapOf(
+                    "AGIMinimum" to (limb?.text("minagility")?.trim()?.toIntOrNull() ?: 3), "STRMinimum" to (limb?.text("minstrength")?.trim()?.toIntOrNull() ?: 3),
+                    "AGIMaximum" to (attrs["AGI"]?.totalMaximum ?: 6), "STRMaximum" to (attrs["STR"]?.totalMaximum ?: 6),
+                )
+                for ((k, v) in values) t = t.replace("{$k}", v.toString())
+            }
+            return t.toIntOrNull() ?: chummer.core.Expr.evalOrNull(t)?.toInt() ?: 0
+        }
+        return resolve(entry.child("minrating")?.textContent.orEmpty()) to resolve(entry.child("rating")?.textContent.orEmpty())
+    }
+
+    /** The limit text Chummer saves for a rating range: its `{AGIMinimum}` placeholders are written as `MinimumAGI`. */
+    private fun savedLimit(text: String) = text.replace("{AGIMinimum}", "MinimumAGI").replace("{STRMinimum}", "MinimumSTR").replace("{AGIMaximum}", "MaximumAGI").replace("{STRMaximum}", "MaximumSTR")
+
     /** Nuyen cost at a grade and rating; null when the price formula cannot be read. */
-    fun cost(entryId: String, grade: String, rating: Int?): Double? {
+    fun cost(entryId: String, grade: String, rating: Int?, parentGuid: String? = null): Double? {
         val entry = data[entryId]?.element ?: return null
-        val base = formula(entry.child("cost")?.textContent.orEmpty(), ratingFor(entry, rating)) ?: return null
+        val parent = parentGuid?.let { findWare(it) }
+        val base = formula(entry.child("cost")?.textContent.orEmpty(), ratingFor(entry, rating, parent), range(entry, parent).first) ?: return null
         val multiplier = gradeElement(isBio(entry), grade)?.child("cost")?.textContent?.trim()?.toDoubleOrNull() ?: 1.0
         return base * multiplier
     }
 
     /** Essence cost at a grade and rating, before the character's modifiers; null when the formula cannot be read. */
-    fun essence(entryId: String, grade: String, rating: Int?): Double? {
+    fun essence(entryId: String, grade: String, rating: Int?, parentGuid: String? = null): Double? {
         val entry = data[entryId]?.element ?: return null
-        val base = formula(entry.child("ess")?.textContent.orEmpty(), ratingFor(entry, rating)) ?: return null
+        val parent = parentGuid?.let { findWare(it) }
+        val base = formula(entry.child("ess")?.textContent.orEmpty(), ratingFor(entry, rating, parent), range(entry, parent).first) ?: return null
         return base * (data.gradeEssence(isBio(entry), grade) ?: 1.0)
     }
 
@@ -125,7 +152,7 @@ class CyberwareEditor(private val file: CharacterFile, private val data: GameDat
         val guid = UUID.randomUUID().toString()
         val forced = d("forcegrade")
         val usedGrade = if (parent != null) parent.text("grade")?.trim().orEmpty().ifEmpty { grade } else if (forced.isNotEmpty()) forced else grade
-        val chosen = ratingFor(entry, rating)
+        val chosen = ratingFor(entry, rating, parent)
         val g = el("cyberware")
         fun add(tag: String, text: String? = null) = g.appendChild(el(tag, text))
         fun flag(tag: String) = if (d(tag).equals("True", true)) "True" else "False"
@@ -134,7 +161,7 @@ class CyberwareEditor(private val file: CharacterFile, private val data: GameDat
         add("ess", d("ess")); add("capacity", d("capacity")); add("avail", d("avail")); add("cost", if (asDefault) "0" else d("cost")); add("weight", d("weight")); add("source", d("source")); add("page", d("page"))
         add("parentid", if (asDefault) parentGuid else ""); add("hasmodularmount", d("hasmodularmount")); add("plugsintomodularmount", d("plugsintomodularmount")); add("blocksmounts", d("blocksmounts")); add("forced")
         add("rating", chosen.toString()); add("minagility", d("minagility").ifEmpty { "3" }); add("minstrength", d("minstrength").ifEmpty { "3" })
-        add("minrating", d("minrating")); add("maxrating", if (d("rating").toIntOrNull() ?: 0 > 0) d("rating") else ""); add("ratinglabel", "String_Rating"); add("subsystems", d("subsystems"))
+        add("minrating", savedLimit(d("minrating"))); add("maxrating", if (range(entry, parent).second > 0) savedLimit(d("rating")) else ""); add("ratinglabel", "String_Rating"); add("subsystems", d("subsystems"))
         add("wirelesson", "False"); add("grade", usedGrade); add("location"); add("extra"); add("suite", "False"); add("stolen", "False")
         add("essdiscount", "0"); add("extraessadditivemultiplier", "0"); add("extraessmultiplicativemultiplier", "1"); add("forcegrade", forced)
         add("matrixcmfilled", "0"); add("matrixcmbonus", "0"); add("prototypetranshuman", "False")
@@ -222,6 +249,18 @@ object WareCatalog {
         val allowed = parent.child("allowsubsystems")?.children("category").orEmpty().map { it.textContent.trim() }.toSet()
         if (allowed.isEmpty()) return emptyList()
         return list(data).filter { it.category in allowed }.map { it.copy(problem = null) }
+    }
+
+    /** The same plug-ins with rating limits worked out for the limb or item with GUID [parentGuid] on this character (limb upgrades depend on it). */
+    fun pluginsFor(data: DataPack, parentSourceId: String, editor: CyberwareEditor, parentGuid: String): List<WareOption> {
+        val parent = editor.findWare(parentGuid)
+        return pluginsFor(data, parentSourceId).map { o ->
+            val el = data[o.id]?.element ?: return@map o
+            val text = (el.child("minrating")?.textContent.orEmpty()) + (el.child("rating")?.textContent.orEmpty())
+            if ('{' !in text) o else editor.range(el, parent).let { (min, max) ->
+                o.copy(minRating = min, maxRating = max, cost = CyberwareEditor.formula(el.child("cost")?.textContent.orEmpty(), maxOf(min, 1), min), essence = CyberwareEditor.formula(el.child("ess")?.textContent.orEmpty(), maxOf(min, 1), min))
+            }
+        }
     }
 
     /**

@@ -389,8 +389,16 @@ class CareerAdvancement(
         return EssenceEngine(set, data, true, rules.essenceDecimals, rules.dontRoundEssenceInternally).essence(6.0, file.augmentations())
     }
 
-    fun wareCost(entryId: String, grade: String, rating: Int? = null): Double? = CyberwareEditor(file, data).cost(entryId, grade, rating)
-    fun wareEssence(entryId: String, grade: String, rating: Int? = null): Double? = CyberwareEditor(file, data).essence(entryId, grade, rating)
+    /** The plug-ins the installed item [parentGuid] takes, with rating limits worked out for it (limb upgrades depend on the limb). */
+    fun pluginOptions(parentGuid: String): List<WareOption> {
+        val editor = CyberwareEditor(file, data)
+        val sourceId = editor.findWare(parentGuid)?.text("sourceid")?.trim().orEmpty()
+        val pack = data as? chummer.core.DataPack ?: return emptyList()
+        return WareCatalog.pluginsFor(pack, sourceId, editor, parentGuid)
+    }
+
+    fun wareCost(entryId: String, grade: String, rating: Int? = null, parentGuid: String? = null): Double? = CyberwareEditor(file, data).cost(entryId, grade, rating, parentGuid)
+    fun wareEssence(entryId: String, grade: String, rating: Int? = null, parentGuid: String? = null): Double? = CyberwareEditor(file, data).essence(entryId, grade, rating, parentGuid)
 
     /**
      * Buy and install cyberware or bioware: pays the price at the grade, refuses what the character cannot pay or what
@@ -405,10 +413,10 @@ class CareerAdvancement(
         val useGrade = parent?.text("grade")?.trim()?.ifEmpty { null } ?: grade
         if (parent == null) { if (CyberwareEditor.problem(entry) != null) return null }
         else if (editor.plugProblem(parentGuid, entryId) != null) return null
-        val cost = editor.cost(entryId, useGrade, rating) ?: return null
+        val cost = editor.cost(entryId, useGrade, rating, parentGuid) ?: return null
         if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating ?: 1, gradeAvailability(entry, useGrade))) return null
         // A plug-in costs essence only when it adds to its parent's.
-        val preview = if (parent != null && entry.child("addtoparentess") == null) 0.0 else editor.essence(entryId, useGrade, rating) ?: return null
+        val preview = if (parent != null && entry.child("addtoparentess") == null) 0.0 else editor.essence(entryId, useGrade, rating, parentGuid) ?: return null
         if (essenceNow() - preview < 0) return null
         val guid = editor.add(entryId, useGrade, rating, parentGuid = parentGuid)
         if (essenceNow() < -0.0001) { editor.remove(guid); return null }

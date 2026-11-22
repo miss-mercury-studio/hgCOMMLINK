@@ -230,7 +230,7 @@ fun AttachPartDialog(kind: String, parentGuid: String, vm: AppViewModel, nuyen: 
 /** Pick cyberware or bioware, choose grade and rating, see price and essence, and install it. */
 @Composable
 fun BuyWareDialog(bioware: Boolean, vm: AppViewModel, nuyen: String, essence: Double, parent: chummer.core.engine.SheetSections.WareLine? = null, onDismiss: () -> Unit) {
-    val options = remember(bioware, parent?.guid) { if (parent != null) vm.pluginOptions(parent.sourceId) else vm.wareOptions().filter { it.isBioware == bioware } }
+    val options = remember(bioware, parent?.guid) { if (parent != null) vm.pluginOptions(parent.guid) else vm.wareOptions().filter { it.isBioware == bioware } }
     val grades = remember(bioware) { vm.wareGrades(bioware) }
     val items = remember(bioware) {
         options.map { o ->
@@ -253,8 +253,8 @@ fun BuyWareDialog(bioware: Boolean, vm: AppViewModel, nuyen: String, essence: Do
         val hasRating = o.maxRating > 0
         var rating by remember(o.id) { mutableStateOf(if (hasRating) maxOf(o.minRating, 1).toString() else "") }
         val r = if (hasRating) rating.toIntOrNull()?.coerceIn(maxOf(o.minRating, 1), o.maxRating) else null
-        val cost = if (o.problem == null) vm.wareCost(o.id, grade, r) else null
-        val ess = if (o.problem == null) vm.wareEssence(o.id, grade, r) else null
+        val cost = if (o.problem == null) vm.wareCost(o.id, grade, r, parent?.guid) else null
+        val ess = if (o.problem == null) vm.wareEssence(o.id, grade, r, parent?.guid) else null
         val have = nuyen.toDoubleOrNull() ?: 0.0
         val ok = cost != null && ess != null && cost <= have && (parent != null && o.essence != null && !o.addsToParent || essence - ess >= 0)
         TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
