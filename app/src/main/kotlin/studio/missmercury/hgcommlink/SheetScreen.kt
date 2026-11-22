@@ -573,6 +573,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     var buying by remember { mutableStateOf<String?>(null) }
     var attaching by remember { mutableStateOf<Pair<String, String>?>(null) }
     var loading by remember { mutableStateOf<String?>(null) }
+    var installing by remember { mutableStateOf<Pair<String, Double?>?>(null) }
     Column(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (g.armorSets.isNotEmpty()) item { SubHeader("Armor") }
@@ -582,8 +583,11 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
                     set.items.forEach { a ->
                         Row2(a.name, a.value.let { v -> if (a.equipped) v else "$v (off)" })
                         Small(a.mods.joinToString(", "))
+                        if (a.gear.isNotEmpty()) Small("Gear: " + a.gear.joinToString(", "))
+                        a.capacityLeft?.let { Small("Capacity left %.0f".format(it)) }
                         if (creating && a.guid.isNotEmpty()) RemoveLink { vm.removePurchase(a.guid) }
                         if (canBuy && a.guid.isNotEmpty()) Text("+ mod", Modifier.clickable { attaching = "mod" to a.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
+                        if (canBuy && a.guid.isNotEmpty() && (a.capacityLeft ?: 0.0) > 0.0) Text("+ gear", Modifier.clickable { installing = a.guid to a.capacityLeft }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
                     }
                 }
             }
@@ -622,6 +626,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     }
     buying?.let { BuyGearDialog(it, vm, s.nuyen) { buying = null } }
     attaching?.let { (kind, guid) -> AttachPartDialog(kind, guid, vm, s.nuyen) { attaching = null } }
+    installing?.let { (armor, room) -> ArmorGearDialog(armor, room ?: 0.0, vm, s.nuyen) { installing = null } }
     loading?.let { weapon ->
         val ammo = g.gear.filter { it.category == "Ammunition" && !it.loaded && it.guid.isNotEmpty() }
         PickerSheet("Load ammo", ammo.map { PickItem(it.guid, it.name, "x${it.quantity}") }, onPick = { vm.loadAmmo(weapon, it) }, note = if (ammo.isEmpty()) "No loose ammunition." else "Fills the first empty clip.", onDismiss = { loading = null })

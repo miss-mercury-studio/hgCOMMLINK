@@ -1,6 +1,7 @@
 package chummer.core.engine
 
 import chummer.core.CharacterFile
+import chummer.core.GameData
 import chummer.core.child
 import chummer.core.children
 import chummer.core.text
@@ -20,7 +21,9 @@ data class SheetSections(
     val lifestyles: List<LifestyleLine>,
     val martialArts: List<String>,
 ) {
-    data class ArmorItemLine(val name: String, val value: String, val equipped: Boolean, val mods: List<String>, val guid: String = "")
+    data class ArmorItemLine(val name: String, val value: String, val equipped: Boolean, val mods: List<String>, val guid: String = "",
+        /** Gear installed in the armor, and the capacity left for more (null when the armor has none). */
+        val gear: List<String> = emptyList(), val capacityLeft: Double? = null)
     /** Armor grouped by equipment set; the set name is empty for armor not in any set. */
     data class ArmorSet(val name: String, val items: List<ArmorItemLine>)
     data class WareLine(val name: String, val grade: String, val rating: Int, val essence: Double, val isBioware: Boolean, val children: List<WareLine>, val guid: String = "", val sourceId: String = "")
@@ -33,7 +36,7 @@ data class SheetSections(
         private fun Element.t(tag: String) = text(tag).orEmpty().trim()
         private fun Element.n(tag: String) = t(tag).toIntOrNull() ?: 0
 
-        fun read(c: CharacterFile, weapons: List<WeaponTotals>, essence: EssenceEngine): SheetSections {
+        fun read(c: CharacterFile, weapons: List<WeaponTotals>, essence: EssenceEngine, data: GameData? = null): SheetSections {
             val locations = c.armorLocations()
             val armors = c.root.child("armors")?.children("armor").orEmpty()
             val sets = armors.groupBy { locations[it.t("location")].orEmpty() }.map { (set, items) ->
@@ -46,6 +49,8 @@ data class SheetSections(
                                 .filter { it.t("included") != "True" }
                                 .map { m -> m.t("name") + m.n("rating").takeIf { it > 0 }?.let { " $it" }.orEmpty() },
                             a.t("guid"),
+                            a.child("gears")?.children("gear").orEmpty().map { g -> g.t("name") + g.n("rating").takeIf { it > 0 }?.let { " $it" }.orEmpty() },
+                            capacityLeft(c, data, a),
                         )
                     },
                 )
@@ -83,6 +88,11 @@ data class SheetSections(
 
             val arts = c.root.child("martialarts")?.children("martialart").orEmpty().map { it.t("name") }
             return SheetSections(sets, weapons, wares, gear, vehicles, contacts, lifestyles, arts)
+        }
+
+        private fun capacityLeft(c: CharacterFile, data: GameData?, a: Element): Double? {
+            if (data == null || a.t("armorcapacity").isBlank() || a.t("armorcapacity") == "0") return null
+            return ArmorWeaponEditor(c, data).armorCapacityLeft(a.t("guid"))
         }
 
         /** The armor value with its equipped mods added, keeping the leading `+` of a stacking accessory. */

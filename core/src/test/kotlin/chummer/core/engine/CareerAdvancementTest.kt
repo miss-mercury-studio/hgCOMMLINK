@@ -164,4 +164,28 @@ class CareerAdvancementTest {
 
     private fun CareerAdvancement.qualityRemoval(c: chummer.core.CharacterFile) =
         c.root.getElementsByTagName("quality").let { n -> (0 until n.length).mapNotNull { i -> (n.item(i) as org.w3c.dom.Element).getElementsByTagName("guid").item(0)?.textContent?.trim()?.let { g -> qualityRemovalCost(g)?.let { g to it } } }.toMap() }
+
+    @Test
+    fun armorGearIsPaidForInstalledAndUndone() {
+        val c = viper()
+        val log = ExpenseLog(c, data, settings)
+        log.manualNuyen(100000.0, "Test funds")
+        val adv = CareerAdvancement(c, data, settings)
+        val shirt = data.byId.entries.first { it.value.file == "armor.xml" && it.value.element.tagName == "armor" && it.value.name == "Custom Ballistic Mask" }.key
+        val armor = adv.buyArmor(shirt)!!
+        val ed = ArmorWeaponEditor(c, data)
+        val left = ed.armorCapacityLeft(armor)!!
+        val options = GearCatalog.list(data).filter { (it.armorCapacity ?: 99.0) <= left && it.cost != null && it.maxRating == 0 }
+        assertTrue("some gear fits", options.isNotEmpty())
+        val pick = options.first()
+        val before = log.nuyen
+        val guid = adv.buyArmorGear(armor, pick.id)!!
+        assertEquals(before - pick.cost!!, log.nuyen.toDouble(), 0.01)
+        assertTrue(ed.armorCapacityLeft(armor)!! < left)
+        assertTrue(log.balanced())
+        assertTrue(log.undo(log.entries().last().guid))
+        assertEquals(before.toDouble(), log.nuyen.toDouble(), 0.01)
+        assertEquals(left, ed.armorCapacityLeft(armor)!!, 0.001)
+        assertTrue(guid.isNotEmpty())
+    }
 }

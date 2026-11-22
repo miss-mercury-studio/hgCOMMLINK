@@ -15,6 +15,8 @@ import java.util.UUID
 data class GearOption(
     val id: String, val name: String, val category: String, val cost: Double?, val avail: String,
     val minRating: Int, val maxRating: Int, val unsupported: List<String>,
+    /** Capacity this gear uses when installed in armor, e.g. `[2]`; null when it does not fit in armor. */
+    val armorCapacity: Double? = null,
 )
 
 object GearCatalog {
@@ -27,7 +29,8 @@ object GearCatalog {
             val min = t("minrating").toIntOrNull() ?: 0
             val max = t("rating").toIntOrNull() ?: 0
             val unsupported = el.child("bonus")?.let { BonusHandlers.apply(it, BonusContext("Gear", "", 1)).unhandled.distinct() }.orEmpty()
-            GearOption(id, t("name"), t("category"), GearEditor.unitCost(el, if (max > 0) maxOf(min, 1) else 0), t("avail"), min, max, unsupported)
+            GearOption(id, t("name"), t("category"), GearEditor.unitCost(el, if (max > 0) maxOf(min, 1) else 0), t("avail"), min, max, unsupported,
+                t("armorcapacity").takeIf { it.startsWith("[") }?.let { CyberwareEditor.formula(it.removePrefix("[").removeSuffix("]"), maxOf(min, 1)) })
         }.sortedBy { it.name.lowercase() }
 }
 

@@ -235,6 +235,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun buyAccessory(weaponGuid: String, id: String, mount: String?, rating: Int?) = editCareer("Accessory bought", "Not enough nuyen") { adv, _ -> adv.buyAccessory(weaponGuid, id, mount, rating) != null }
     fun buyArmorMod(armorGuid: String, id: String, rating: Int?) = editCareer("Mod bought", "Not enough nuyen") { adv, _ -> adv.buyArmorMod(armorGuid, id, rating) != null }
 
+    fun armorGearOptions(room: Double) = gameData.gearOptions().filter { (it.armorCapacity ?: Double.MAX_VALUE) <= room + 1e-9 }
+    fun buyArmorGear(armorGuid: String, id: String, rating: Int?) = editCareer("Gear installed", "Cannot install that (nuyen or capacity)") { adv, _ -> adv.buyArmorGear(armorGuid, id, rating) != null }
+
     fun wareOptions() = gameData.wareOptions()
     fun wareGrades(bioware: Boolean): List<String> = open?.let { gameData.wareGrades(bioware, it.character) }.orEmpty()
     fun wareCost(id: String, grade: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareCost(id, grade, rating) }
