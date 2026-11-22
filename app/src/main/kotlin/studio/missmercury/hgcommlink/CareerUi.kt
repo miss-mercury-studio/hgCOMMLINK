@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Row as LayoutRow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -413,4 +415,66 @@ fun ArmorGearDialog(armorGuid: String, room: Double, vm: AppViewModel, nuyen: St
             }
         }
     }
+}
+
+/** Initiation (or submersion) as list items: the grade, what the next one costs, and the metamagics (echoes) taken. */
+fun androidx.compose.foundation.lazy.LazyListScope.initiationItems(section: chummer.core.engine.InitiationSection, vm: AppViewModel, onInitiate: () -> Unit, onMetamagic: () -> Unit) {
+    val word = if (section.technomancer) "Submersion" else "Initiation"
+    val thing = if (section.technomancer) "echo" else "metamagic"
+    item {
+        Column(Modifier.padding(top = 8.dp)) {
+            Text("// ${word.uppercase()}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Text(
+                "grade ${section.grade} of ${section.maxGrade} possible" + if (section.grade < section.maxGrade) "  ·  next grade ${section.nextCost} karma" else "",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+    if (section.metamagics.isEmpty()) item { Text("No ${thing}s.", style = MaterialTheme.typography.bodySmall) }
+    items(section.metamagics.size) { i ->
+        val m = section.metamagics[i]
+        Column(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalArrangement = Arrangement.Center) {
+            Text(m.name, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            Text("grade ${m.grade}" + if (m.paid) "  ·  paid with karma" else "", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+        }
+    }
+    item {
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TerminalButton(if (section.grade >= section.maxGrade) "Grade limit" else "+ Grade", { if (section.grade < section.maxGrade) onInitiate() }, Modifier.weight(1f), enabled = section.grade < section.maxGrade)
+            TerminalButton("+ ${thing.replaceFirstChar { it.uppercase() }}", onMetamagic, Modifier.weight(1f), enabled = section.grade > 0)
+        }
+    }
+}
+
+/** Take the next initiation grade: the discounts it can have, and the karma (and nuyen) it costs. */
+@Composable
+fun InitiateSheet(section: chummer.core.engine.InitiationSection, vm: AppViewModel, onDismiss: () -> Unit) {
+    var group by remember { mutableStateOf("No") }
+    var ordeal by remember { mutableStateOf("No") }
+    var schooling by remember { mutableStateOf("No") }
+    val cost = vm.initiationCost(group == "Yes", ordeal == "Yes", schooling == "Yes")
+    TerminalSheet(if (section.technomancer) "Submerge" else "Initiate", onDismiss) { close ->
+        val yesNo = listOf("No" to "No", "Yes" to "Yes")
+        ChoiceChips("Group initiation", yesNo, group, { group = it })
+        ChoiceChips("Ordeal", yesNo, ordeal, { ordeal = it })
+        ChoiceChips("Schooling (10,000 nuyen)", yesNo, schooling, { schooling = it })
+        Text("Grade ${section.grade + 1} costs $cost karma" + if (schooling == "Yes") " and 10,000 nuyen" else "", Modifier.padding(vertical = 10.dp))
+        TerminalButton("Take grade ${section.grade + 1}", { vm.initiate(group == "Yes", ordeal == "Yes", schooling == "Yes"); close() }, Modifier.fillMaxWidth().padding(bottom = 12.dp), filled = true)
+    }
+}
+
+/** The metamagics (echoes) on offer; ones with unmet requirements are shown with what they need and cannot be taken. */
+@Composable
+fun MetamagicPicker(section: chummer.core.engine.InitiationSection, vm: AppViewModel, onDismiss: () -> Unit) {
+    val options = remember { vm.metamagicOptions() }
+    val items = options.map {
+        PickItem(it.id, it.name, listOf(it.source, if (it.unmet.isNotEmpty()) it.unmet else "").filter { x -> x.isNotBlank() }.joinToString("  ·  "), warn = it.unmet.isNotEmpty())
+    }
+    val thing = if (section.technomancer) "echo" else "metamagic"
+    val free = section.metamagics.none { it.grade == section.grade }
+    PickerSheet(
+        "Add a $thing", items, { id -> if (options.firstOrNull { it.id == id }?.unmet.isNullOrEmpty()) vm.addMetamagic(id) }, keepOpenFor = { id -> options.firstOrNull { it.id == id }?.unmet?.isNotEmpty() == true },
+        note = if (free) "The first one of grade ${section.grade} is part of the grade." else "A second one of grade ${section.grade} costs ${section.extraMetamagicCost} karma.",
+        onDismiss = onDismiss,
+    )
 }

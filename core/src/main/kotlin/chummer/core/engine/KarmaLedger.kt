@@ -42,8 +42,9 @@ data class KarmaLedger(
     val martialArts: Int = 0,
     val complexForms: Int = 0,
     val foci: Int = 0,
+    val initiation: Int = 0,
 ) {
-    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen + martialArts + complexForms + foci
+    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells + nuyen + martialArts + complexForms + foci + initiation
     val remaining get() = budget - spent
     val knowledgePointsLeft get() = knowledgePoints - knowledgePointsUsed
 
@@ -285,8 +286,8 @@ data class KarmaLedger(
 
             for ((tag, label) in listOf(
                 "stackedfoci" to "stacked foci", "aiprograms" to "programs",
-                "initiationgrades" to "initiation", "critterpowers" to "critter powers",
-                "metamagics" to "metamagics", "mentorspirits" to "mentor spirits",
+                "critterpowers" to "critter powers",
+                "mentorspirits" to "mentor spirits",
             )) if (c.root.child(tag)?.children().orEmpty().isNotEmpty()) notCounted += label
             var martialArts = 0
             for (m in c.root.child("martialarts")?.children("martialart").orEmpty()) {
@@ -308,12 +309,21 @@ data class KarmaLedger(
                 val g = gearByGuid[f.text("gearid")?.trim()?.lowercase()] ?: return@sumOf 0
                 FocusCost.of(g.text("name")?.trim().orEmpty(), g.text("rating")?.trim()?.toIntOrNull() ?: 0, cost)
             }
+            // Initiation (Chummer's calculation in `CharacterCreate`): each grade's karma, and the metamagic price for each metamagic of a grade after its first.
+            val gradeRows = c.root.child("initiationgrades")?.children("initiationgrade").orEmpty()
+            fun yes(e: org.w3c.dom.Element, t: String) = e.text(t)?.trim().equals("True", true)
+            val metamagicRows = c.root.child("metamagics")?.children("metamagic").orEmpty()
+            val initiation = gradeRows.sumOf { g ->
+                val n = g.text("grade")?.trim()?.toIntOrNull() ?: 0
+                InitiationEditor.gradeCost(n, yes(g, "res"), yes(g, "group"), yes(g, "ordeal"), yes(g, "schooling"), settings) +
+                    maxOf(metamagicRows.count { it.text("grade")?.trim()?.toIntOrNull() == n } - 1, 0) * k("karmametamagic", 15)
+            }
             val nuyenKarma = (c.root.text("nuyenbp")?.trim()?.toDoubleOrNull()?.toInt() ?: 0)
                 .coerceIn(0, if (settings.bool("unrestrictednuyen")) Int.MAX_VALUE else settings.int("nuyenmaxbp", 10))
 
             return KarmaLedger(
                 budget, metatype, attributes, skills, qualities, contacts, notCounted, positive, negative,
-                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma, martialArts, complexForms, foci,
+                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma, nuyenKarma, martialArts, complexForms, foci, initiation,
             )
         }
     }

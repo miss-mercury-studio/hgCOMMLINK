@@ -790,9 +790,12 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
     var choosingTradition by remember { mutableStateOf(false) }
     var addingSpell by remember { mutableStateOf(false) }
     var addingPower by remember { mutableStateOf(false) }
+    var initiating by remember { mutableStateOf(false) }
+    var pickingMeta by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         s.powers?.let { pp -> adeptPowerItems(pp, vm) { addingPower = true } }
+        s.initiation?.let { initiationItems(it, vm, { initiating = true }, { pickingMeta = true }) }
         if (showMagician) item {
             Section("Tradition") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -821,6 +824,10 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
     if (creation && showMagician) PinnedAction("+ Add spell") { addingSpell = true }
     }
     if (addingPower) AddPowerDialog(vm) { addingPower = false }
+    s.initiation?.let { sec ->
+        if (initiating) InitiateSheet(sec, vm) { initiating = false }
+        if (pickingMeta) MetamagicPicker(sec, vm) { pickingMeta = false }
+    }
     if (choosingTradition) {
         val options = remember { vm.traditionOptions().map { PickItem(it.id, it.name, "Drain ${it.drain}") } }
         PickerSheet("Choose a tradition", options, { vm.setTradition(it) }) { choosingTradition = false }
@@ -909,6 +916,8 @@ private fun Resonance(s: Sheet, vm: AppViewModel) {
     var adding by remember { mutableStateOf(false) }
     var choosing by remember { mutableStateOf<String?>(null) }
     var addingSprite by remember { mutableStateOf(false) }
+    var initiating by remember { mutableStateOf(false) }
+    var pickingMeta by remember { mutableStateOf(false) }
     val full = section.forms.size >= section.limit
     Column(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -942,10 +951,11 @@ private fun Resonance(s: Sheet, vm: AppViewModel) {
                     StepButton("×", 36) { vm.removeSprite(sp.guid) }
                 }
             }
+            s.initiation?.let { initiationItems(it, vm, { initiating = true }, { pickingMeta = true }) }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TerminalButton(if (full) "Form limit reached" else "+ Complex form", { if (!full) adding = true }, Modifier.weight(1f))
-            TerminalButton(if (section.sprites.count { it.bound } >= section.spriteLimit) "Sprite limit reached" else "+ Sprite", { if (section.sprites.count { it.bound } < section.spriteLimit) addingSprite = true }, Modifier.weight(1f))
+            TerminalButton(if (full) "Forms full" else "+ Form", { if (!full) adding = true }, Modifier.weight(1f))
+            TerminalButton(if (section.sprites.count { it.bound } >= section.spriteLimit) "Sprites full" else "+ Sprite", { if (section.sprites.count { it.bound } < section.spriteLimit) addingSprite = true }, Modifier.weight(1f))
         }
     }
     if (adding) {
@@ -954,6 +964,10 @@ private fun Resonance(s: Sheet, vm: AppViewModel) {
             val o = vm.complexFormOptions().first { x -> x.id == it }
             if (o.needsChoice) choosing = it else vm.addComplexForm(it)
         }) { adding = false }
+    }
+    s.initiation?.let { sec ->
+        if (initiating) InitiateSheet(sec, vm) { initiating = false }
+        if (pickingMeta) MetamagicPicker(sec, vm) { pickingMeta = false }
     }
     if (addingSprite) {
         val options = remember { vm.spriteOptions().map { PickItem(it.id, it.name, "level ${section.spriteMax}  ·  ${it.source}") } }

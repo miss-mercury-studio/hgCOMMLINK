@@ -260,6 +260,37 @@ class CareerAdvancement(
     /** The character's sprites (in creation and career alike; sprites cost no karma). */
     fun sprites() = SpriteEditor(file, data, settings)
 
+    // ---- initiation and metamagics
+
+    fun initiation() = InitiationEditor(file, data, settings)
+
+    /**
+     * Take the next initiation (submersion) grade with karma, and 10,000 nuyen more for schooling. Null when the grade passes Magic (Resonance), or
+     * karma or nuyen fall short. Chummer's entries are "Initiate Grade 0 -> 1" (karma, undoable) and, for schooling, the same text in nuyen.
+     */
+    fun initiate(group: Boolean = false, ordeal: Boolean = false, schooling: Boolean = false, now: LocalDateTime = LocalDateTime.now()): String? {
+        val ed = initiation()
+        val cost = ed.nextCost(group, ordeal, schooling)
+        val before = ed.grade()
+        if (cost > log.karma || (schooling && ExpenseLog(file).nuyen < 10000)) return null
+        val guid = ed.initiate(group, ordeal, schooling) ?: return null
+        val reason = (if (ed.technomancer) "Submersion Grade" else "Initiate Grade") + " $before -> ${before + 1}"
+        log.add("Karma", -cost.toDouble(), reason, "ImproveInitiateGrade", objectId = guid, now = now)
+        if (schooling) log.add("Nuyen", -10000.0, reason, "ImproveInitiateGrade", objectId = guid, now = now)
+        return guid
+    }
+
+    /** Add a metamagic (echo) to the latest grade. The first of a grade is free; each after costs the metamagic price. */
+    fun addMetamagic(entryId: String, now: LocalDateTime = LocalDateTime.now()): String? {
+        val ed = initiation()
+        val grade = ed.grade()
+        val cost = if (ed.costsKarma(grade)) ed.extraMetamagicCost() else 0
+        if (cost > log.karma) return null
+        val guid = ed.addMetamagic(entryId, grade) ?: return null
+        if (cost > 0) log.add("Karma", -cost.toDouble(), (if (ed.technomancer) "Echo " else "Metamagic ") + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddMetamagic", objectId = guid, now = now)
+        return guid
+    }
+
     // ---- complex forms
 
     /** The karma price of learning a complex form (Chummer's `ComplexFormKarmaCost`). */

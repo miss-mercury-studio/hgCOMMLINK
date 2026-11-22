@@ -60,6 +60,8 @@ data class Sheet(
     val points: PointsLedger? = null,
     /** The technomancer's complex forms, when Resonance is switched on. */
     val complexForms: ComplexFormSection? = null,
+    /** Initiation (submersion) for a character with magic or resonance, once created. */
+    val initiation: InitiationSection? = null,
 ) {
     data class CreationBuy(val ledger: NuyenLedger, val pluginCapacity: Map<String, Double>)
     /**
@@ -173,6 +175,7 @@ data class Sheet(
                 career = if (career) careerLines(c, data, settings, shown.map { it.name }) else null,
                 karmaLedger = if (!career && s.buildMethod in CREATION_BUILDS) KarmaLedger.of(c, settings, data) else null,
                 points = if (!career) PointsLedger.of(c, data, settings = settings) else null,
+                initiation = if (career && !flag(c, "initiationdisabled") && (flag(c, "magenabled") || flag(c, "resenabled"))) InitiationEditor(c, data, settings).section() else null,
                 complexForms = if (flag(c, "resenabled")) ComplexForms.section(c, data, settings, settings.karmaCost["karmanewcomplexform"] ?: 4) else null,
                 sections = SheetSections.read(c, WeaponEngine(c.root, set, str, d.limitPhysical).all(), essenceEngine, data),
             )

@@ -106,7 +106,7 @@ class ExpenseLog(
 
     /** Which entries can be undone by [undo]: manual ones, and skill and attribute improvements. */
     fun canUndo(entry: ExpenseEntry): Boolean = when {
-        entry.isKarma -> entry.undoKind in setOf("ManualAdd", "ManualSubtract", "ImproveAttribute", "ImproveSkill", "AddSkill", "AddSpecialization", "AddQuality", "AddSpell", "AddMartialArt", "AddMartialArtTechnique", "AddComplexForm") && entry.reason != "Starting Karma"
+        entry.isKarma -> entry.undoKind in setOf("ManualAdd", "ManualSubtract", "ImproveAttribute", "ImproveSkill", "AddSkill", "AddSpecialization", "AddQuality", "AddSpell", "AddMartialArt", "AddMartialArtTechnique", "AddComplexForm", "ImproveInitiateGrade", "AddMetamagic") && entry.reason != "Starting Karma"
         else -> entry.undoKind in setOf("ManualAdd", "ManualSubtract", "AddGear", "AddArmor", "AddWeapon", "AddWeaponAccessory", "AddArmorMod", "AddCyberware") && entry.reason != "Starting Nuyen"
     }
 
@@ -148,6 +148,20 @@ class ExpenseLog(
         if (entry.isKarma && entry.undoKind == "AddMartialArtTechnique") {
             val d = data ?: return false
             if (!MartialArtEditor(file, d).removeTechnique(entry.objectId)) return false
+        }
+        if (entry.isKarma && entry.undoKind == "AddMetamagic") {
+            val d = data ?: return false
+            if (!InitiationEditor(file, d, settings ?: return false).removeMetamagic(entry.objectId)) return false
+        }
+        if (entry.isKarma && entry.undoKind == "ImproveInitiateGrade") {
+            val d = data ?: return false
+            if (!InitiationEditor(file, d, settings ?: return false).removeGrade(entry.objectId)) return false
+            // The nuyen of schooling goes back with the grade.
+            val school = entries().firstOrNull { !it.isKarma && it.undoKind == "ImproveInitiateGrade" && it.objectId.equals(entry.objectId, true) }
+            if (school != null) {
+                root.child("expenses")?.children("expense")?.first { it.text("guid")?.trim().equals(school.guid, true) }?.let { it.parentNode.removeChild(it) }
+                adjust(school.type, -school.amount)
+            }
         }
         if (entry.isKarma && entry.undoKind == "AddComplexForm") {
             val d = data ?: return false
