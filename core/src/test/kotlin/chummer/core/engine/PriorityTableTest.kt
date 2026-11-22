@@ -72,13 +72,10 @@ class PriorityTableTest {
         var checked = 0
         for ((f, c) in fixtures) {
             if (c.root.text("created")?.trim() == "True" || c.root.text("appversion")?.startsWith("5.202") != true) continue
-            val loaded = chummer.core.data.CharacterSettings.find(c.root.text("settings").orEmpty(), File(src, "Chummer/data/settings.xml"), emptyList())
-            // The fixtures were saved with a profile (default.xml) that is not shipped; their numbers only add up when specializations
-            // on skills bought with karma may be paid with skill points, so the test uses that setting.
-            val settings = chummer.core.data.CharacterSettings(
-                loaded.id, loaded.name, loaded.values + ("allowpointbuyspecializationsonkarmaskills" to "True"), loaded.books, loaded.customData,
-                loaded.bannedWareGrades, loaded.redlinerExclusion, loaded.karmaCost,
-            )
+            // The fixtures were saved with a profile named default.xml, which Chummer does not ship; the one in the reference folder is a Sum-to-Ten
+            // profile with specializations on karma skills payable with skill points (the only setting their numbers need).
+            val settings = chummer.core.data.CharacterSettings.find(c.root.text("settings").orEmpty(), File(src, "Chummer/data/settings.xml"), listOf(File(System.getProperty("chummer.reference"), "Chummer5.226.0/settings")))
+            assertTrue("default.xml was not found in the reference folder", !settings.isFallback)
             val ledger = KarmaLedger.of(c, settings, data)
             val stored = c.root.text("karma")?.trim()?.toIntOrNull()
             checked++
@@ -95,10 +92,10 @@ class PriorityTableTest {
          * other 7: quality rules the data does not settle (Miko, Ocelot, Ushi, prime; Miko is a changeling with metagenic qualities), a mystic
          * adept's power points (resub), and something unexplained in Bastion and Yeti (not their complex forms, nor their Resonance, which
          * matches Chummer's stored value; their ledgers also differ in ways foci and mentor spirits cannot explain).
-         * Two rules were read from the data, not from Chummer's source: the
-         * fixtures only add up when specializations on skills bought with karma can be paid with skill points (the profile `default.xml`
-         * they were saved with is not shipped, so the test sets that option), and a negative quality refund is capped at the quality
-         * limit when the positive qualities stay within it.
+         * Two rules were read from the data, not from Chummer's source: the fixtures only add up when specializations on skills bought with karma
+         * can be paid with skill points (set in the `default.xml` profile in the reference folder, a Sum-to-Ten profile made for this because the
+         * original, which the fixtures name, is not available; it gives the same 19 as setting that option by hand), and a negative quality
+         * refund is capped at the quality limit when the positive qualities stay within it.
          */
         const val KNOWN_DIFFERENCES = 7
     }

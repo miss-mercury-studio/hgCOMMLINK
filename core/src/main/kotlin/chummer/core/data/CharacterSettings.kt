@@ -98,7 +98,7 @@ class CharacterSettings(
 
         /**
          * Find the profile a character names. Looks in [userDirs] (standalone files with a `<settings>` root)
-         * first, then in Chummer's built-in `data/settings.xml`. An unknown name, such as the old
+         * first (by id or file name), then in Chummer's built-in `data/settings.xml`. An unknown name, such as the old
          * `default.xml`, falls back to the first built-in profile.
          */
         fun find(settingsRef: String, builtInFile: File, userDirs: List<File> = emptyList()): CharacterSettings {
@@ -110,7 +110,9 @@ class CharacterSettings(
                     } catch (ex: Exception) {
                         continue
                     }
-                    if (root.tagName == "settings" && root.child("id")?.textContent?.trim()?.lowercase() == wanted) return parse(root)
+                    // A profile is named by its id; characters saved by older Chummer versions name it by file name (`default.xml`), and a file made with
+                    // Save As carries an empty id, so the file name is matched as well.
+                    if (root.tagName == "settings" && (root.child("id")?.textContent?.trim()?.lowercase() == wanted || f.name.lowercase() == wanted)) return parse(root)
                 }
             }
             val builtIn = parseXml(builtInFile).documentElement.child("settings")?.children("setting").orEmpty()
