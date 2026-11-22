@@ -27,11 +27,11 @@ class PointsEditingTest {
         val c = apex()
         val ed = CharacterEditor(c, data, settings = settings(c))
         val before = PointsLedger.of(c, data)!!
-        assertEquals(6, before.skills.left) // 36 points, 30 spent
+        assertEquals(1, before.skills.left) // 36 points: 30 in ranks and 5 specializations (the sixth is bought with karma)
         val row = c.root.child("newskills")!!.child("skills")!!.children("skill").first { it.text("isknowledge") != "True" && (it.text("base")?.trim()?.toIntOrNull() ?: 0) == 0 && it.text("karma")?.trim() == "0" }
         val name = skillName(row)
-        repeat(6) { assertTrue(ed.changeSkill(name, 1)) }
-        assertEquals("6", row.text("base"))
+        assertTrue(ed.changeSkill(name, 1))
+        assertEquals("1", row.text("base"))
         assertEquals("0", row.text("karma"))
         assertEquals(0, PointsLedger.of(c, data)!!.skills.left)
         // Out of points: the next steps cost karma (the creation maximum is 6, so use another skill).
@@ -44,7 +44,7 @@ class PointsEditingTest {
         assertEquals("0", other.text("karma"))
         assertFalse(ed.changeSkill(skillName(other), -1))
         assertTrue(ed.changeSkill(name, -1))
-        assertEquals("5", row.text("base"))
+        assertEquals("0", row.text("base"))
         assertEquals(1, PointsLedger.of(c, data)!!.skills.left)
     }
 
