@@ -339,6 +339,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun addGradeSpell(id: String) = editCareer("Spell added", "Not enough karma") { adv, _ -> adv.addGradeSpell(id) != null }
     fun updateSprite(guid: String, name: String, level: Int, tasks: Int, registered: Boolean) = editCareer("Sprite changed", "Cannot change the sprite that way (level, or registration limit)") { adv, _ -> adv.sprites().update(guid, name, level, tasks, registered) }
     fun chooseMentor(guid: String, set: Int, choice: String) = editCareer(null, "Cannot choose that") { adv, _ -> adv.mentors().choose(guid, set, choice) }
+    fun spiritOptions() = open?.let { gameData.career(it.character).spirits().options() }.orEmpty()
+    fun addSpirit(entryId: String) = editCareer("Spirit added", "Cannot add that spirit (force)") { adv, _ -> adv.spirits().add(entryId, "", services = 0) != null }
+    fun updateSpirit(guid: String, name: String, level: Int, tasks: Int, bound: Boolean) = editCareer("Spirit changed", "Cannot change the spirit that way (force, or bound limit)") { adv, _ -> adv.spirits().update(guid, name, level, tasks, bound) }
+    fun removeSpirit(guid: String) = editCareer("Spirit removed", "Nothing changed") { adv, _ -> adv.spirits().remove(guid) }
     fun spriteOptions() = open?.let { gameData.career(it.character).sprites().options() }.orEmpty()
     fun addSprite(entryId: String, name: String) = editCareer("Sprite added", "Cannot add that sprite (limit, or level)") { adv, _ -> adv.sprites().add(entryId, name) != null }
     fun removeSprite(guid: String) = editCareer("Sprite removed", "Nothing changed") { adv, _ -> adv.sprites().remove(guid) }

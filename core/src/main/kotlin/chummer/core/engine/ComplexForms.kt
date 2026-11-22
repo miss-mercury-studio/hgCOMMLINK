@@ -71,12 +71,12 @@ data class SpriteLine(val guid: String, val name: String, val critterName: Strin
  * Sprites, kept in the `spirits` list with type `Sprite` as Chummer saves them. In creation every sprite is registered and at
  * most the character's Charisma (the `registeredspriteexpression` setting) may be; its level is at most Resonance (twice that in career).
  */
-class SpriteEditor(private val file: CharacterFile, private val data: GameData, private val settings: CharacterSettings) {
-    private val root get() = file.root
-    private val created get() = root.text("created")?.trim().equals("True", true)
+open class SpriteEditor(protected val file: CharacterFile, protected val data: GameData, protected val settings: CharacterSettings, protected val kind: String = "Sprite") {
+    protected val root get() = file.root
+    protected val created get() = root.text("created")?.trim().equals("True", true)
 
     /** The sprites the character's stream offers (all of them when no stream is chosen). */
-    fun options(): List<SpriteOption> {
+    open fun options(): List<SpriteOption> {
         val pack = data as? DataPack ?: return emptyList()
         val allowed = root.child("tradition")?.child("spirits")?.children("spirit").orEmpty().map { it.textContent.trim() }.toSet()
         return pack.byId.entries.filter { it.value.file == "critters.xml" && it.value.element.tagName == "metatype" && it.value.element.text("category")?.trim() == "Sprites" }
@@ -84,35 +84,41 @@ class SpriteEditor(private val file: CharacterFile, private val data: GameData, 
             .filter { allowed.isEmpty() || it.name in allowed }.sortedBy { it.name.lowercase() }
     }
 
-    private fun attribute(abbrev: String) = AttributeEngine.forFile(file, settings.toRuleSettings())[abbrev]?.totalValue ?: 0
+    protected fun attribute(abbrev: String) = AttributeEngine.forFile(file, settings.toRuleSettings())[abbrev]?.totalValue ?: 0
 
     /** The highest level a sprite can have: Resonance in creation, twice that once the character is created. */
-    fun maxLevel(): Int = if (root.text("resenabled")?.trim().equals("True", true)) attribute("RES").let { if (created) it * 2 else it } else 0
+    open fun maxLevel(): Int = if (root.text("resenabled")?.trim().equals("True", true)) attribute("RES").let { if (created) it * 2 else it } else 0
 
     /** How many registered sprites the character may have (Chummer's `RegisteredSpriteLimit`, Charisma by default). */
-    fun registeredLimit(): Int = standardRound(settings.evaluate("registeredspriteexpression", mapOf("CHA" to attribute("CHA").toDouble(), "LOG" to attribute("LOG").toDouble()), "{CHA}"))
+    open fun registeredLimit(): Int = standardRound(settings.evaluate("registeredspriteexpression", mapOf("CHA" to attribute("CHA").toDouble(), "LOG" to attribute("LOG").toDouble()), "{CHA}"))
 
-    fun sprites(): List<SpriteLine> = root.child("spirits")?.children("spirit").orEmpty().filter { it.text("type")?.trim() == "Sprite" }.map {
+    fun sprites(): List<SpriteLine> = root.child("spirits")?.children("spirit").orEmpty().filter { it.text("type")?.trim() == kind }.map {
         SpriteLine(
             it.text("guid").orEmpty().trim(), it.text("name").orEmpty().trim(), it.text("crittername").orEmpty().trim(),
             it.text("force")?.trim()?.toIntOrNull() ?: 0, it.text("services")?.trim()?.toIntOrNull() ?: 0, it.text("bound")?.trim().equals("True", true),
         )
     }
 
-    private fun registered() = sprites().count { it.bound }
+    /** Whether a conjured thing of this name counts against the bound or registered limit (watchers and homunculi do not). */
+    protected open fun countsAgainst(name: String) = true
+
+    private fun registered() = sprites().count { it.bound && countsAgainst(it.name) }
 
     /** Add a sprite. In creation it is registered; the level defaults to the highest allowed. Null when the limit or level forbids it. */
     fun add(entryId: String, critterName: String = "", force: Int = maxLevel(), services: Int = 1): String? {
         val entry = data[entryId]?.element ?: return null
-        val bound = !created || services > 0
-        if (force < 1 || force > maxLevel() || (bound && registered() >= registeredLimit())) return null
+        val name = entry.child("name")?.textContent?.trim().orEmpty()
+        val atLimit = countsAgainst(name) && registered() >= registeredLimit()
+        // A sprite is registered (the limit stops it); a spirit is bound unless the limit is reached, and is then added unbound.
+        val bound = if (kind == "Sprite") !created || services > 0 else !atLimit
+        if (force < 1 || force > maxLevel() || (kind == "Sprite" && bound && atLimit)) return null
         val guid = java.util.UUID.randomUUID().toString()
         val doc = file.doc
         fun el(tag: String, text: String? = null) = doc.createElement(tag).also { if (!text.isNullOrEmpty()) it.textContent = text }
         val s = el("spirit")
         for ((tag, v) in listOf(
             "guid" to guid, "name" to entry.child("name")?.textContent?.trim().orEmpty(), "crittername" to critterName, "services" to services.toString(),
-            "force" to force.toString(), "bound" to if (bound) "True" else "False", "fettered" to "False", "type" to "Sprite",
+            "force" to force.toString(), "bound" to if (bound) "True" else "False", "fettered" to "False", "type" to kind,
             "file" to "", "relative" to "", "notes" to "", "mainmugshotindex" to "-1", "mugshots" to "",
         )) s.appendChild(el(tag, v))
         (root.child("spirits") ?: el("spirits").also { root.appendChild(it) }).appendChild(s)
@@ -124,13 +130,13 @@ class SpriteEditor(private val file: CharacterFile, private val data: GameData, 
      * registered. Registering one more than the limit allows is refused. False when nothing was changed.
      */
     fun update(guid: String, critterName: String? = null, force: Int? = null, services: Int? = null, bound: Boolean? = null): Boolean {
-        val s = root.child("spirits")?.children("spirit")?.firstOrNull { it.text("guid")?.trim().equals(guid, true) && it.text("type")?.trim() == "Sprite" } ?: return false
+        val s = root.child("spirits")?.children("spirit")?.firstOrNull { it.text("guid")?.trim().equals(guid, true) && it.text("type")?.trim() == kind } ?: return false
         if (force != null && (force < 1 || force > maxLevel())) return false
         if (services != null && services < 0) return false
         val wasBound = s.text("bound")?.trim().equals("True", true)
         if (bound != null && bound != wasBound) {
             if (!created && !bound) return false
-            if (bound && registered() >= registeredLimit()) return false
+            if (bound && countsAgainst(s.text("name")?.trim().orEmpty()) && registered() >= registeredLimit()) return false
         }
         critterName?.let { s.child("crittername")?.textContent = it }
         force?.let { s.child("force")?.textContent = it.toString() }

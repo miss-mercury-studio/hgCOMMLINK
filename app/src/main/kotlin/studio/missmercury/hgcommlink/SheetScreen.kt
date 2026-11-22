@@ -806,6 +806,8 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
     var initiating by remember { mutableStateOf(false) }
     var pickingMeta by remember { mutableStateOf(false) }
     var pickingArt by remember { mutableStateOf(false) }
+    var addingSpirit by remember { mutableStateOf(false) }
+    var editingSpirit by remember { mutableStateOf<String?>(null) }
     var more by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -835,10 +837,36 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
                 if (creation) StepButton("×", 36) { vm.removeSpell(sp.guid) }
             }
         }
+        s.spirits?.takeIf { showMagician }?.let { sec ->
+            item {
+                Column(Modifier.padding(top = 10.dp)) {
+                    Text("// SPIRITS", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    Small("${sec.bound} of ${sec.boundLimit} bound  ·  force up to ${sec.maxForce}")
+                }
+            }
+            if (sec.spirits.isEmpty()) item { Text("No spirits.", style = MaterialTheme.typography.bodySmall) }
+            items(sec.spirits, key = { it.guid }) { sp ->
+                Row(Modifier.fillMaxWidth().clickable { editingSpirit = sp.guid }.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(sp.name + if (sp.critterName.isNotBlank()) " \"${sp.critterName}\"" else "", fontWeight = FontWeight.Bold)
+                        Small("force ${sp.force}  ·  ${sp.services} services  ·  ${if (sp.bound) "bound" else "not bound"}")
+                    }
+                    StepButton("×", 36) { vm.removeSpirit(sp.guid) }
+                }
+            }
+            item { TerminalButton("+ Spirit", { addingSpirit = true }, Modifier.fillMaxWidth().padding(vertical = 8.dp), enabled = sec.maxForce > 0) }
+        }
     }
     if (creation && showMagician) PinnedAction("+ Add spell") { addingSpell = true }
     }
     if (addingPower) AddPowerDialog(vm) { addingPower = false }
+    s.spirits?.let { sec ->
+        sec.spirits.firstOrNull { it.guid == editingSpirit }?.let { SpriteSheet(it, sec.maxForce, true, vm, spirit = true) { editingSpirit = null } }
+        if (addingSpirit) {
+            val options = remember { vm.spiritOptions().map { PickItem(it.id, it.name, "force ${sec.maxForce}  ·  ${it.source}") } }
+            PickerSheet("Add a spirit", options, { vm.addSpirit(it) }, note = "Starts at the highest force you can summon; change it afterwards.") { addingSpirit = false }
+        }
+    }
     s.initiation?.let { sec ->
         if (initiating) InitiateSheet(sec, vm) { initiating = false }
         if (pickingMeta) MetamagicPicker(sec, vm) { pickingMeta = false }
@@ -938,6 +966,8 @@ private fun Resonance(s: Sheet, vm: AppViewModel) {
     var initiating by remember { mutableStateOf(false) }
     var pickingMeta by remember { mutableStateOf(false) }
     var pickingArt by remember { mutableStateOf(false) }
+    var addingSpirit by remember { mutableStateOf(false) }
+    var editingSpirit by remember { mutableStateOf<String?>(null) }
     var more by remember { mutableStateOf<String?>(null) }
     val full = section.forms.size >= section.limit
     Column(Modifier.fillMaxSize()) {
@@ -1006,7 +1036,7 @@ private fun Resonance(s: Sheet, vm: AppViewModel) {
 
 /** A sprite's name, level, tasks owed and registration. */
 @Composable
-private fun SpriteSheet(sp: chummer.core.engine.SpriteLine, maxLevel: Int, career: Boolean, vm: AppViewModel, onDismiss: () -> Unit) {
+private fun SpriteSheet(sp: chummer.core.engine.SpriteLine, maxLevel: Int, career: Boolean, vm: AppViewModel, spirit: Boolean = false, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf(sp.critterName) }
     var level by remember { mutableStateOf(sp.force) }
     var tasks by remember { mutableStateOf(sp.services) }
@@ -1023,7 +1053,7 @@ private fun SpriteSheet(sp: chummer.core.engine.SpriteLine, maxLevel: Int, caree
             StepButton("-", 44) { if (tasks > 0) tasks-- }
             StepButton("+", 44) { tasks++ }
         }
-        if (career) ChoiceChips("Registered", listOf("Yes" to "Yes", "No" to "No"), registered, { registered = it })
-        TerminalButton("Save", { vm.updateSprite(sp.guid, name.trim(), level, tasks, registered == "Yes"); close() }, Modifier.fillMaxWidth().padding(vertical = 12.dp), filled = true)
+        if (career || spirit) ChoiceChips(if (spirit) "Bound" else "Registered", listOf("Yes" to "Yes", "No" to "No"), registered, { registered = it })
+        TerminalButton("Save", { if (spirit) vm.updateSpirit(sp.guid, name.trim(), level, tasks, registered == "Yes") else vm.updateSprite(sp.guid, name.trim(), level, tasks, registered == "Yes"); close() }, Modifier.fillMaxWidth().padding(vertical = 12.dp), filled = true)
     }
 }

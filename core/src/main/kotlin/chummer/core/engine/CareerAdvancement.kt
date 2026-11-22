@@ -260,6 +260,9 @@ class CareerAdvancement(
     /** The character's sprites (in creation and career alike; sprites cost no karma). */
     fun sprites() = SpriteEditor(file, data, settings)
 
+    /** The character's summoned and bound spirits. */
+    fun spirits() = SpiritEditor(file, data, settings)
+
     // ---- initiation and metamagics
 
     fun initiation() = InitiationEditor(file, data, settings)

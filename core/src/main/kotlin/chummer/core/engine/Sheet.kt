@@ -64,6 +64,8 @@ data class Sheet(
     val initiation: InitiationSection? = null,
     /** Mentor spirits with the advantage choices they offer. */
     val mentors: List<MentorLine> = emptyList(),
+    /** Summoned and bound spirits of a character with magic. */
+    val spirits: SpiritSection? = null,
 ) {
     data class CreationBuy(val ledger: NuyenLedger, val pluginCapacity: Map<String, Double>)
     /**
@@ -178,6 +180,7 @@ data class Sheet(
                 karmaLedger = if (!career && s.buildMethod in CREATION_BUILDS) KarmaLedger.of(c, settings, data) else null,
                 points = if (!career) PointsLedger.of(c, data, settings = settings) else null,
                 mentors = MentorEditor(c, data).mentors(),
+                spirits = if (flag(c, "magenabled")) SpiritEditor(c, data, settings).let { e -> SpiritSection(e.spirits(), e.maxLevel(), e.registeredLimit(), e.spirits().count { it.bound && e.countsFor(it.name) }) } else null,
                 initiation = if (career && !flag(c, "initiationdisabled") && (flag(c, "magenabled") || flag(c, "resenabled"))) InitiationEditor(c, data, settings).section() else null,
                 complexForms = if (flag(c, "resenabled")) ComplexForms.section(c, data, settings, settings.karmaCost["karmanewcomplexform"] ?: 4) else null,
                 sections = SheetSections.read(c, WeaponEngine(c.root, set, str, d.limitPhysical).all(), essenceEngine, data),
