@@ -404,4 +404,36 @@ class NewCharacterTemplateTest {
         }
         assertEquals(a, b)
     }
+
+    /** Mag_Spent.chum5 is Mag_Empty with the spell Ball Lightning added. */
+    @Test
+    fun addingBallLightningToTheGeneratedMagicianMatchesMagSpent() {
+        val settings = settingsForTemplates()
+        val want = load("Mag_Spent.chum5")
+        val resolved = chummer.core.data.CustomDataLocator(listOf(File(src, "Chummer/customdata"))).resolve(settings.customData)
+        val data = DataPack.load(File(src, "Chummer/data"), resolved.dirs)
+        val elf = data.byId.entries.first { it.value.file == "metatypes.xml" && it.value.element.tagName == "metatype" && it.value.element.child("name")?.textContent?.trim() == "Elf" }
+        val c = NewCharacter.createKarma(
+            data, settings,
+            NewCharacterRequest(
+                metatypeId = elf.key, metavariantId = want.root.text("metavariantid")!!.trim(),
+                settingsHash = want.root.text("settingshashcode")!!.trim().toInt(), customDataNames = resolved.dirs.map { it.name },
+            ),
+        )
+        val editor = CharacterEditor(c, data, translations::get, settings)
+        fun byName(file: String, name: String) = data.byId.entries.first { it.value.file == file && it.value.element.child("name")?.textContent?.trim() == name }.key
+        editor.addQuality(byName("qualities.xml", "Magician"))
+        editor.setTradition(byName("traditions.xml", "Red Magic"))
+        assertTrue(editor.changeAttribute("MAG", 1))
+        val spell = editor.addSpell(byName("spells.xml", "Ball Lightning"))
+        assertEquals(canonNoGuids(want.root), canonNoGuids(c.root))
+
+        // The ledger counts the spell; Mag_Empty is the same character without it.
+        val withSpell = KarmaLedger.of(c, settings, data)
+        println("Mag_Spent ledger: $withSpell remaining=${withSpell.remaining}")
+        assertEquals(5, withSpell.spells)
+        assertTrue(editor.removeItem(spell))
+        assertEquals(0, KarmaLedger.of(c, settings, data).spells)
+        assertEquals(canonNoGuids(load("Mag_Empty.chum5").root), canonNoGuids(c.root))
+    }
 }

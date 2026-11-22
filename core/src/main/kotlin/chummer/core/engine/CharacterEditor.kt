@@ -246,12 +246,49 @@ class CharacterEditor(
         for ((tag, v) in values) cv.child(tag)?.textContent = v.toString()
     }
 
-    /** Remove the item with this GUID (a quality, for now) and every improvement it granted. Returns false if none. */
+    /** Remove the quality or spell with this GUID and every improvement it granted. Returns false if there is none. */
     fun removeItem(guid: String): Boolean {
-        val item = root.children("qualities").flatMap { it.children() }.firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: return false
+        val item = (root.children("qualities") + root.children("spells")).flatMap { it.children() }
+            .firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: return false
         item.parentNode.removeChild(item)
         removeImprovementsOf(guid)
         return true
+    }
+
+    /** Add a spell, ritual or preparation from the game data. Returns the new item's GUID. */
+    fun addSpell(entryId: String, extra: String = ""): String {
+        val entry = data[entryId]?.element ?: error("No spell with id $entryId in the game data")
+        val guid = UUID.randomUUID().toString()
+        val name = entryText(entry, "name").orEmpty()
+        val spell = element("spell")
+        fun add(tag: String, text: String? = null) = spell.appendChild(element(tag, text))
+        add("sourceid", entryId.lowercase())
+        add("guid", guid)
+        add("name", name)
+        add("descriptors", entryText(entry, "descriptor"))
+        add("category", entryText(entry, "category"))
+        add("type", entryText(entry, "type"))
+        add("range", entryText(entry, "range"))
+        add("damage", entryText(entry, "damage"))
+        add("duration", entryText(entry, "duration"))
+        add("dv", entryText(entry, "dv"))
+        add("useskill", entryText(entry, "useskill"))
+        add("limited", "False")
+        add("extended", "False")
+        add("customextended", "False")
+        add("alchemical", "False")
+        add("source", entryText(entry, "source"))
+        add("page", entryText(entry, "page"))
+        add("extra", extra)
+        add("notes")
+        add("notesColor", NOTES_COLOR)
+        add("freebonus", "False")
+        add("barehandedadept", "False")
+        add("improvementsource", "Spell")
+        add("grade", "0")
+        grantBonus(entry.child("bonus"), BonusContext("Spell", guid, 1, extra, name, translate))
+        container("spells").appendChild(spell)
+        return guid
     }
 
     private fun grantBonus(bonus: Element?, ctx: BonusContext) {
@@ -462,4 +499,15 @@ internal object SkillElements {
             e.appendChild(el("name", name))
         }
     }
+}
+
+/** A spell, ritual or preparation that can be added. */
+data class SpellOption(val id: String, val name: String, val category: String, val type: String, val range: String, val dv: String, val descriptors: String)
+
+object SpellCatalog {
+    fun list(data: chummer.core.DataPack): List<SpellOption> =
+        data.byId.entries.filter { it.value.file == "spells.xml" && it.value.element.tagName == "spell" }.map { (id, e) ->
+            fun t(tag: String) = e.element.child(tag)?.textContent?.trim().orEmpty()
+            SpellOption(id, t("name"), t("category"), t("type"), t("range"), t("dv"), t("descriptor"))
+        }.sortedWith(compareBy({ it.category }, { it.name.lowercase() }))
 }

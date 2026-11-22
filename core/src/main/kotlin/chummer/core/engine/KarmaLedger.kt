@@ -14,8 +14,8 @@ import chummer.core.text
  * qualities. Chummer does not store the remaining karma, so it is always calculated.
  *
  * Covered: the metatype, attributes, active skills, skill groups, knowledge skills (with the free knowledge points),
- * qualities and contacts. Not covered, and reported in [notCounted] when the character has any: specializations on
- * knowledge skills, spells, foci, complex forms, programs, martial arts, initiation, critter powers, nuyen converted to
+ * qualities, contacts and spells. Not covered, and reported in [notCounted] when the character has any: specializations on
+ * knowledge skills, free-spell rules beyond the plain free spells, foci, complex forms, programs, martial arts, initiation, critter powers, nuyen converted to
  * karma and gear bought with karma. These are left out of [spent], so [remaining] is then an upper bound.
  */
 data class KarmaLedger(
@@ -35,8 +35,9 @@ data class KarmaLedger(
     /** Free knowledge skill points: the pool the settings give, and how many are used. */
     val knowledgePoints: Int = 0,
     val knowledgePointsUsed: Int = 0,
+    val spells: Int = 0,
 ) {
-    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts
+    val spent get() = metatype + attributes + skills + skillGroups + knowledge + qualities + contacts + spells
     val remaining get() = budget - spent
     val knowledgePointsLeft get() = knowledgePoints - knowledgePointsUsed
 
@@ -172,8 +173,33 @@ data class KarmaLedger(
             val contacts = maxOf(0, usedPoints - freePoints) * k("karmacontact", 1)
             if (contactRows.any { it.text("group")?.trim() == "True" }) notCounted += "group contacts"
 
+            // Spells, rituals and preparations. Free spells (from improvements) cover spells first, then rituals, then preparations.
+            val spellRows = c.root.child("spells")?.children("spell").orEmpty()
+            var spellKarma = 0
+            if (spellRows.isNotEmpty()) {
+                fun price(category: String): Int {
+                    var v = k("karmaspell", 5).toDouble()
+                    val forCategory = { i: Improvement -> i.enabled && (i.improvedName == category || i.improvedName.isEmpty()) }
+                    v += set.all.filter { it.type == "NewSpellKarmaCost" && forCategory(it) }.sumOf { it.value * it.rating }
+                    var multiplier = 1.0
+                    set.all.filter { it.type == "NewSpellKarmaCostMultiplier" && forCategory(it) }.forEach { multiplier *= it.value / 100.0 }
+                    if (multiplier != 1.0) v *= multiplier
+                    return maxOf(standardRound(v), 0)
+                }
+                fun flag(e: org.w3c.dom.Element, tag: String) = e.text(tag)?.trim().equals("True", true)
+                val own = spellRows.filter { (it.text("grade")?.trim()?.toIntOrNull() ?: 0) == 0 && !flag(it, "freebonus") }
+                var spells = own.count { !flag(it, "alchemical") && it.text("category")?.trim() != "Rituals" }
+                var rituals = own.count { !flag(it, "alchemical") && it.text("category")?.trim() == "Rituals" }
+                var preps = own.count { flag(it, "alchemical") }
+                repeat(maxOf(0, standardRound(set.valueOf("FreeSpells")))) {
+                    if (spells > 0) spells-- else if (rituals > 0) rituals-- else if (preps > 0) preps--
+                }
+                spellKarma = spells * price("Spells") + rituals * price("Rituals") + preps * price("Preparations")
+                if (listOf("FreeSpellsATT", "FreeSpellsSkill", "SpellLimit").any { set.all.any { i -> i.enabled && i.type == it } }) notCounted += "free spell rules"
+            }
+
             for ((tag, label) in listOf(
-                "spells" to "spells", "foci" to "foci", "complexforms" to "complex forms", "aiprograms" to "programs",
+                "foci" to "foci", "complexforms" to "complex forms", "aiprograms" to "programs",
                 "martialarts" to "martial arts", "initiationgrades" to "initiation", "critterpowers" to "critter powers",
                 "powers" to "adept powers", "metamagics" to "metamagics", "mentorspirits" to "mentor spirits",
             )) if (c.root.child(tag)?.children().orEmpty().isNotEmpty()) notCounted += label
@@ -181,7 +207,7 @@ data class KarmaLedger(
 
             return KarmaLedger(
                 budget, metatype, attributes, skills, qualities, contacts, notCounted, positive, negative,
-                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed,
+                settings.int("qualitykarmalimit", 25), skillGroups, knowledge, knowledgePoints, knowledgePointsUsed, spellKarma,
             )
         }
     }
