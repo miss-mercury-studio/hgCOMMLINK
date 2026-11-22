@@ -54,4 +54,20 @@ class LifestyleVehicleCostTest {
         }
         assertTrue(bad.joinToString(), bad.isEmpty())
     }
+
+    @Test
+    fun improvementsAdjustTheMonthlyCost() {
+        val life = viper().root.child("lifestyles")!!.children("lifestyle").first()
+        val plain = NuyenLedger.lifestyleTotal(life)
+        fun imp(source: String, value: Double, name: String = "", sourceName: String = "x") = Improvement(
+            "LifestyleCost", source, name, sourceName, "", value, 0.0, 0.0, 0.0, 0.0, 0.0, false, true, false, "",
+        )
+        // A metatype surcharge and another source multiply in turn; one aimed at a different lifestyle does nothing.
+        val base = life.text("baselifestyle")!!.trim()
+        assertEquals(plain * 1.2 * 1.1, NuyenLedger.lifestyleTotal(life, listOf(imp("Metatype", 20.0), imp("Quality", 10.0))), 0.01)
+        assertEquals(plain, NuyenLedger.lifestyleTotal(life, listOf(imp("Metatype", 20.0, name = "Not $base"))), 0.01)
+        assertEquals(plain * 0.9, NuyenLedger.lifestyleTotal(life, listOf(imp("Quality", -10.0, name = base))), 0.01)
+        // A dependent's surcharge is added to the other dependents first.
+        assertEquals(plain * 1.3, NuyenLedger.lifestyleTotal(life, listOf(imp("Quality", 10.0, sourceName = "g1"), imp("Quality", 20.0, sourceName = "g2")), setOf("g1", "g2")), 0.01)
+    }
 }

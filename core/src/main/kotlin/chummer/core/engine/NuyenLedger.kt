@@ -109,7 +109,9 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
             }
 
             var spent = 0.0
-            for (l in c.root.child("lifestyles")?.children("lifestyle").orEmpty()) spent += lifestyleTotal(l)
+            val imps = Improvement.parseAll(c.root)
+            val dependents = c.root.child("qualities")?.children("quality").orEmpty().filter { it.text("name")?.contains("Dependent") == true }.mapNotNull { it.text("guid")?.trim()?.lowercase() }.toSet()
+            for (l in c.root.child("lifestyles")?.children("lifestyle").orEmpty()) spent += lifestyleTotal(l, imps, dependents)
             for (v in c.root.child("vehicles")?.children("vehicle").orEmpty()) spent += vehicle(v)
             for (g in c.root.child("gears")?.children("gear").orEmpty()) spent += gear(g)
             for (w in c.root.child("weapons")?.children("weapon").orEmpty()) spent += weapon(w)
@@ -121,9 +123,10 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
         /**
          * A lifestyle's total cost, following Chummer's `CostPreSplit`: the base cost, the multipliers of qualities chosen by the user,
          * area, comforts and security, entertainment assets and other qualities as flat costs (qualities paid in LP cost no nuyen),
-         * roommates, split with roommates, then times the months bought. Cost adjustments from improvements are not applied.
+         * roommates, split with roommates, the cost adjustments of improvements (dependents first, then the metatype, then the rest; "once" adjustments that Chummer
+         * spreads over several lifestyles are not applied), outings and services, the percentage, contracts, then times the months bought.
          */
-        fun lifestyleTotal(l: Element): Double {
+        fun lifestyleTotal(l: Element, improvements: List<Improvement> = emptyList(), dependentQualityGuids: Set<String> = emptySet()): Double {
             fun d(tag: String) = l.text(tag)?.trim()?.toDoubleOrNull() ?: 0.0
             if (l.text("trustfund")?.trim() == "True") return 0.0
             val quals = l.child("lifestylequalities")?.children("lifestylequality").orEmpty().filter { it.text("lifestylequalitysource")?.trim() != "BuiltIn" }
@@ -148,6 +151,34 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
             val roommates = d("roommates")
             if (l.text("splitcostwithroommates")?.trim() == "True") cost /= roommates + 1.0
             if (roommates > 0) cost *= 1.0 + 0.1 * roommates
+            // Adjustments from the character (metatype, dependents, augmentations...), for this lifestyle or any.
+            val base = l.text("baselifestyle")?.trim().orEmpty()
+            val standard = l.text("type")?.trim().let { it.isNullOrEmpty() || it == "Standard" }
+            val adjust = improvements.filter {
+                it.enabled && (it.type == "LifestyleCost" || (standard && it.type == "BasicLifestyleCost")) && it.condition != "once" && (it.improvedName.isEmpty() || it.improvedName == base)
+            }
+            var dependents = 0.0
+            var metatype = 0.0
+            var other = 1.0
+            for (i in adjust) when {
+                i.source == "Quality" && i.sourceName.lowercase() in dependentQualityGuids -> dependents += i.value
+                i.source == "Heritage" || i.source == "Metatype" || i.source == "Metavariant" -> metatype += i.value
+                else -> other *= 1.0 + i.value / 100.0
+            }
+            if (dependents != 0.0) cost *= 1.0 + dependents / 100.0
+            if (metatype != 0.0) cost *= 1.0 + metatype / 100.0
+            if (other != 1.0) cost *= other
+            // Outings and services, then contracts (flat costs that are not part of the lifestyle's own price).
+            val outings = quals.filter { type(it) == "Entertainment" && it.text("category")?.contains("Asset") != true }
+            var outingMultiplier = 1.0
+            var outingBase = 1.0
+            for (q in outings) { outingMultiplier *= 1.0 + mult(q) / 100.0; outingBase *= 1.0 + (q.text("basemultiplier")?.trim()?.toDoubleOrNull() ?: 0.0) / 100.0 }
+            if (outingMultiplier != 1.0) cost *= outingMultiplier
+            cost += outings.sumOf { flat(it) }
+            if (outingBase != 1.0) cost += d("cost") * outingBase
+            cost *= (l.text("percentage")?.trim()?.toDoubleOrNull() ?: 100.0) / 100.0
+            val contracts = quals.filter { type(it) == "Contracts" }.sumOf { flat(it) }
+            cost += when (l.text("increment")?.trim()) { "Day" -> contracts / (4.34812 * 7); "Week" -> contracts / 4.34812; else -> contracts }
             return maxOf(cost, 0.0) * (l.text("months")?.trim()?.toDoubleOrNull() ?: 1.0)
         }
 
