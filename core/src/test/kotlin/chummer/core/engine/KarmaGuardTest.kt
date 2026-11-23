@@ -63,6 +63,5 @@ class KarmaGuardTest {
         // One more plain rank on a skill below the maximum would overspend.
         val open = names.first { n -> ed.changeSkill(n, 1).also { if (it) ed.changeSkill(n, -1) } }
         assertTrue(ed.changeSkill(open, 1))
-        assertTrue(KarmaLedger.of(c, settings, data).remaining < 0 || KarmaLedger.of(c, settings, data).remaining >= 0)
     }
 }
