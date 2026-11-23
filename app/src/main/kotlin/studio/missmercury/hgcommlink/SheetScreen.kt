@@ -125,7 +125,12 @@ private fun SellSheet(name: String, onSell: (Int) -> Unit, onDismiss: () -> Unit
         Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Take this share of what it is worth, with whatever is fitted to it. A sale cannot be undone from the log.", style = MaterialTheme.typography.bodySmall, color = MutedSilver)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(100, 75, 50, 25).forEach { pct -> TerminalButton("$pct%", { close(); onSell(pct) }, Modifier.weight(1f)) }
+                listOf(100, 75, 50, 25).forEach { pct ->
+                    Box(
+                        Modifier.weight(1f).heightIn(min = 48.dp).background(SlateHigh).border(1.dp, PhosphorGreen.copy(alpha = 0.6f)).clickable { close(); onSell(pct) },
+                        contentAlignment = Alignment.Center,
+                    ) { Text("$pct%", style = MaterialTheme.typography.titleMedium, color = PhosphorGreen) }
+                }
             }
             TerminalButton("Cancel", close, Modifier.fillMaxWidth())
         }
@@ -205,7 +210,7 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
         if (s.isCareer) DamageCard(s, vm)
 
         // The numbers needed in play, together: initiative, condition, armor.
-        TerminalCard("Vitals", tag = "01") {
+        TerminalCard("Vitals", tag = if (s.isCareer) "02" else "01") {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Stat("Initiative", "${s.initiativeValue} + ${s.initiativeDice}d6", Modifier.weight(1.4f))
@@ -585,7 +590,7 @@ private fun AddQualityDialog(vm: AppViewModel, onDismiss: () -> Unit) {
             val o = options.first { it.id == id }
             if (o.needsText) { needsText = o; text = "" } else vm.addQuality(id)
         },
-        note = if (vm.open?.sheet?.isCareer == true) "Costs karma now. Prerequisites are not checked yet." else "Prerequisites and karma limits are not checked yet.",
+        note = if (vm.open?.sheet?.isCareer == true) "Costs karma now. Common prerequisites are checked when you pick." else "Common prerequisites and the karma limits are checked when you pick.",
         keepOpenFor = { id -> options.first { it.id == id }.needsText },
         onDismiss = onDismiss,
     )
@@ -1168,14 +1173,14 @@ private fun SpriteSheet(sp: chummer.core.engine.SpriteLine, maxLevel: Int, caree
 @Composable
 private fun DamageCard(s: Sheet, vm: AppViewModel) {
     val d = s.damage
-    TerminalCard("Damage", tag = "00") {
+    TerminalCard("Damage", tag = "01") {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             DamageTrack("Physical", d.physical, d.physicalMax, d.overflowMax, d.threshold) { vm.changeDamage("physical", it) }
             DamageTrack("Stun", d.stun, d.stunMax, 0, d.threshold) { vm.changeDamage("stun", it) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (d.wound == 0) "No wound penalty" else "Wound modifier ${d.wound} (one die per ${d.threshold} boxes)",
-                    style = MaterialTheme.typography.labelSmall, color = if (d.wound == 0) MutedSilver else DrainAmber,
+                    if (d.wound == 0) "No wound penalty" else "Wound modifier ${d.wound}\n(1 die per ${d.threshold} boxes)",
+                    Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = if (d.wound == 0) MutedSilver else DrainAmber,
                 )
                 TerminalButton("Heal all", { vm.healAll() }, enabled = d.physical + d.stun > 0)
             }
