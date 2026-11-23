@@ -181,6 +181,9 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
         s.creationBuy?.let { NuyenCard(it.ledger, vm) }
         if (s.review != null) FinishCard(s.review!!, vm)
 
+        // Damage taken and its wound modifier (career only; the numbers below and the skill pools already include it).
+        if (s.isCareer) DamageCard(s, vm)
+
         // The numbers needed in play, together: initiative, condition, armor.
         TerminalCard("Vitals", tag = "01") {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -195,6 +198,7 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
                     Stat("Essence", formatEssence(s.essence), Modifier.weight(1f), if (s.essence < 6.0) DrainAmber else Quicksilver)
                 }
                 val extras = buildList {
+                    if (s.damage.wound != 0) add("Wounds ${s.damage.wound}")
                     if (s.movement.isNotEmpty()) add("Move ${s.movement}")
                     add("Overflow ${s.cmOverflow}")
                     if (s.armor.encumbrance != 0) add("Encumbrance ${s.armor.encumbrance}")
@@ -1126,5 +1130,49 @@ private fun SpriteSheet(sp: chummer.core.engine.SpriteLine, maxLevel: Int, caree
         }
         if (career || spirit) ChoiceChips(if (spirit) "Bound" else "Registered", listOf("Yes" to "Yes", "No" to "No"), registered, { registered = it })
         TerminalButton("Save", { if (spirit) vm.updateSpirit(sp.guid, name.trim(), level, tasks, registered == "Yes") else vm.updateSprite(sp.guid, name.trim(), level, tasks, registered == "Yes"); close() }, Modifier.fillMaxWidth().padding(vertical = 12.dp), filled = true)
+    }
+}
+
+/** The two condition monitors as rows of boxes with a minus and plus, the wound modifier they cause, and a button to clear it all. */
+@Composable
+private fun DamageCard(s: Sheet, vm: AppViewModel) {
+    val d = s.damage
+    TerminalCard("Damage", tag = "00") {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            DamageTrack("Physical", d.physical, d.physicalMax, d.overflowMax, d.threshold) { vm.changeDamage("physical", it) }
+            DamageTrack("Stun", d.stun, d.stunMax, 0, d.threshold) { vm.changeDamage("stun", it) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (d.wound == 0) "No wound penalty" else "Wound modifier ${d.wound} (one die per ${d.threshold} boxes)",
+                    style = MaterialTheme.typography.labelSmall, color = if (d.wound == 0) MutedSilver else DrainAmber,
+                )
+                TerminalButton("Heal all", { vm.healAll() }, enabled = d.physical + d.stun > 0)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DamageTrack(label: String, filled: Int, size: Int, overflow: Int, threshold: Int, change: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        StepButton("−", 48) { change(-1) }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                label.uppercase() + "  $filled / $size" + if (overflow > 0) "  (+$overflow overflow)" else "",
+                style = MaterialTheme.typography.labelSmall, color = MutedSilver,
+            )
+            Row(Modifier.fillMaxWidth()) {
+                val total = size + overflow
+                repeat(total) { i ->
+                    Box(
+                        Modifier.weight(1f).height(16.dp)
+                            .background(if (i < filled) DrainAmber else SlateHigh)
+                            .border(1.dp, if (i >= size) MutedSilver else TerminalGrid),
+                    )
+                    if ((i + 1) % threshold == 0 && i != total - 1) Spacer(Modifier.width(4.dp)) else if (i != total - 1) Spacer(Modifier.width(1.dp))
+                }
+            }
+        }
+        StepButton("+", 48) { change(1) }
     }
 }

@@ -9,7 +9,7 @@ import kotlin.math.ceil
  * checked against Chummer's own print output (see GoldenExportDerivedTest).
  *
  * Not yet covered: matrix and astral initiative, armor and the armor-based resistance pools,
- * movement, wound modifiers, and limit modifiers that depend on a condition.
+ * movement, and limit modifiers that depend on a condition.
  */
 class DerivedStats(
     private val improvements: ImprovementSet,
@@ -44,6 +44,20 @@ class DerivedStats(
     val cmOverflow: Int get() = attr("BOD") + 1 + improvement("CMOverflow")
     val physicalCMThresholdOffset: Int get() = improvement("CMThresholdOffset") + improvement("PhysicalCMThresholdOffset")
     val stunCMThresholdOffset: Int get() = improvement("CMThresholdOffset") + improvement("StunCMThresholdOffset")
+
+    /** Boxes of damage per point of wound penalty: 3 plus improvements. */
+    val cmThreshold: Int get() = maxOf(1, 3 + improvement("CMThreshold"))
+
+    /**
+     * The wound modifier (zero or negative) for [physicalFilled] and [stunFilled] boxes of damage, as `Character.RefreshWoundPenalties`:
+     * every [cmThreshold] boxes beyond the threshold offset cost one die, unless an improvement ignores that track's penalty.
+     */
+    fun woundModifier(physicalFilled: Int, stunFilled: Int): Int {
+        fun ignores(type: String) = improvements.all.any { it.enabled && it.type == type }
+        val stun = if (ignores("IgnoreCMPenaltyStun")) 0 else minOf(0, stunCMThresholdOffset - minOf(stunFilled, stunCM)) / cmThreshold
+        val physical = if (ignores("IgnoreCMPenaltyPhysical")) 0 else minOf(0, physicalCMThresholdOffset - minOf(physicalFilled, physicalCM)) / cmThreshold
+        return stun + physical
+    }
 
     /** Lift and carry limits come from expressions in the settings, for example `{STR} * 15`. */
     val liftWeight: Int get() = standardRound(settings.evaluate("liftlimitexpression", mapOf("STR" to attr("STR").toDouble()), "{STR} * 15"))

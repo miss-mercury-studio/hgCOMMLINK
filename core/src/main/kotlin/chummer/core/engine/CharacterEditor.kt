@@ -133,6 +133,29 @@ class CharacterEditor(
         return true
     }
 
+    /**
+     * Mark one more box ([delta] = 1) or one fewer (-1) of damage on the "physical" or "stun" monitor, as Chummer stores it in
+     * `physicalcmfilled` and `stuncmfilled`. Physical damage can run into the overflow boxes; stun stops at the end of its track.
+     * Returns false at either end. Needs the settings (the monitor sizes come from the rules).
+     */
+    fun changeDamage(track: String, delta: Int): Boolean {
+        require(track == "physical" || track == "stun")
+        val cfg = settings ?: error("Settings are needed to track damage")
+        val d = Sheet.build(file, data, cfg).damage
+        val tag = if (track == "physical") "physicalcmfilled" else "stuncmfilled"
+        val now = if (track == "physical") d.physical else d.stun
+        val max = if (track == "physical") d.physicalMax + d.overflowMax else d.stunMax
+        val next = now + delta
+        if (next < 0 || next > max) return false
+        (root.child(tag) ?: element(tag).also { root.appendChild(it) }).textContent = next.toString()
+        return true
+    }
+
+    /** Clear all damage (a full rest or a heal). */
+    fun healAll() {
+        for (tag in listOf("physicalcmfilled", "stuncmfilled")) (root.child(tag) ?: element(tag).also { root.appendChild(it) }).textContent = "0"
+    }
+
     private fun attributeRow(name: String): Element? =
         root.child("attributes")?.children("attribute")?.firstOrNull { it.text("name")?.trim() == name }
 

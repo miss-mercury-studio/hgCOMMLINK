@@ -148,6 +148,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun changeSkill(name: String, delta: Int) =
         edit(null, blocked = if (delta > 0) "$name is at the creation maximum, or not enough karma left" else "No karma point in $name to give back") { ed -> if (delta > 0) ed.withinKarma({ ed.changeSkill(name, 1) }, { ed.changeSkill(name, -1) }) else ed.changeSkill(name, delta) }
 
+    /** Mark one more box (+1) or one fewer (-1) of damage on the "physical" or "stun" monitor. */
+    fun changeDamage(track: String, delta: Int) =
+        edit(null, blocked = if (delta > 0) "The $track track is full" else "No $track damage to clear") { it.changeDamage(track, delta) }
+
+    /** Clear all damage. */
+    fun healAll() = edit("Damage cleared") { it.healAll(); true }
+
     /** Remove a quality (and the improvements it granted) from the open character. */
     fun removeQuality(guid: String) =
         if (open?.sheet?.isCareer == true) editCareer("Removed quality", "Not enough karma to remove that quality") { adv, _ -> adv.removeQuality(guid) }

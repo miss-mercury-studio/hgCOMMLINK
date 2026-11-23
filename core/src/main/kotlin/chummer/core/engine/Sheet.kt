@@ -72,7 +72,11 @@ data class Sheet(
     val critterPowers: List<CritterPowerLine>? = null,
     /** An A.I.'s programs (shown when Depth is switched on). */
     val aiPrograms: List<AiProgramLine>? = null,
+    /** Damage taken and the wound modifier it causes (already applied to initiative and the skill pools). */
+    val damage: DamageLine = DamageLine(0, 0, 0, 0, 0, 0, 3),
 ) {
+    /** Boxes filled on each condition monitor, the sizes of the tracks, the wound modifier (zero or negative) and the boxes per penalty step. */
+    data class DamageLine(val physical: Int, val stun: Int, val physicalMax: Int, val stunMax: Int, val overflowMax: Int, val wound: Int, val threshold: Int)
     data class CreationBuy(val ledger: NuyenLedger, val pluginCapacity: Map<String, Double>)
     /**
      * Career spending: the karma price of the next step of each attribute, skill (by GUID) and skill group (null at the
@@ -129,7 +133,10 @@ data class Sheet(
 
             val magic = flag(c, "magenabled")
             val resonance = flag(c, "resenabled")
-            val skillEngine = SkillEngine(set, attrs, rules, career, magicEnabled = magic, resonanceEnabled = resonance)
+            val physicalFilled = c.root.text("physicalcmfilled")?.trim()?.toIntOrNull() ?: 0
+            val stunFilled = c.root.text("stuncmfilled")?.trim()?.toIntOrNull() ?: 0
+            val wound = d.woundModifier(physicalFilled, stunFilled)
+            val skillEngine = SkillEngine(set, attrs, rules, career, magicEnabled = magic, resonanceEnabled = resonance, woundModifier = wound)
             val groups = c.skillGroups()
             val skills = SkillEngine.skillsOf(c, data).map { raw ->
                 raw to skillEngine.calculate(raw, groups[raw.group]?.first ?: 0, groups[raw.group]?.second ?: 0)
@@ -148,8 +155,9 @@ data class Sheet(
                 name = s.name, alias = s.alias, metatype = s.metatype, buildMethod = s.buildMethod, isCareer = career,
                 karma = s.karma, nuyen = s.nuyen, attributes = shown, essence = essence,
                 limits = Limits(d.limitPhysical, d.limitMental, d.limitSocial, d.limitAstral),
-                initiativeValue = d.initiative.value, initiativeDice = d.initiative.dice,
+                initiativeValue = d.initiative.value + wound, initiativeDice = d.initiative.dice,
                 physicalCM = d.physicalCM, stunCM = d.stunCM, cmOverflow = d.cmOverflow,
+                damage = DamageLine(physicalFilled, stunFilled, d.physicalCM, d.stunCM, d.cmOverflow, wound, d.cmThreshold),
                 armor = ArmorLines(general, armor.encumbrance(), byType),
                 soak = (attrs["BOD"]?.totalValue ?: 0) + general + standardRound(set.valueOf("DamageResistance")),
                 liftWeight = d.liftWeight, carryWeight = d.carryWeight,
