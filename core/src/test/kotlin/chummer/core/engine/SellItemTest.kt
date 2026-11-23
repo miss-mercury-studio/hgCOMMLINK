@@ -64,4 +64,10 @@ class SellItemTest {
         val c = CharacterIo.readFile(File(ref, "New_Empty.chum5"))
         assertNull(CareerAdvancement(c, data, settings).sellPurchase("00000000-0000-0000-0000-000000000001", 100))
     }
+
+    @Test
+    fun fixedValuesCapacityReadsAsARange() {
+        assertEquals("[1] to [6] by rating", ArmorWeaponCatalog.readableCapacity("FixedValues([1],[2],[3],[4],[5],[6])"))
+        assertEquals("[3]", ArmorWeaponCatalog.readableCapacity("[3]"))
+    }
 }

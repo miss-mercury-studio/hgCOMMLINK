@@ -400,6 +400,13 @@ class ArmorWeaponEditor(private val file: CharacterFile, private val data: GameD
 }
 
 object ArmorWeaponCatalog {
+    /** A capacity formula as a person reads it: `FixedValues([1],[2],[3])` is "[1] to [3] by rating"; other text is left as it is. */
+    fun readableCapacity(text: String): String {
+        val m = Regex("""^FixedValues\((.*)\)$""").find(text.trim()) ?: return text
+        val values = Regex("""\[([^\]]*)\]""").findAll(m.groupValues[1]).map { it.groupValues[1] }.toList()
+        return if (values.size > 1) "[${values.first()}] to [${values.last()}] by rating" else text
+    }
+
     fun armor(data: chummer.core.DataPack): List<ItemOption> =
         data.byId.entries.filter { it.value.file == "armor.xml" && it.value.element.tagName == "armor" }.map { (id, e) ->
             val el = e.element
@@ -430,6 +437,6 @@ object ArmorWeaponCatalog {
             val el = e.element
             fun t(tag: String) = el.child(tag)?.textContent?.trim().orEmpty()
             val max = t("maxrating").toIntOrNull() ?: 0
-            ItemOption(id, t("name"), t("category"), GearEditor.unitCost(el, if (max > 1) 1 else 0), t("avail"), null, "armor ${t("armor")}  capacity ${t("armorcapacity")}", if (max > 1) max else 0)
+            ItemOption(id, t("name"), t("category"), GearEditor.unitCost(el, if (max > 1) 1 else 0), t("avail"), null, "armor ${t("armor")}  capacity ${readableCapacity(t("armorcapacity"))}", if (max > 1) max else 0)
         }.sortedBy { it.name.lowercase() }
 }
