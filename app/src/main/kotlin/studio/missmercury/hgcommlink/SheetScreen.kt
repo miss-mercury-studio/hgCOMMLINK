@@ -120,10 +120,10 @@ private fun SellLink(onClick: () -> Unit) {
 
 /** The share of an item's price to take when selling it. */
 @Composable
-private fun SellSheet(name: String, onSell: (Int) -> Unit, onDismiss: () -> Unit) {
+private fun SellSheet(name: String, onSell: (Int) -> Unit, onRemove: () -> Unit, onDismiss: () -> Unit) {
     TerminalSheet("Sell $name", onDismiss) { close ->
         Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Take this share of what it is worth, with whatever is fitted to it. A sale cannot be undone from the log.", style = MaterialTheme.typography.bodySmall, color = MutedSilver)
+            Text("Take a share of what it is worth, with whatever is fitted to it, or remove it for nothing (free or included items). Neither can be undone from the log.", style = MaterialTheme.typography.bodySmall, color = MutedSilver)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(100, 75, 50, 25).forEach { pct ->
                     Box(
@@ -132,6 +132,7 @@ private fun SellSheet(name: String, onSell: (Int) -> Unit, onDismiss: () -> Unit
                     ) { Text("$pct%", style = MaterialTheme.typography.titleMedium, color = PhosphorGreen) }
                 }
             }
+            TerminalButton("Remove, no nuyen", { close(); onRemove() }, Modifier.fillMaxWidth(), accent = CriticalRed)
             TerminalButton("Cancel", close, Modifier.fillMaxWidth())
         }
     }
@@ -636,7 +637,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     var installing by remember { mutableStateOf<Pair<String, Double?>?>(null) }
     var selling by remember { mutableStateOf<Pair<String, String>?>(null) }
     val career = s.career != null
-    selling?.let { (guid, name) -> SellSheet(name, { pct -> vm.sellPurchase(guid, pct) }) { selling = null } }
+    selling?.let { (guid, name) -> SellSheet(name, { pct -> vm.sellPurchase(guid, pct) }, { vm.discardPurchase(guid) }) { selling = null } }
     Column(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (g.armorSets.isNotEmpty()) item { SubHeader("Armor") }

@@ -441,9 +441,13 @@ class CareerAdvancement(
         val before = NuyenLedger.of(file, settings, data).spent
         if (!removeAny(guid, includeArts = false)) return null
         val value = (before - NuyenLedger.of(file, settings, data).spent).coerceAtLeast(0.0) * percent / 100.0
-        log.add("Nuyen", value, "Selling Item $name", "SellItem", objectId = guid, now = now)
+        // A sale worth nothing (an included part, a free item) leaves no log entry.
+        if (value > 0.0) log.add("Nuyen", value, "Selling Item $name", "SellItem", objectId = guid, now = now)
         return value
     }
+
+    /** Take an item out of a career character without any nuyen changing hands (a free or included item). False when there is no such item, or in creation. */
+    fun discardPurchase(guid: String): Boolean = !inCreation && removeAny(guid, includeArts = false)
 
     private fun nameOfItem(guid: String): String? {
         val all = file.doc.getElementsByTagName("guid")

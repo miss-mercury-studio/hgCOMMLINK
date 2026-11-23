@@ -271,6 +271,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Sell a bought item in career for a share of its price. */
     fun sellPurchase(guid: String, percent: Int) = editCareer("Sold", "Cannot sell that") { adv, _ -> adv.sellPurchase(guid, percent) != null }
 
+    /** Remove an item in career with no nuyen changing hands. */
+    fun discardPurchase(guid: String) = editCareer("Removed", "Cannot remove that") { adv, _ -> adv.discardPurchase(guid) }
+
     fun martialArtOptions() = gameData.martialArtOptions()
     fun techniqueOptions(artName: String) = gameData.techniqueOptions(artName)
     fun martialArtCost(id: String) = martialArtCoster()(id)

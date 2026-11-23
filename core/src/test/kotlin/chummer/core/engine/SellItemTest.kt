@@ -46,6 +46,20 @@ class SellItemTest {
     }
 
     @Test
+    fun discardingTakesAnItemOutWithNoNuyenOrLogEntry() {
+        val c = CharacterIo.readFile(File(ref, "Viper_career.chum5"))
+        val adv = CareerAdvancement(c, data, settings)
+        val log = ExpenseLog(c, data, settings)
+        val guid = adv.buyGear(named("gear.xml", "gear", "Flashlight"))!!
+        val nuyen = log.nuyen
+        val entries = log.entries().size
+        assertTrue(adv.discardPurchase(guid))
+        assertEquals(nuyen, log.nuyen, 0.001)
+        assertEquals(entries, log.entries().size)
+        assertTrue(c.root.child("gears")!!.children("gear").none { it.text("guid")?.trim() == guid })
+    }
+
+    @Test
     fun nothingIsSoldInCreation() {
         val c = CharacterIo.readFile(File(ref, "New_Empty.chum5"))
         assertNull(CareerAdvancement(c, data, settings).sellPurchase("00000000-0000-0000-0000-000000000001", 100))
