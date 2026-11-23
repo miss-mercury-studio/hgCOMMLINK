@@ -37,6 +37,10 @@ class DerivedStats(
             return Initiative(value, dice.coerceIn(settings.int("mininitiativedice", 1), settings.int("maxinitiativedice", 5)))
         }
 
+    /** Astral initiative as Chummer prints it: twice Intuition plus the wound modifier, with the settings' astral initiative dice (3 by default). */
+    fun astralInitiative(wound: Int): Initiative =
+        Initiative(attr("INT") * 2 + wound, minOf(settings.int("minastralinitiativedice", 3), settings.int("maxastralinitiativedice", 3)))
+
     val physicalCM: Int get() = 8 + ceil(attr("BOD") / 2.0).toInt() + improvement("PhysicalCM")
     val stunCM: Int get() = 8 + ceil(attr("WIL") / 2.0).toInt() + improvement("StunCM")
 

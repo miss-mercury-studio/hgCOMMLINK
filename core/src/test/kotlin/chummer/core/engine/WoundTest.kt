@@ -57,4 +57,27 @@ class WoundTest {
         repeat(d.physicalMax + d.overflowMax) { assertTrue(ed.changeDamage("physical", 1)) }
         assertFalse(ed.changeDamage("physical", 1))
     }
+
+    @Test
+    fun astralInitiativeIsTwiceIntuitionPlusWounds() {
+        val c = CharacterIo.readFile(File(ref, "Mag_Spent.chum5"))
+        val ed = CharacterEditor(c, data, settings = settings)
+        val s = Sheet.build(c, data, settings)
+        val int = s.attributes.first { it.name == "INT" }.total
+        assertEquals(int * 2, s.astralInitiative!!.value)
+        assertEquals(3, s.astralInitiative!!.dice)
+        repeat(3) { ed.changeDamage("physical", 1) }
+        assertEquals(int * 2 - 1, Sheet.build(c, data, settings).astralInitiative!!.value)
+        // A mundane character has none.
+        assertEquals(null, Sheet.build(CharacterIo.readFile(File(ref, "Viper_career.chum5")), data, settings).astralInitiative)
+    }
+
+    @Test
+    fun fractionalNuyenKeepsItsCents() {
+        val c = CharacterIo.readFile(File(ref, "Viper_career.chum5"))
+        c.root.getElementsByTagName("nuyen").item(0).textContent = "247.50"
+        assertEquals("247.5", c.summary().nuyen)
+        c.root.getElementsByTagName("nuyen").item(0).textContent = "6678.00"
+        assertEquals("6678", c.summary().nuyen)
+    }
 }

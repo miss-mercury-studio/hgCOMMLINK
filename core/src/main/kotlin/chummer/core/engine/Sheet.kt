@@ -74,6 +74,8 @@ data class Sheet(
     val aiPrograms: List<AiProgramLine>? = null,
     /** Damage taken and the wound modifier it causes (already applied to initiative and the skill pools). */
     val damage: DamageLine = DamageLine(0, 0, 0, 0, 0, 0, 3),
+    /** Astral initiative (score and dice) for a character with magic; null otherwise. */
+    val astralInitiative: DerivedStats.Initiative? = null,
 ) {
     /** Boxes filled on each condition monitor, the sizes of the tracks, the wound modifier (zero or negative) and the boxes per penalty step. */
     data class DamageLine(val physical: Int, val stun: Int, val physicalMax: Int, val stunMax: Int, val overflowMax: Int, val wound: Int, val threshold: Int)
@@ -158,6 +160,7 @@ data class Sheet(
                 initiativeValue = d.initiative.value + wound, initiativeDice = d.initiative.dice,
                 physicalCM = d.physicalCM, stunCM = d.stunCM, cmOverflow = d.cmOverflow,
                 damage = DamageLine(physicalFilled, stunFilled, d.physicalCM, d.stunCM, d.cmOverflow, wound, d.cmThreshold),
+                astralInitiative = if (magic) d.astralInitiative(wound) else null,
                 armor = ArmorLines(general, armor.encumbrance(), byType),
                 soak = (attrs["BOD"]?.totalValue ?: 0) + general + standardRound(set.valueOf("DamageResistance")),
                 liftWeight = d.liftWeight, carryWeight = d.carryWeight,

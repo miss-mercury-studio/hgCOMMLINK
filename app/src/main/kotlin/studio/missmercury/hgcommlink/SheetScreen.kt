@@ -225,6 +225,7 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
                 }
                 val extras = buildList {
                     if (s.damage.wound != 0) add("Wounds ${s.damage.wound}")
+                    s.astralInitiative?.let { add("Astral ${it.value} + ${it.dice}d6") }
                     if (s.movement.isNotEmpty()) add("Move ${s.movement}")
                     add("Overflow ${s.cmOverflow}")
                     if (s.armor.encumbrance != 0) add("Encumbrance ${s.armor.encumbrance}")
@@ -707,14 +708,16 @@ private fun Ware(g: chummer.core.engine.SheetSections, essence: Double, s: Sheet
     val pluginRoom = s.career?.pluginCapacity ?: s.creationBuy?.pluginCapacity
     var buying by remember { mutableStateOf<Boolean?>(null) }
     var plugging by remember { mutableStateOf<chummer.core.engine.SheetSections.WareLine?>(null) }
+    var selling by remember { mutableStateOf<Pair<String, String>?>(null) }
+    selling?.let { (guid, name) -> SellSheet(name, { pct -> vm.sellPurchase(guid, pct) }, { vm.discardPurchase(guid) }) { selling = null } }
     Column(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         item { Row2("Essence", formatEssence(essence), bold = true) }
         val (bio, cyber) = g.ware.partition { it.isBioware }
         if (cyber.isNotEmpty()) item { SubHeader("Cyberware") }
-        items(cyber) { WareRow(it, 0, pluginRoom?.get(it.guid), if (s.creationBuy != null) ({ vm.removePurchase(it.guid) }) else null) { plugging = it } }
+        items(cyber) { WareRow(it, 0, pluginRoom?.get(it.guid), if (s.creationBuy != null) ({ vm.removePurchase(it.guid) }) else null, if (s.career != null) ({ selling = it.guid to it.name }) else null) { plugging = it } }
         if (bio.isNotEmpty()) item { SubHeader("Bioware") }
-        items(bio) { WareRow(it, 0, pluginRoom?.get(it.guid), if (s.creationBuy != null) ({ vm.removePurchase(it.guid) }) else null) { plugging = it } }
+        items(bio) { WareRow(it, 0, pluginRoom?.get(it.guid), if (s.creationBuy != null) ({ vm.removePurchase(it.guid) }) else null, if (s.career != null) ({ selling = it.guid to it.name }) else null) { plugging = it } }
         if (g.ware.isEmpty()) item { Text("No augmentations.") }
     }
     if (canBuy) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -727,12 +730,13 @@ private fun Ware(g: chummer.core.engine.SheetSections, essence: Double, s: Sheet
 }
 
 @Composable
-private fun WareRow(w: chummer.core.engine.SheetSections.WareLine, depth: Int, capacityLeft: Double? = null, onRemove: (() -> Unit)? = null, onPlug: () -> Unit = {}) {
+private fun WareRow(w: chummer.core.engine.SheetSections.WareLine, depth: Int, capacityLeft: Double? = null, onRemove: (() -> Unit)? = null, onSell: (() -> Unit)? = null, onPlug: () -> Unit = {}) {
     Column(Modifier.padding(start = (depth * 16).dp)) {
         Row2(w.name + if (w.rating > 0) " (rating ${w.rating})" else "", if (w.essence != 0.0) formatEssence(w.essence) else "", bold = depth == 0)
         Small(w.grade.takeIf { !it.equals("Standard", true) }.orEmpty())
         w.children.forEach { WareRow(it, depth + 1) }
         if (onRemove != null && depth == 0) RemoveLink(onRemove)
+        if (onSell != null && depth == 0 && w.guid.isNotEmpty()) SellLink(onSell)
         if (capacityLeft != null) Text("+ plug-in  (capacity left ${"%.0f".format(java.util.Locale.ROOT, capacityLeft)})", Modifier.clickable(onClick = onPlug).padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
     }
 }
