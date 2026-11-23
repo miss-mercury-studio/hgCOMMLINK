@@ -877,6 +877,7 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
     val showMagician = s.isMagician || s.powers == null
     var choosingTradition by remember { mutableStateOf(false) }
     var addingSpell by remember { mutableStateOf(false) }
+    var addingPreparation by remember { mutableStateOf(false) }
     var addingPower by remember { mutableStateOf(false) }
     var initiating by remember { mutableStateOf(false) }
     var pickingMeta by remember { mutableStateOf(false) }
@@ -932,7 +933,10 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
             item { TerminalButton("+ Spirit", { addingSpirit = true }, Modifier.fillMaxWidth().padding(vertical = 8.dp), enabled = sec.maxForce > 0) }
         }
     }
-    if (creation && showMagician) PinnedAction("+ Add spell") { addingSpell = true }
+    if (creation && showMagician) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TerminalButton("+ Spell", { addingSpell = true }, Modifier.weight(1f))
+        TerminalButton("+ Preparation", { addingPreparation = true }, Modifier.weight(1f))
+    }
     }
     if (addingPower) AddPowerDialog(vm) { addingPower = false }
     s.spirits?.let { sec ->
@@ -952,10 +956,11 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
         val options = remember { vm.traditionOptions().map { PickItem(it.id, it.name, "Drain ${it.drain}") } }
         PickerSheet("Choose a tradition", options, { vm.setTradition(it) }) { choosingTradition = false }
     }
-    if (addingSpell) {
+    if (addingSpell || addingPreparation) {
+        val prep = addingPreparation
         val spellCoster = remember { vm.careerSpellCoster() }
-        val options = remember { vm.spellOptions().map { PickItem(it.id, it.name, listOf(it.category, "type ${it.type}", it.range, "drain ${it.dv}", spellCoster(it.id)?.let { c -> "costs $c karma" }.orEmpty()).filter { x -> x.isNotBlank() }.joinToString("  ·  ")) } }
-        PickerSheet("Add a spell", options, { vm.addSpell(it) }) { addingSpell = false }
+        val options = remember(prep) { vm.spellOptions().map { PickItem(it.id, it.name, listOf(it.category, "type ${it.type}", it.range, "drain ${it.dv}", spellCoster(it.id, prep)?.let { c -> "costs $c karma" }.orEmpty()).filter { x -> x.isNotBlank() }.joinToString("  ·  ")) } }
+        PickerSheet(if (prep) "Add a preparation" else "Add a spell", options, { vm.addSpell(it, prep) }) { addingSpell = false; addingPreparation = false }
     }
 }
 

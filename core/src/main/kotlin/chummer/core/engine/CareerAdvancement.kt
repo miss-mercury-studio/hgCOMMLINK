@@ -229,7 +229,7 @@ class CareerAdvancement(
         val sourceId = q.text("sourceid")?.trim().orEmpty()
         val negative = !q.text("qualitytype")?.trim().equals("Positive", true)
         if (!CharacterEditor(file, data, settings = settings).removeItem(guid)) return false
-        // Buying off a negative quality is not undoable in the app (Chummer re-adds it from the data), so it is logged as such.
+        // Buying off a negative quality can be undone: the quality is re-added from the data (its source id is the entry's object).
         if (negative) log.add("Karma", -cost.toDouble(), "Removed Negative Quality $name", "RemoveQuality", objectId = sourceId, extra = q.text("extra")?.trim().orEmpty(), now = now)
         return true
     }

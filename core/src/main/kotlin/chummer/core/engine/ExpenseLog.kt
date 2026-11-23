@@ -106,7 +106,7 @@ class ExpenseLog(
 
     /** Which entries can be undone by [undo]: manual ones, and skill and attribute improvements. */
     fun canUndo(entry: ExpenseEntry): Boolean = when {
-        entry.isKarma -> entry.undoKind in setOf("ManualAdd", "ManualSubtract", "ImproveAttribute", "ImproveSkill", "AddSkill", "AddSpecialization", "AddQuality", "AddSpell", "AddMartialArt", "AddMartialArtTechnique", "AddComplexForm", "ImproveInitiateGrade", "AddMetamagic", "AddEnhancement", "AddCritterPower", "AddAIProgram") && entry.reason != "Starting Karma"
+        entry.isKarma -> entry.undoKind in setOf("ManualAdd", "ManualSubtract", "ImproveAttribute", "ImproveSkill", "AddSkill", "AddSpecialization", "AddQuality", "AddSpell", "AddMartialArt", "AddMartialArtTechnique", "AddComplexForm", "ImproveInitiateGrade", "AddMetamagic", "AddEnhancement", "AddCritterPower", "AddAIProgram", "RemoveQuality") && (entry.undoKind != "RemoveQuality" || (data?.get(entry.objectId) != null)) && entry.reason != "Starting Karma"
         else -> entry.undoKind in setOf("ManualAdd", "ManualSubtract", "AddGear", "AddArmor", "AddWeapon", "AddWeaponAccessory", "AddArmorMod", "AddCyberware") && entry.reason != "Starting Nuyen"
     }
 
@@ -182,6 +182,12 @@ class ExpenseLog(
         if (entry.isKarma && entry.undoKind == "AddSpell") {
             val d = data ?: return false
             if (!CharacterEditor(file, d, settings = settings).removeItem(entry.objectId)) return false
+        }
+        // Taking back the buy-off of a negative quality puts the quality back (with its improvements) from the game data.
+        if (entry.isKarma && entry.undoKind == "RemoveQuality") {
+            val d = data ?: return false
+            if (d[entry.objectId] == null) return false
+            CharacterEditor(file, d, settings = settings).addQuality(entry.objectId, entry.extra)
         }
         if (entry.isKarma && entry.undoKind == "AddQuality") {
             val d = data ?: return false

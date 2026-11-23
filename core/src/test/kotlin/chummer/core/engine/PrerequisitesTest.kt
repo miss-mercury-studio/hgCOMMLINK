@@ -29,7 +29,7 @@ class PrerequisitesTest {
                 if (q.text("qualitysource")?.trim() != "Selected") continue
                 val entry = (data[q.text("sourceid")?.trim().orEmpty()]?.element ?: byNameOrNull(q.text("name")?.trim().orEmpty())) ?: continue
                 // Creation-only flags describe adding, not holding.
-                val r = Prerequisites.check(entry, c, data, settings.toRuleSettings())
+                val r = Prerequisites.check(entry, c, data, settings.toRuleSettings(), checkLimit = false)
                 checked++
                 unchecked += r.unchecked
                 val problems = r.problems.filter { !it.startsWith("Only available") && !it.startsWith("Only given") }
@@ -76,6 +76,19 @@ class PrerequisitesTest {
         assertTrue(Prerequisites.check(entry, c, data).problems.none { it.contains(forbiddenName) })
         ed.addQuality(target!!.key)
         assertTrue(Prerequisites.check(entry, c, data).problems.any { it == "Not allowed with $forbiddenName" })
+    }
+
+    @Test
+    fun aQualityCannotBeTakenTwiceUnlessItsLimitAllows() {
+        val c = CharacterIo.readFile(fixtures().first())
+        c.root.child("qualities")?.children("quality")?.toList()?.forEach { it.parentNode.removeChild(it) }
+        val ed = CharacterEditor(c, data)
+        val once = byNameOrNull("Toughness")!!
+        val id = data.byId.entries.first { it.value.element === once }.key
+        assertTrue(Prerequisites.check(once, c, data).met)
+        ed.addQuality(id)
+        assertEquals(listOf("Already taken"), Prerequisites.check(once, c, data).problems)
+        assertTrue(Prerequisites.check(once, c, data, checkLimit = false).met)
     }
 
     companion object { const val KNOWN_UNMET = 2 }

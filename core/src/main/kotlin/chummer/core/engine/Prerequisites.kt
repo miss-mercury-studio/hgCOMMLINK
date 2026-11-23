@@ -23,7 +23,7 @@ object Prerequisites {
         val met get() = problems.isEmpty()
     }
 
-    fun check(entry: Element, file: CharacterFile, data: GameData, rules: RuleSettings = RuleSettings()): Result {
+    fun check(entry: Element, file: CharacterFile, data: GameData, rules: RuleSettings = RuleSettings(), checkLimit: Boolean = true): Result {
         val root = file.root
         val created = root.text("created")?.trim().equals("True", true)
         val problems = ArrayList<String>()
@@ -32,6 +32,20 @@ object Prerequisites {
         if (!created && entry.child("careeronly") != null) problems += "Only available in career"
         if (!created && entry.child("onlyprioritygiven") != null && root.text("buildmethod")?.trim() in setOf("Priority", "SumtoTen")) {
             problems += "Only given by a priority choice"
+        }
+
+        // How many times the entry may be taken: its `limit` (a quality defaults to once; "False" means no limit); a creation-only
+        // `chargenlimit` replaces it while the character is being created. A limit that is a formula is not read.
+        if (checkLimit) {
+            val chargen = entry.child("chargenlimit")?.textContent?.trim().orEmpty()
+            val own = entry.child("limit")?.textContent?.trim().orEmpty()
+            val limit = if (chargen.isNotEmpty() && !created) chargen else own.ifEmpty { if (entry.tagName == "quality") "1" else "False" }
+            val max = limit.toIntOrNull()
+            if (max != null) {
+                val name = entry.child("name")?.textContent?.trim().orEmpty()
+                val have = root.child("qualities")?.children("quality").orEmpty().count { it.text("name")?.trim().equals(name, true) }
+                if (entry.tagName == "quality" && have >= max) problems += if (max == 1) "Already taken" else "Already taken $have times (limit $max)"
+            }
         }
 
         val attrs by lazy { AttributeEngine.forFile(file, rules) }

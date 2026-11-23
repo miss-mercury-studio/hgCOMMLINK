@@ -324,14 +324,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun traditionOptions() = gameData.traditionOptions()
 
     fun setTradition(entryId: String) = edit("Tradition chosen") { it.setTradition(entryId); true }
-    fun addSpell(entryId: String) =
-        if (open?.sheet?.isCareer == true) editCareer("Learned spell", "Not enough karma for that spell") { adv, _ -> adv.addSpell(entryId) != null }
-        else edit("Added spell") { it.addSpell(entryId); true }
-    fun careerSpellCost(entryId: String): Int? = careerSpellCoster()(entryId)
-    fun careerSpellCoster(): (String) -> Int? {
-        val current = open?.takeIf { it.sheet?.isCareer == true } ?: return { null }
+    fun addSpell(entryId: String, alchemical: Boolean = false) =
+        if (open?.sheet?.isCareer == true) editCareer(if (alchemical) "Learned preparation" else "Learned spell", "Not enough karma for that spell") { adv, _ -> adv.addSpell(entryId, alchemical = alchemical) != null }
+        else edit(if (alchemical) "Added preparation" else "Added spell") { it.addSpell(entryId, alchemical = alchemical); true }
+    fun careerSpellCost(entryId: String): Int? = careerSpellCoster()(entryId, false)
+    /** The karma price of a spell in career (a preparation when the flag is true); null in creation. */
+    fun careerSpellCoster(): (String, Boolean) -> Int? {
+        val current = open?.takeIf { it.sheet?.isCareer == true } ?: return { _, _ -> null }
         val adv = gameData.career(current.character)
-        return { adv.spellCost(it) }
+        return { id, alchemical -> adv.spellCost(id, alchemical) }
     }
     fun removeSpell(guid: String) = edit("Removed spell") { it.removeItem(guid) }
 
