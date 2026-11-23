@@ -73,6 +73,17 @@ class WoundTest {
     }
 
     @Test
+    fun recoveryPoolsFollowChummer() {
+        // Physical: twice Body; stun: Body plus Willpower (Viper has Body 5 and Willpower 5, so the old Body + Willpower also gave 10).
+        val c = CharacterIo.readFile(File(ref, "Mag_Spent.chum5"))
+        val s = Sheet.build(c, data, settings)
+        val bod = s.attributes.first { it.name == "BOD" }.total
+        val wil = s.attributes.first { it.name == "WIL" }.total
+        assertEquals(2 * bod, s.damage.physicalRecovery)
+        assertEquals(bod + wil, s.damage.stunRecovery)
+    }
+
+    @Test
     fun fractionalNuyenKeepsItsCents() {
         val c = CharacterIo.readFile(File(ref, "Viper_career.chum5"))
         c.root.getElementsByTagName("nuyen").item(0).textContent = "247.50"

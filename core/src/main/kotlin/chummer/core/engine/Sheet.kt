@@ -78,7 +78,11 @@ data class Sheet(
     val astralInitiative: DerivedStats.Initiative? = null,
 ) {
     /** Boxes filled on each condition monitor, the sizes of the tracks, the wound modifier (zero or negative) and the boxes per penalty step. */
-    data class DamageLine(val physical: Int, val stun: Int, val physicalMax: Int, val stunMax: Int, val overflowMax: Int, val wound: Int, val threshold: Int)
+    data class DamageLine(
+        val physical: Int, val stun: Int, val physicalMax: Int, val stunMax: Int, val overflowMax: Int, val wound: Int, val threshold: Int,
+        /** Natural recovery dice pools (null for an A.I., whose recovery works differently). */
+        val physicalRecovery: Int? = null, val stunRecovery: Int? = null,
+    )
     data class CreationBuy(val ledger: NuyenLedger, val pluginCapacity: Map<String, Double>)
     /**
      * Career spending: the karma price of the next step of each attribute, skill (by GUID) and skill group (null at the
@@ -159,7 +163,11 @@ data class Sheet(
                 limits = Limits(d.limitPhysical, d.limitMental, d.limitSocial, d.limitAstral),
                 initiativeValue = d.initiative.value + wound, initiativeDice = d.initiative.dice,
                 physicalCM = d.physicalCM, stunCM = d.stunCM, cmOverflow = d.cmOverflow,
-                damage = DamageLine(physicalFilled, stunFilled, d.physicalCM, d.stunCM, d.cmOverflow, wound, d.cmThreshold),
+                damage = DamageLine(
+                    physicalFilled, stunFilled, d.physicalCM, d.stunCM, d.cmOverflow, wound, d.cmThreshold,
+                    physicalRecovery = if (flag(c, "depenabled")) null else d.physicalCMNaturalRecovery,
+                    stunRecovery = if (flag(c, "depenabled")) null else d.stunCMNaturalRecovery,
+                ),
                 astralInitiative = if (magic) d.astralInitiative(wound) else null,
                 armor = ArmorLines(general, armor.encumbrance(), byType),
                 soak = (attrs["BOD"]?.totalValue ?: 0) + general + standardRound(set.valueOf("DamageResistance")),

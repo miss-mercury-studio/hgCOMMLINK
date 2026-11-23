@@ -74,7 +74,13 @@ class DerivedStats(
     val liftAndCarry: Int get() = attr("STR") + attr("BOD") + improvement("LiftAndCarry")
     val fatigueResist: Int get() = attr("BOD") + attr("WIL") + improvement("FatigueResist")
     val dodge: Int get() = attr("REA") + attr("INT") + improvement("Dodge")
-    val physicalCMNaturalRecovery: Int get() = attr("BOD") + attr("WIL") + improvement("PhysicalCMRecovery")
+    /** Natural recovery pool for physical damage, as `Character.PhysicalCMNaturalRecovery`: twice Body plus improvements (not for an A.I., which uses Software). */
+    val physicalCMNaturalRecovery: Int get() = 2 * attr("BOD") + improvement("PhysicalCMRecovery")
+
+    /** Natural recovery pool for stun damage: Body plus Willpower plus improvements, plus Essence when an improvement says so. */
+    val stunCMNaturalRecovery: Int get() =
+        attr("BOD") + attr("WIL") + improvement("StunCMRecovery") +
+            (if (improvements.all.any { it.enabled && it.type == "AddESStoStunCMRecovery" }) essence.toInt() else 0)
 
     private fun sum(attrs: List<String>, vararg types: String) =
         attrs.sumOf { attr(it) } + standardRound(types.sumOf { improvements.valueOf(it) })

@@ -1189,6 +1189,10 @@ private fun DamageCard(s: Sheet, vm: AppViewModel) {
                 )
                 TerminalButton("Heal all", { vm.healAll() }, enabled = d.physical + d.stun > 0)
             }
+            if (d.physicalRecovery != null && d.stunRecovery != null) Text(
+                "Natural recovery pools:  physical ${d.physicalRecovery}  ·  stun ${d.stunRecovery}",
+                style = MaterialTheme.typography.labelSmall, color = MutedSilver,
+            )
         }
     }
 }
