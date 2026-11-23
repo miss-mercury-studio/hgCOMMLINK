@@ -236,10 +236,10 @@ class CareerAdvancement(
 
     // ---- spells
 
-    /** The karma price of learning a spell or ritual (preparations are not told apart yet). Null for an unknown id. */
-    fun spellCost(entryId: String): Int? {
+    /** The karma price of learning a spell, ritual or (when [alchemical]) preparation, as `Character.SpellKarmaCost`. Null for an unknown id. */
+    fun spellCost(entryId: String, alchemical: Boolean = false): Int? {
         val entry = data[entryId]?.element ?: return null
-        val category = entry.child("category")?.textContent?.trim().let { if (it == "Rituals" || it == "Enchantments") it else "Spells" }
+        val category = if (alchemical) "Preparations" else entry.child("category")?.textContent?.trim().let { if (it == "Rituals") it else "Spells" }
         val set = improvements
         var v = k("karmaspell", 5).toDouble()
         fun applies(i: Improvement) = i.enabled && (i.improvedName == category || i.improvedName.isEmpty())
@@ -249,10 +249,10 @@ class CareerAdvancement(
         return maxOf(standardRound(v * multiplier), 0)
     }
 
-    fun addSpell(entryId: String, now: LocalDateTime = LocalDateTime.now()): String? {
-        val cost = spellCost(entryId) ?: return null
+    fun addSpell(entryId: String, now: LocalDateTime = LocalDateTime.now(), alchemical: Boolean = false): String? {
+        val cost = spellCost(entryId, alchemical) ?: return null
         if (cost > log.karma) return null
-        val guid = CharacterEditor(file, data, settings = settings).addSpell(entryId)
+        val guid = CharacterEditor(file, data, settings = settings).addSpell(entryId, alchemical = alchemical)
         val name = data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty()
         log.add("Karma", -cost.toDouble(), "Learned Spell $name", "AddSpell", objectId = guid, now = now)
         return guid

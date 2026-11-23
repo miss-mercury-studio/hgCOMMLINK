@@ -327,7 +327,7 @@ class CharacterEditor(
     }
 
     /** Add a spell, ritual or preparation from the game data. Returns the new item's GUID. */
-    fun addSpell(entryId: String, extra: String = ""): String {
+    fun addSpell(entryId: String, extra: String = "", alchemical: Boolean = false): String {
         val entry = data[entryId]?.element ?: error("No spell with id $entryId in the game data")
         val guid = UUID.randomUUID().toString()
         val name = entryText(entry, "name").orEmpty()
@@ -347,7 +347,7 @@ class CharacterEditor(
         add("limited", "False")
         add("extended", "False")
         add("customextended", "False")
-        add("alchemical", "False")
+        add("alchemical", if (alchemical) "True" else "False")
         add("source", entryText(entry, "source"))
         add("page", entryText(entry, "page"))
         add("extra", extra)
