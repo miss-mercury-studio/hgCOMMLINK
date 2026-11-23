@@ -40,6 +40,8 @@ class QualityUndoTest {
         val entry = log.entries().last()
         assertEquals("RemoveQuality", entry.undoKind)
         assertTrue(log.canUndo(entry))
+        // The sheet builds its log without the game data; the entry must still be offered for undo there.
+        assertTrue(ExpenseLog(c).canUndo(entry))
         assertTrue(log.undo(entry.guid))
         assertEquals(countBefore, c.root.child("qualities")!!.children("quality").count { it.text("name")?.trim() == name })
         assertEquals(before, ExpenseLog(c, data, settings).karma)
