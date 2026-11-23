@@ -30,7 +30,7 @@ data class SheetSections(
     data class ArmorSet(val name: String, val items: List<ArmorItemLine>)
     data class WareLine(val name: String, val grade: String, val rating: Int, val essence: Double, val isBioware: Boolean, val children: List<WareLine>, val guid: String = "", val sourceId: String = "")
     data class GearLine(val name: String, val category: String, val quantity: String, val rating: Int, val children: List<String>, val guid: String = "", val loaded: Boolean = false)
-    data class VehicleLine(val name: String, val category: String, val stats: String)
+    data class VehicleLine(val name: String, val category: String, val stats: String, val guid: String = "", val mods: List<String> = emptyList())
     data class ContactLine(val name: String, val type: String, val connection: Int, val loyalty: Int, val notes: String)
     data class LifestyleLine(val name: String, val type: String, val monthly: String, val notes: String)
 
@@ -76,7 +76,12 @@ data class SheetSections(
             val vehicles = c.root.child("vehicles")?.children("vehicle").orEmpty().map { v ->
                 VehicleLine(
                     v.t("name"), v.t("category"),
-                    "Handling ${v.t("handling")}  Speed ${v.t("speed")}  Body ${v.t("body")}  Armor ${v.t("armor")}  Pilot ${v.t("pilot")}",
+                    run {
+                        fun fig(on: String, off: String) = if (off.isNotEmpty() && off != v.t(on)) "${v.t(on)}/$off" else v.t(on)
+                        "Handling ${fig("handling", v.t("offroadhandling"))}  Speed ${fig("speed", v.t("offroadspeed"))}  Accel ${fig("accel", v.t("offroadaccel"))}  Body ${v.t("body")}  Armor ${v.t("armor")}  Pilot ${v.t("pilot")}  Sensor ${v.t("sensor")}" +
+                            (v.t("seats").takeIf { it.isNotEmpty() && it != "0" }?.let { "  Seats $it" } ?: "")
+                    },
+                    v.t("guid"), v.child("mods")?.children("mod").orEmpty().map { it.t("name") },
                 )
             }
 

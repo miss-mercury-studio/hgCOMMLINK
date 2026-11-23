@@ -424,9 +424,11 @@ class CareerAdvancement(
         return removed
     }
 
+    private fun removeVehicle(guid: String): Boolean = (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).remove(guid) } == true
+
     private fun removeAny(guid: String, includeArts: Boolean = true): Boolean {
         val aw = ArmorWeaponEditor(file, data)
-        return GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
+        return removeVehicle(guid) || GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
             aw.removeAccessory(guid) || aw.removeArmorMod(guid) || CyberwareEditor(file, data).remove(guid) || (includeArts && removeMartialArtItem(guid))
     }
 
@@ -467,6 +469,22 @@ class CareerAdvancement(
     }
 
     fun weaponCost(entryId: String): Double? = data[entryId]?.element?.let { GearEditor.unitCost(it, 0) }
+
+    // ---- vehicles and drones
+
+    fun vehicleCost(entryId: String): Double? = data[entryId]?.element?.takeIf { it.tagName == "vehicle" }?.let { GearEditor.unitCost(it, 0) }
+
+    /** Buy a vehicle or drone (with the mods and gear it comes with); returns its GUID, or null when it cannot be paid for or is over the creation availability limit. */
+    fun buyVehicle(entryId: String, now: LocalDateTime = LocalDateTime.now()): String? {
+        val pack = data as? chummer.core.DataPack ?: return null
+        val editor = VehicleEditor(file, pack)
+        if (editor.problem(entryId) != null) return null
+        val cost = vehicleCost(entryId) ?: return null
+        if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, null)) return null
+        val guid = editor.add(entryId)
+        charge(cost, "Purchased Vehicle " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddVehicle", guid, 0.0, now)
+        return guid
+    }
 
     fun buyArmor(entryId: String, rating: Int? = null, now: LocalDateTime = LocalDateTime.now()): String? {
         val editor = ArmorWeaponEditor(file, data)

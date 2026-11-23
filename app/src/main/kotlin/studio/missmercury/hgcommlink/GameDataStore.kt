@@ -102,6 +102,7 @@ class GameDataStore(private val context: Context) {
 
     fun armorOptions(): List<chummer.core.engine.ItemOption> = catalog("armor", chummer.core.engine.ArmorWeaponCatalog::armor)
     fun weaponOptions(): List<chummer.core.engine.ItemOption> = catalog("weapon", chummer.core.engine.ArmorWeaponCatalog::weapons)
+    fun vehicleOptions(): List<chummer.core.engine.ItemOption> = catalog("vehicle", chummer.core.engine.VehicleCatalog::vehicles)
 
     fun accessoryOptions(): List<chummer.core.engine.ItemOption> = catalog("accessory", chummer.core.engine.ArmorWeaponCatalog::accessories)
     fun armorModOptions(): List<chummer.core.engine.ItemOption> = catalog("armormod", chummer.core.engine.ArmorWeaponCatalog::armorMods)

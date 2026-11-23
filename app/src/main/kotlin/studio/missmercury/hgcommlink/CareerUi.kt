@@ -123,7 +123,7 @@ fun SpecializationSheet(skill: String, cost: Int, choices: List<String>, karma: 
     }
 }
 
-/** Pick gear, a weapon or armor ([kind]: "gear", "weapon", "armor") from the game data, choose rating and quantity where they apply, and pay. */
+/** Pick gear, a weapon, armor or a vehicle ([kind]: "gear", "weapon", "armor", "vehicle") from the game data, choose rating and quantity where they apply, and pay. */
 @Composable
 fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
     class Opt(val id: String, val name: String, val category: String, val cost: Double?, val avail: String, val min: Int, val max: Int, val note: String?, val blocked: Boolean)
@@ -132,6 +132,7 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
             "weapon" -> vm.weaponOptions().map { o ->
                 Opt(o.id, o.name, o.category, o.cost, o.avail, 0, 0, o.detail, o.problem != null)
             }
+            "vehicle" -> vm.vehicleOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, 0, 0, o.detail, o.problem != null) }
             "armor" -> vm.armorOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, 1, o.maxRating, o.detail, o.problem != null) }
             else -> vm.gearOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, o.minRating, o.maxRating, if (o.unsupported.isNotEmpty()) "some bonuses not applied yet" else null, false) }
         }
@@ -156,6 +157,7 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
         val q = if (kind == "gear") qty.toDoubleOrNull() else 1.0
         val cost = if (q == null || o.blocked) null else when (kind) {
             "weapon" -> vm.weaponCost(o.id)
+            "vehicle" -> vm.vehicleCost(o.id)
             "armor" -> vm.armorCost(o.id, r)
             else -> vm.gearCost(o.id, r, q)
         }
@@ -176,7 +178,7 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
                     TerminalButton("Cancel", close, Modifier.weight(1f))
                     TerminalButton("Buy", {
                         close(); chosen = null
-                        when (kind) { "weapon" -> vm.buyWeapon(o.id); "armor" -> vm.buyArmor(o.id, r); else -> vm.buyGear(o.id, r, q!!) }
+                        when (kind) { "weapon" -> vm.buyWeapon(o.id); "vehicle" -> vm.buyVehicle(o.id); "armor" -> vm.buyArmor(o.id, r); else -> vm.buyGear(o.id, r, q!!) }
                         onDismiss()
                     }, Modifier.weight(1f), filled = true, enabled = cost != null && q != null && q > 0 && cost <= have)
                 }

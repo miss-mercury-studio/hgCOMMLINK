@@ -676,7 +676,14 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
             }
         }
         if (g.vehicles.isNotEmpty()) item { SubHeader("Vehicles") }
-        items(g.vehicles) { v -> Column { Row2(v.name, v.category, bold = true); Small(v.stats) } }
+        items(g.vehicles) { v ->
+            Column {
+                Row2(v.name, v.category, bold = true); Small(v.stats)
+                Small(v.mods.joinToString(", "))
+                if (creating && v.guid.isNotEmpty()) RemoveLink { vm.removePurchase(v.guid) }
+                if (career && v.guid.isNotEmpty()) SellLink { selling = v.guid to v.name }
+            }
+        }
         if (g.gear.isNotEmpty()) item { SubHeader("Gear") }
         items(g.gear) { it ->
             Column {
@@ -691,6 +698,9 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         TerminalButton("Gear", { buying = "gear" }, Modifier.weight(1f))
         TerminalButton("Weapon", { buying = "weapon" }, Modifier.weight(1f))
         TerminalButton("Armor", { buying = "armor" }, Modifier.weight(1f))
+    }
+    if (canBuy) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+        TerminalButton("+ Vehicle or drone", { buying = "vehicle" }, Modifier.fillMaxWidth())
     }
     }
     buying?.let { BuyGearDialog(it, vm, s.nuyen) { buying = null } }

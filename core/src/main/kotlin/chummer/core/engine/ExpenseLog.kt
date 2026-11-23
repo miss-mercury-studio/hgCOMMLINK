@@ -107,7 +107,7 @@ class ExpenseLog(
     /** Which entries can be undone by [undo]: manual ones, and skill and attribute improvements. */
     fun canUndo(entry: ExpenseEntry): Boolean = when {
         entry.isKarma -> entry.undoKind in setOf("ManualAdd", "ManualSubtract", "ImproveAttribute", "ImproveSkill", "AddSkill", "AddSpecialization", "AddQuality", "AddSpell", "AddMartialArt", "AddMartialArtTechnique", "AddComplexForm", "ImproveInitiateGrade", "AddMetamagic", "AddEnhancement", "AddCritterPower", "AddAIProgram", "RemoveQuality") && (entry.undoKind != "RemoveQuality" || (data?.get(entry.objectId) != null)) && entry.reason != "Starting Karma"
-        else -> entry.undoKind in setOf("ManualAdd", "ManualSubtract", "AddGear", "AddArmor", "AddWeapon", "AddWeaponAccessory", "AddArmorMod", "AddCyberware") && entry.reason != "Starting Nuyen"
+        else -> entry.undoKind in setOf("ManualAdd", "ManualSubtract", "AddGear", "AddArmor", "AddWeapon", "AddWeaponAccessory", "AddArmorMod", "AddCyberware", "AddVehicle") && entry.reason != "Starting Nuyen"
     }
 
     /**
@@ -132,6 +132,10 @@ class ExpenseLog(
         if (!entry.isKarma && entry.undoKind == "AddArmor") {
             val d = data ?: return false
             if (!ArmorWeaponEditor(file, d).removeArmor(entry.objectId)) return false
+        }
+        if (!entry.isKarma && entry.undoKind == "AddVehicle") {
+            val d = data as? chummer.core.DataPack ?: return false
+            if (!VehicleEditor(file, d).remove(entry.objectId)) return false
         }
         if (!entry.isKarma && entry.undoKind == "AddWeapon") {
             val d = data ?: return false

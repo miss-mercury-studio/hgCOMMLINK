@@ -233,6 +233,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun armorOptions() = gameData.armorOptions()
     fun weaponOptions() = gameData.weaponOptions()
+    fun vehicleOptions() = gameData.vehicleOptions()
+    fun vehicleCost(id: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).vehicleCost(id) }
+    fun buyVehicle(id: String) = editCareer("Vehicle bought", "Cannot buy that vehicle (nuyen, or over the availability limit)") { adv, _ -> adv.buyVehicle(id) != null }
     fun armorCost(id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).armorCost(id, rating) }
     fun weaponCost(id: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).weaponCost(id) }
     fun buyArmor(id: String, rating: Int?) = editCareer("Armor bought", "Cannot buy that armor (nuyen, or it comes with parts that are not supported yet)") { adv, _ -> adv.buyArmor(id, rating) != null }
