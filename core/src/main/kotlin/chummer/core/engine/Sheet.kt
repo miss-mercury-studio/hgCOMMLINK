@@ -80,7 +80,7 @@ data class Sheet(
     /** Boxes filled on each condition monitor, the sizes of the tracks, the wound modifier (zero or negative) and the boxes per penalty step. */
     data class DamageLine(
         val physical: Int, val stun: Int, val physicalMax: Int, val stunMax: Int, val overflowMax: Int, val wound: Int, val threshold: Int,
-        /** Natural recovery dice pools (null for an A.I., whose recovery works differently). */
+        /** Natural recovery dice pools (an A.I. has no natural stun recovery). */
         val physicalRecovery: Int? = null, val stunRecovery: Int? = null,
     )
     data class CreationBuy(val ledger: NuyenLedger, val pluginCapacity: Map<String, Double>)
@@ -142,6 +142,8 @@ data class Sheet(
             val physicalFilled = c.root.text("physicalcmfilled")?.trim()?.toIntOrNull() ?: 0
             val stunFilled = c.root.text("stuncmfilled")?.trim()?.toIntOrNull() ?: 0
             val wound = d.woundModifier(physicalFilled, stunFilled)
+            // An A.I. has no Body (its metatype maximum is 0) and recovers differently (Chummer's `IsAI`).
+            val isAI = flag(c, "depenabled") && c.root.child("attributes")?.children("attribute")?.firstOrNull { it.text("name")?.trim() == "BOD" }?.text("metatypemax")?.trim()?.toIntOrNull() == 0
             val skillEngine = SkillEngine(set, attrs, rules, career, magicEnabled = magic, resonanceEnabled = resonance, woundModifier = wound)
             val groups = c.skillGroups()
             val skills = SkillEngine.skillsOf(c, data).map { raw ->
@@ -165,8 +167,8 @@ data class Sheet(
                 physicalCM = d.physicalCM, stunCM = d.stunCM, cmOverflow = d.cmOverflow,
                 damage = DamageLine(
                     physicalFilled, stunFilled, d.physicalCM, d.stunCM, d.cmOverflow, wound, d.cmThreshold,
-                    physicalRecovery = if (flag(c, "depenabled")) null else d.physicalCMNaturalRecovery,
-                    stunRecovery = if (flag(c, "depenabled")) null else d.stunCMNaturalRecovery,
+                    physicalRecovery = d.physicalRecovery(isAI, if (isAI) skills.firstOrNull { it.first.name == "Software" && !it.first.isKnowledge }?.let { (raw, _) -> skillEngine.calculate(raw.copy(attribute = "DEP"), groups[raw.group]?.first ?: 0, groups[raw.group]?.second ?: 0).pool } else null),
+                    stunRecovery = if (isAI) 0 else d.stunCMNaturalRecovery,
                 ),
                 astralInitiative = if (magic) d.astralInitiative(wound) else null,
                 armor = ArmorLines(general, armor.encumbrance(), byType),

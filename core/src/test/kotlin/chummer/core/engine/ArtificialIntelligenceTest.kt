@@ -31,4 +31,20 @@ class ArtificialIntelligenceTest {
         assertTrue(editor.changeAttribute("DEP", 1))
         assertEquals(5, Sheet.build(c, data, settings).attributes.first { it.name == "DEP" }.total)
     }
+
+    /** An A.I. recovers Core damage with Software + Depth and has no natural stun recovery (`Character.PhysicalCMNaturalRecovery`). */
+    @Test
+    fun anAiRecoversWithSoftwarePlusDepth() {
+        val meta = data.byId.entries.first { it.value.file == "metatypes.xml" && it.value.element.tagName == "metatype" && it.value.name == "A.I." }
+        val c = NewCharacter.createPriority(data, settings, NewCharacterRequest(name = "T", metatypeId = meta.key), PriorityChoice("C", "A", "B", "D", "E", "A.I.", true, talentSkills = emptyList()))
+        assertEquals("0", c.root.child("attributes")!!.children("attribute").first { it.text("name") == "BOD" }.text("metatypemax"))
+        val before = Sheet.build(c, data, settings).damage
+        assertEquals(0, before.stunRecovery)
+        assertEquals(0, before.physicalRecovery)   // Software cannot default
+        val editor = CharacterEditor(c, data, settings = settings)
+        assertTrue(editor.changeSkill("Software", 1))
+        val after = Sheet.build(c, data, settings).damage
+        assertEquals(1 + 4, after.physicalRecovery)   // rating 1 + Depth 4
+        assertEquals(0, after.stunRecovery)
+    }
 }

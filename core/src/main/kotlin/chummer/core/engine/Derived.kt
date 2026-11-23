@@ -74,8 +74,18 @@ class DerivedStats(
     val liftAndCarry: Int get() = attr("STR") + attr("BOD") + improvement("LiftAndCarry")
     val fatigueResist: Int get() = attr("BOD") + attr("WIL") + improvement("FatigueResist")
     val dodge: Int get() = attr("REA") + attr("INT") + improvement("Dodge")
-    /** Natural recovery pool for physical damage, as `Character.PhysicalCMNaturalRecovery`: twice Body plus improvements (not for an A.I., which uses Software). */
-    val physicalCMNaturalRecovery: Int get() = 2 * attr("BOD") + improvement("PhysicalCMRecovery")
+    private fun addsEssence(type: String) = improvements.all.any { it.enabled && it.type == type }
+
+    /**
+     * Natural recovery pool for physical damage, as `Character.PhysicalCMNaturalRecovery`: twice Body plus improvements. An A.I. restores
+     * Core damage with Software + Depth [Data Processing] instead: [software] is that skill's pool, or Depth - 1 when it has no such skill.
+     * Essence is added when an improvement says so.
+     */
+    fun physicalRecovery(ai: Boolean = false, software: Int? = null): Int =
+        (if (ai) (software ?: (attr("DEP") - 1)) else 2 * attr("BOD")) + improvement("PhysicalCMRecovery") +
+            (if (addsEssence("AddESStoPhysicalCMRecovery")) essence.toInt() else 0)
+
+    val physicalCMNaturalRecovery: Int get() = physicalRecovery()
 
     /** Natural recovery pool for stun damage: Body plus Willpower plus improvements, plus Essence when an improvement says so. */
     val stunCMNaturalRecovery: Int get() =
