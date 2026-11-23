@@ -41,8 +41,11 @@ class DerivedStats(
     fun astralInitiative(wound: Int): Initiative =
         Initiative(attr("INT") * 2 + wound, minOf(settings.int("minastralinitiativedice", 3), settings.int("maxastralinitiativedice", 3)))
 
-    val physicalCM: Int get() = 8 + ceil(attr("BOD") / 2.0).toInt() + improvement("PhysicalCM")
-    val stunCM: Int get() = 8 + ceil(attr("WIL") / 2.0).toInt() + improvement("StunCM")
+    /** Set for an A.I.: its physical track is the Core monitor (8 + half Depth, rounded up) and it has no stun track (Chummer gives it the home node's matrix monitor, which is not tracked here). */
+    var isAI: Boolean = false
+
+    val physicalCM: Int get() = 8 + ceil(attr(if (isAI) "DEP" else "BOD") / 2.0).toInt() + improvement("PhysicalCM")
+    val stunCM: Int get() = if (isAI) 0 else 8 + ceil(attr("WIL") / 2.0).toInt() + improvement("StunCM")
 
     /** Boxes of overflow before death: Body plus one. */
     val cmOverflow: Int get() = attr("BOD") + 1 + improvement("CMOverflow")

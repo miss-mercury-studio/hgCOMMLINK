@@ -1191,7 +1191,7 @@ private fun DamageCard(s: Sheet, vm: AppViewModel) {
     TerminalCard("Damage", tag = "01") {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             DamageTrack("Physical", d.physical, d.physicalMax, d.overflowMax, d.threshold) { vm.changeDamage("physical", it) }
-            DamageTrack("Stun", d.stun, d.stunMax, 0, d.threshold) { vm.changeDamage("stun", it) }
+            if (d.stunMax > 0)             DamageTrack("Stun", d.stun, d.stunMax, 0, d.threshold) { vm.changeDamage("stun", it) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     if (d.wound == 0) "No wound penalty" else "Wound modifier ${d.wound}\n(1 die per ${d.threshold} boxes)",

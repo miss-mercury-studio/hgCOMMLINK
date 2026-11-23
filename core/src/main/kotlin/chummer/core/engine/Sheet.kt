@@ -125,6 +125,9 @@ data class Sheet(
             val essenceEngine = EssenceEngine(set, data, true, rules.essenceDecimals, rules.dontRoundEssenceInternally)
             val essence = essenceEngine.essence(6.0, c.augmentations())
             val d = DerivedStats(set, attrs, essence, settings)
+            // An A.I. has no Body (its metatype maximum is 0) and its monitors and recovery work differently (Chummer's `IsAI`).
+            val isAI = flag(c, "depenabled") && c.root.child("attributes")?.children("attribute")?.firstOrNull { it.text("name")?.trim() == "BOD" }?.text("metatypemax")?.trim()?.toIntOrNull() == 0
+            d.isAI = isAI
 
             val str = attrs["STR"]?.totalValue ?: 0
             val armor = ArmorEngine(
@@ -142,8 +145,6 @@ data class Sheet(
             val physicalFilled = c.root.text("physicalcmfilled")?.trim()?.toIntOrNull() ?: 0
             val stunFilled = c.root.text("stuncmfilled")?.trim()?.toIntOrNull() ?: 0
             val wound = d.woundModifier(physicalFilled, stunFilled)
-            // An A.I. has no Body (its metatype maximum is 0) and recovers differently (Chummer's `IsAI`).
-            val isAI = flag(c, "depenabled") && c.root.child("attributes")?.children("attribute")?.firstOrNull { it.text("name")?.trim() == "BOD" }?.text("metatypemax")?.trim()?.toIntOrNull() == 0
             val skillEngine = SkillEngine(set, attrs, rules, career, magicEnabled = magic, resonanceEnabled = resonance, woundModifier = wound)
             val groups = c.skillGroups()
             val skills = SkillEngine.skillsOf(c, data).map { raw ->
