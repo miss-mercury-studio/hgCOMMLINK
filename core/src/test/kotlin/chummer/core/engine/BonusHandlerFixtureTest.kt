@@ -126,6 +126,6 @@ class BonusHandlerFixtureTest {
     }
 
     companion object {
-        const val KNOWN_NOT_MATCHING = 120
+        const val KNOWN_NOT_MATCHING = 118
     }
 }

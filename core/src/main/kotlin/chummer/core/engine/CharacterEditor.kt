@@ -106,6 +106,16 @@ class CharacterEditor(
         }
     }
 
+    /**
+     * Why a quality's `required` and `forbidden` blocks (and its chargen-only, career-only and priority-only flags) rule it out
+     * for this character, or null if they do not. Item kinds [Prerequisites] does not read never refuse.
+     */
+    fun qualityRequirementProblem(entryId: String): String? {
+        val entry = data[entryId]?.element ?: return null
+        val result = Prerequisites.check(entry, file, data, settings?.toRuleSettings() ?: RuleSettings())
+        return result.problems.takeIf { it.isNotEmpty() }?.joinToString("; ")
+    }
+
     private fun attributeRow(name: String): Element? =
         root.child("attributes")?.children("attribute")?.firstOrNull { it.text("name")?.trim() == name }
 
@@ -481,7 +491,7 @@ object ImprovementWriter {
         fun add(tag: String, text: String = "") { e.appendChild(doc.createElement(tag).also { if (text.isNotEmpty()) it.textContent = text }) }
         // Chummer leaves the element out when there is no unique name.
         if (i.uniqueName.isNotEmpty()) add("unique", i.uniqueName)
-        add("target")
+        add("target", i.target)
         add("improvedname", i.improvedName)
         add("sourcename", i.sourceName)
         add("min", number(i.minimum))

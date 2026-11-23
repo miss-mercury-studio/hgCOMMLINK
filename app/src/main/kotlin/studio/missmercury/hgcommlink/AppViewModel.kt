@@ -130,9 +130,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun addQuality(entryId: String, extra: String = "") {
         val current = open ?: return
         viewModelScope.launch {
-            val problem = if (current.sheet?.isCareer == true) null else try { io { gameData.editor(current.character).qualityLimitProblem(entryId) } } catch (e: Throwable) { null }
-            if (current.sheet?.isCareer == true) editCareer("Added quality", "Not enough karma for that quality") { adv, _ -> adv.addQuality(entryId, extra) != null }
-            else if (problem != null) message = problem
+            val career = current.sheet?.isCareer == true
+            val problem = try {
+                io { gameData.editor(current.character).let { ed -> ed.qualityRequirementProblem(entryId) ?: if (career) null else ed.qualityLimitProblem(entryId) } }
+            } catch (e: Throwable) { null }
+            if (problem != null) message = problem
+            else if (career) editCareer("Added quality", "Not enough karma for that quality") { adv, _ -> adv.addQuality(entryId, extra) != null }
             else edit("Added quality") { editor -> editor.addQuality(entryId, extra); true }
         }
     }

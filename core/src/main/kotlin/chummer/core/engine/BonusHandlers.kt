@@ -111,11 +111,11 @@ object BonusHandlers {
     fun improvement(
         ctx: BonusContext, type: String, unique: String, value: Double = 0.0, improvedName: String = "",
         rating: Double = 1.0, min: Double = 0.0, max: Double = 0.0, augmented: Double = 0.0, augMax: Double = 0.0,
-        exclude: String = "", addToRating: Boolean = false, condition: String = "",
+        exclude: String = "", addToRating: Boolean = false, condition: String = "", target: String = "",
     ) = Improvement(
         type = type, source = ctx.source, improvedName = improvedName, sourceName = ctx.sourceName, uniqueName = unique,
         value = value, augmented = augmented, minimum = min, maximum = max, augmentedMaximum = augMax, rating = rating,
-        addToRating = addToRating, enabled = true, custom = false, condition = condition, exclude = exclude,
+        addToRating = addToRating, enabled = true, custom = false, condition = condition, exclude = exclude, target = target,
     )
 
     // ---- helpers for the hand-written handlers ----
@@ -517,6 +517,49 @@ object BonusHandlers {
             if (category.isEmpty()) return@put
             node.t("val")?.takeIf { it.isNotEmpty() }?.let { t -> value(t, ctx.rating)?.takeIf { it != 0.0 }?.let { out += improvement(ctx, "WalkMultiplier", unique, it, category) } }
             node.t("percent")?.takeIf { it.isNotEmpty() }?.let { t -> value(t, ctx.rating)?.takeIf { it != 0.0 }?.let { out += improvement(ctx, "WalkMultiplierPercent", unique, it, category) } }
+        }
+
+        put("runmultiplier") { node, ctx, unique, out ->
+            val category = node.t("category").orEmpty()
+            if (category.isEmpty()) return@put
+            node.t("val")?.takeIf { it.isNotEmpty() }?.let { t -> value(t, ctx.rating)?.takeIf { it != 0.0 }?.let { out += improvement(ctx, "RunMultiplier", unique, it, category) } }
+            node.t("percent")?.takeIf { it.isNotEmpty() }?.let { t -> value(t, ctx.rating)?.takeIf { it != 0.0 }?.let { out += improvement(ctx, "RunMultiplierPercent", unique, it, category) } }
+        }
+
+        // Fading (the technomancer's drain): the node text is the value, an optional `specific` attribute names what it applies to.
+        put("fadingvalue") { node, ctx, unique, out ->
+            value(node.textContent.trim(), ctx.rating)?.let { out += improvement(ctx, "FadingValue", unique, it, node.getAttribute("specific")) }
+        }
+
+        // Drain and damage changes for a spell category (the category may be the user's choice) or descriptor.
+        put("spellcategorydrain") { node, ctx, unique, out ->
+            val category = node.t("category")?.takeIf { it.isNotEmpty() } ?: ctx.choice.takeIf { it.isNotEmpty() } ?: return@put
+            value(node.t("val"), ctx.rating)?.let { out += improvement(ctx, "SpellCategoryDrain", unique, it, category) }
+        }
+        for ((tag, field, type) in listOf(
+            Triple("spellcategorydamage", "category", "SpellCategoryDamage"),
+            Triple("spelldescriptordamage", "descriptor", "SpellDescriptorDamage"),
+            Triple("spelldescriptordrain", "descriptor", "SpellDescriptorDrain"),
+        )) put(tag) { node, ctx, unique, out ->
+            value(node.t("val"), ctx.rating)?.let { out += improvement(ctx, type, unique, it, node.t(field).orEmpty()) }
+        }
+
+        // A cyberware or bioware grade the character cannot take; the node name is the unique name, as in Chummer.
+        put("disablecyberwaregrade") { node, ctx, _, out -> out += improvement(ctx, "DisableCyberwareGrade", "disablecyberwaregrade", 0.0, node.textContent.trim()) }
+        put("disablebiowaregrade") { node, ctx, _, out -> out += improvement(ctx, "DisableBiowareGrade", "disablebiowaregrade", 0.0, node.textContent.trim()) }
+
+        // Attributes whose limits are replaced (a critter's or a metatype's own range).
+        put("replaceattributes") { node, ctx, unique, out ->
+            for (a in node.children("replaceattribute")) {
+                val name = a.t("name") ?: continue
+                fun n(tag: String) = a.t(tag)?.toDoubleOrNull() ?: 0.0
+                out += improvement(ctx, "ReplaceAttribute", unique, 0.0, name, rating = 1.0, min = n("min"), max = n("max"), augMax = n("aug"))
+            }
+        }
+
+        // The karma cost of binding a focus changes by the value; `extracontains` limits it to foci whose name contains the text.
+        put("focusbindingkarmacost") { node, ctx, unique, out ->
+            out += improvement(ctx, "FocusBindingKarmaCost", unique, value(node.t("val"), ctx.rating) ?: 0.0, node.t("name").orEmpty(), rating = 1.0, target = node.t("extracontains").orEmpty())
         }
 
         // Older data spelled the metagenic limit node "metageneticlimit".
