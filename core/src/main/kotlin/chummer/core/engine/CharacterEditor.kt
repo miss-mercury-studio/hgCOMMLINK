@@ -116,6 +116,23 @@ class CharacterEditor(
         return result.problems.takeIf { it.isNotEmpty() }?.joinToString("; ")
     }
 
+    /**
+     * Run a purchase step ([buy], one point of an attribute, skill or group) for a character in creation and take it back with
+     * [undo] if it leaves the karma overspent when the step before it did not: Chummer's creation screen does not let a purchase
+     * go past the karma left. Returns false when the step failed or was taken back. Characters in career, or with no settings,
+     * are not limited here (career purchases check their own price).
+     */
+    fun withinKarma(buy: () -> Boolean, undo: () -> Unit): Boolean {
+        val cfg = settings
+        val limited = cfg != null && !root.text("created")?.trim().equals("True", true)
+        val before = if (limited) KarmaLedger.of(file, cfg!!, data).remaining else 0
+        if (!buy()) return false
+        if (!limited) return true
+        val after = KarmaLedger.of(file, cfg!!, data).remaining
+        if (after < 0 && after < before) { undo(); return false }
+        return true
+    }
+
     private fun attributeRow(name: String): Element? =
         root.child("attributes")?.children("attribute")?.firstOrNull { it.text("name")?.trim() == name }
 

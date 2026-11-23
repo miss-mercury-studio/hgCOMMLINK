@@ -142,11 +142,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Buy (+1) or give back (-1) a point of an attribute with karma, in creation. */
     fun changeAttribute(name: String, delta: Int) =
-        edit(null, blocked = if (delta > 0) "$name is at its maximum" else "No karma point in $name to give back") { it.changeAttribute(name, delta) }
+        edit(null, blocked = if (delta > 0) "$name is at its maximum, or not enough karma left" else "No karma point in $name to give back") { ed -> if (delta > 0) ed.withinKarma({ ed.changeAttribute(name, 1) }, { ed.changeAttribute(name, -1) }) else ed.changeAttribute(name, delta) }
 
     /** Buy (+1) or give back (-1) a rating point of an active skill with karma, in creation. */
     fun changeSkill(name: String, delta: Int) =
-        edit(null, blocked = if (delta > 0) "$name is at the creation maximum" else "No karma point in $name to give back") { it.changeSkill(name, delta) }
+        edit(null, blocked = if (delta > 0) "$name is at the creation maximum, or not enough karma left" else "No karma point in $name to give back") { ed -> if (delta > 0) ed.withinKarma({ ed.changeSkill(name, 1) }, { ed.changeSkill(name, -1) }) else ed.changeSkill(name, delta) }
 
     /** Remove a quality (and the improvements it granted) from the open character. */
     fun removeQuality(guid: String) =
@@ -365,11 +365,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Buy (+1) or give back (-1) a step of a skill group with karma, in creation. */
     fun changeSkillGroup(name: String, delta: Int) =
-        edit(null, blocked = if (delta > 0) "$name is at the creation maximum" else "No karma step in $name to give back") { it.changeSkillGroup(name, delta) }
+        edit(null, blocked = if (delta > 0) "$name is at the creation maximum, or not enough karma left" else "No karma step in $name to give back") { ed -> if (delta > 0) ed.withinKarma({ ed.changeSkillGroup(name, 1) }, { ed.changeSkillGroup(name, -1) }) else ed.changeSkillGroup(name, delta) }
 
     /** Buy (+1, free points first, then karma) or give back (-1) a rating of a knowledge skill, in creation. */
     fun changeKnowledge(guid: String, delta: Int) =
-        edit(null, blocked = if (delta > 0) "At the creation maximum" else "Nothing to give back") { it.changeKnowledgeSkill(guid, delta) }
+        edit(null, blocked = if (delta > 0) "At the creation maximum, or not enough karma left" else "Nothing to give back") { ed -> if (delta > 0) ed.withinKarma({ ed.changeKnowledgeSkill(guid, 1) }, { ed.changeKnowledgeSkill(guid, -1) }) else ed.changeKnowledgeSkill(guid, delta) }
 
     fun addKnowledge(entryId: String, native: Boolean) = edit("Added skill") { it.addKnowledgeSkill(entryId, native = native); true }
     fun removeKnowledge(guid: String) = edit("Removed skill") { it.removeKnowledgeSkill(guid) }
