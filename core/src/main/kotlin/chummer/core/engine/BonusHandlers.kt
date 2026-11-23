@@ -562,6 +562,10 @@ object BonusHandlers {
             out += improvement(ctx, "FocusBindingKarmaCost", unique, value(node.t("val"), ctx.rating) ?: 0.0, node.t("name").orEmpty(), rating = 1.0, target = node.t("extracontains").orEmpty())
         }
 
+        put("focusbindingkarmamultiplier") { node, ctx, unique, out ->
+            out += improvement(ctx, "FocusBindingKarmaMultiplier", unique, value(node.t("val"), ctx.rating) ?: 0.0, node.t("name").orEmpty(), rating = 1.0, target = node.t("extracontains").orEmpty())
+        }
+
         // Older data spelled the metagenic limit node "metageneticlimit".
         put("metageneticlimit") { node, ctx, unique, out ->
             value(node.textContent, ctx.rating)?.let { out += improvement(ctx, "MetageneticLimit", unique, it) }

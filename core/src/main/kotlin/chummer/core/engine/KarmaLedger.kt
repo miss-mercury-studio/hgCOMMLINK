@@ -309,7 +309,7 @@ data class KarmaLedger(
             }
             val foci = c.root.child("foci")?.children("focus").orEmpty().sumOf { f ->
                 val g = gearByGuid[f.text("gearid")?.trim()?.lowercase()] ?: return@sumOf 0
-                FocusCost.of(g.text("name")?.trim().orEmpty(), g.text("rating")?.trim()?.toIntOrNull() ?: 0, cost)
+                FocusCost.of(g.text("name")?.trim().orEmpty(), g.text("rating")?.trim()?.toIntOrNull() ?: 0, cost, set.all, g.text("extra")?.trim().orEmpty())
             }
             // Initiation (Chummer's calculation in `CharacterCreate`): each grade's karma, and the metamagic price for each metamagic of a grade after its first.
             val gradeRows = c.root.child("initiationgrades")?.children("initiationgrade").orEmpty()
@@ -343,16 +343,26 @@ object FocusCost {
     )
 
     /** Chummer's `Focus.BindingKarmaCost`: Force times the price for the kind of focus, less 1 or 2 for an individualized one (a name with a choice in brackets or after a comma is cut). */
-    fun of(gearName: String, rating: Int, karmaCost: Map<String, Int>): Int {
+    fun of(gearName: String, rating: Int, karmaCost: Map<String, Int>, improvements: List<Improvement> = emptyList(), extra: String = ""): Int {
         var name = gearName
-        var extra = 0
-        if (name.endsWith(", Individualized, Complete")) { extra = -2; name = name.removeSuffix(", Individualized, Complete") }
-        else if (name.endsWith(", Individualized, Partial")) { extra = -1; name = name.removeSuffix(", Individualized, Partial") }
+        var flat = 0
+        if (name.endsWith(", Individualized, Complete")) { flat = -2; name = name.removeSuffix(", Individualized, Complete") }
+        else if (name.endsWith(", Individualized, Partial")) { flat = -1; name = name.removeSuffix(", Individualized, Partial") }
         val paren = name.indexOf('(')
         if (paren > 0) name = name.substring(0, paren - 1)
         name = name.substringBefore(',')
         val key = name.lowercase().replace(" ", "")
-        val multiplier = karmaCost["karma$key"] ?: DEFAULTS[key] ?: 1
-        return rating * multiplier + extra
+        var multiplier = (karmaCost["karma$key"] ?: DEFAULTS[key] ?: 1).toDouble()
+        // Improvements for this kind of focus: a flat change to the price, or a change to the multiplier. One with a target applies when the
+        // focus's own text is in it; with no focus text, only the untargeted ones apply.
+        for (i in improvements) {
+            if (!i.enabled || i.improvedName != name) continue
+            if (extra.isBlank()) { if (i.target.isNotEmpty()) continue } else if (i.target.isNotEmpty() && !i.target.contains(extra)) continue
+            when (i.type) {
+                "FocusBindingKarmaCost" -> flat += standardRound(i.value)
+                "FocusBindingKarmaMultiplier" -> multiplier += i.value
+            }
+        }
+        return standardRound(rating * multiplier + flat)
     }
 }

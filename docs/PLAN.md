@@ -182,7 +182,7 @@ Approach: creation edits a character document (the same DOM we read) and every c
 - [x] Specializations (price from the settings, one per skill; checked against Viper's 7-karma entry; undo removes it) and **buying qualities in career** (karma x the settings' quality multiplier, doubled unless the settings or the quality say otherwise; negative qualities log 0; undo removes the quality and its improvements). In the app: "+spec" on rated skills, and the Add quality list shows career prices. Builds; not yet seen on the phone.
 - [x] Career spells (settings' spell price with the new-spell-cost improvements; rituals priced separately, preparations not told apart yet; undo removes the spell), removing qualities (positive: free; negative: bought off at karma x multiplier, doubled unless the settings say otherwise; logged, not undoable in the app), undo of skill-group improvements. App: spell picker and quality removal show prices. Builds; not yet seen on the phone.
 - [x] Since built (see M4 and the progress log): initiation, complex forms, martial arts, critter powers, A.I. programs, gear, ware, weapon and armor purchases with nuyen entries and undo.
-- [ ] Not built: swapping qualities, quality discounts and `refundkarmaonremove`, free-spell rules in career (preparations are priced in the core but the picker has no "alchemical" switch yet), lifestyle payments, undo of negative-quality removal, karma-to-nuyen conversion, selling gear and ware, upgrading ware grade, and the career-karma total for refund entries.
+- [ ] Not built: swapping qualities, quality discounts and `refundkarmaonremove`, free-spell rules in career, lifestyle payments, karma-to-nuyen conversion, upgrading ware grade, and the career-karma total for refund entries.
 - [ ] Created-versus-career mode: the sheet already switches on `created`; still to check which creation-only controls must be hidden or locked in career.
 - [ ] Viper's expense log as the test case: the balance and prices are covered; replaying the whole log's purchases against an empty character is not.
 
@@ -216,14 +216,14 @@ Against desktop Chummer:
 - [ ] Attributes: 14 of 454 miss (Davis Jones 10, saved by 5.183, may need an old-format reader; Bastion and Blindfire 4, cyberlimb averaging one too low).
 - [ ] Essence: 4 of 35 miss (Bastion, Monomax, Fuzzy-chargen, SCSi).
 - [ ] Creation karma: 7 of 26 miss (Bastion and Yeti complex forms, Resub mystic adept power points, Miko, Ocelot, Ushi and prime quality rules, group contacts).
-- [ ] Bonus handlers: 67 of 246 node types unhandled (about 40 of them used only by life modules, which are out of scope; others include `selectspell`, `addweapon` in power bonuses, `optionalpowers`, `addspirit`, `skillattribute`, vehicle stats); about 118 stored items differ, mostly old-version drift. `focusbindingkarmacost` and the spell drain/damage nodes make improvements, but no engine reads them yet.
+- [ ] Bonus handlers: 67 of 246 node types unhandled (about 40 of them used only by life modules, which are out of scope; others include `selectspell`, `addweapon` in power bonuses, `optionalpowers`, `addspirit`, `skillattribute`, vehicle stats); about 118 stored items differ, mostly old-version drift. `focusbindingkarmacost` and `focusbindingkarmamultiplier` now change the focus price in the karma ledger; the spell drain and damage nodes make improvements that nothing reads yet.
 - [ ] Price mysteries: Explosive Rounds (300 against 240), Novacoke and Jazz (double), Bone Lacing (18000 paid 6750).
-- [ ] Not calculated: matrix and astral initiative, wound modifiers from damage, skillsofts and activesofts, conditional improvements, broken skill groups, toxin and pathogen immunity, cyberleg movement setting, shapeshifter movement, encumbrance, Cyberzombie, Custom Fit (Stack), FixedValues and Variable essence formulas, essence holes, weapon dice pools, wireless bonuses, fire modes from accessories, flechette ammo, weapon availability and cost.
+- [ ] Not calculated: matrix and astral initiative, skillsofts and activesofts, conditional improvements, broken skill groups, toxin and pathogen immunity, cyberleg movement setting, shapeshifter movement, encumbrance, Cyberzombie, Custom Fit (Stack), FixedValues and Variable essence formulas, essence holes, weapon dice pools, wireless bonuses, fire modes from accessories, flechette ammo, weapon availability and cost.
 - [ ] Chummer creation checks not ported: attribute and skill limits per metatype and group, contact limits, metagenic balance, cyberware grades and capacity, vehicle rules, nuyen limits.
 
 ### C. Creation
 - [x] Creation steppers stop at zero karma (`CharacterEditor.withinKarma`); the attribute stepper no longer overspends.
-- [~] Quality prerequisites: `Prerequisites` reads quality, metatype, metatype category, attribute, Magic/Resonance/Depth enabled, power, spell, critter power, ware and gear items and the chargen-only, career-only and priority-only flags. Not read (never refuse): skill, skilltotal, tradition, group, gameplayoption, lifestyle and other kinds. Qualities with levels, and the same-quality-twice limit, are still open.
+- [~] Quality prerequisites: `Prerequisites` reads quality, metatype, metatype category, attribute, Magic/Resonance/Depth enabled, power, spell, critter power, ware and gear items and the chargen-only, career-only and priority-only flags. Not read (never refuse): skill, skilltotal, tradition, group, gameplayoption, lifestyle and other kinds. The same-quality-twice limit (`limit`, default once for a quality; `chargenlimit` in creation) is checked too. Qualities with levels are still open.
 - [ ] Choice pickers for weapon and armor selections in bonuses.
 - [ ] Knowledge skill specializations, typed knowledge skill names, knowledge skill type choice.
 - [ ] Special attribute limits (MAG, RES, EDG).
@@ -234,11 +234,11 @@ Against desktop Chummer:
 - [ ] Metatype variants for Priority and Sum-to-Ten (for example Nartaki); `settingshashcode` empty on new characters.
 
 ### D. Career
-- [ ] Swapping qualities, quality discounts, `refundkarmaonremove`, free-spell rules; the "alchemical" switch in the spell picker (preparations are priced and saved by the core).
+- [ ] Swapping qualities, quality discounts, `refundkarmaonremove`, free-spell rules.
 - [ ] Lifestyle payments, karma-to-nuyen conversion, career-karma total for refund entries.
-- [ ] Undo of negative-quality removal and of group improvements.
-- [ ] Selling gear and ware, upgrading ware grade.
-- [ ] Hide or lock creation-only controls in career.
+- [x] Undo of negative-quality removal (the quality is re-added from the data) and of group improvements.
+- [~] Selling: gear, weapons and armor can be sold for 100, 75, 50 or 25 percent of their price (`sellPurchase`); ware and vehicles have no sell link, and upgrading ware grade is not built.
+- [ ] Hide or lock creation-only controls in career (the steppers key off the creation ledgers, so most are already hidden; not reviewed screen by screen).
 - [ ] Replay Viper's whole expense log against an empty character as a test.
 
 ### E. Magic and resonance
@@ -377,3 +377,10 @@ Against desktop Chummer:
   - **Creation karma guard:** `CharacterEditor.withinKarma` takes a purchase back when it leaves karma overspent; the attribute, skill, skill group and knowledge steppers use it (`KarmaGuardTest`).
   - **Spell prices:** an Enchantment is priced as a spell, as Chummer does (it only knows Spells, Rituals and Preparations); `spellCost` and `addSpell` take an `alchemical` flag for preparations (`SpellPricingTest`). The picker has no switch for it yet.
   - Not run on the phone: the refusal messages for prerequisites and the karma guard.
+- 2026-11-22: **Triage session, second part (unattended)**.
+  - **Wounds** (`DerivedStats.woundModifier`, `Sheet.damage`, `CharacterEditor.changeDamage` and `healAll`): the damage on the physical and stun monitors is stored where Chummer stores it (`physicalcmfilled`, `stuncmfilled`). The wound modifier follows `RefreshWoundPenalties`: boxes beyond the threshold offset divided by the threshold (3 plus improvements), a track whose penalty an improvement ignores counts zero. It is applied to initiative and to every skill pool (`WoundTest`). In the app a career character has a Damage card above Vitals: a row of boxes for each track with a minus and plus, the wound modifier, and Heal all; Vitals shows "Wounds -n". Not built: stun overflowing into physical, the encumbrance part of the wound modifier (a setting that is off by default), wound modifiers on the other dice pools of the Overview, healing rolls and natural recovery. Not run on the phone.
+  - **Preparations in the spell picker:** a "+ Preparation" button beside "+ Spell" opens the picker priced as a preparation and saves the spell as alchemical.
+  - **Same-quality limit:** adding a quality already held is refused ("Already taken") unless its `limit` allows more.
+  - **Undo of buying off a negative quality** re-adds it from the game data and returns the karma (`QualityUndoTest`).
+  - **Selling:** `CareerAdvancement.sellPurchase` removes a bought item and logs "Selling Item" with the share of its price (the drop in the nuyen ledger's total, so every pricing rule is reused); not undoable. The Gear tab shows "sell" under armor, weapons and gear in career, with a 100/75/50/25 percent choice. Chummer's own default percent was not checked.
+  - **Focus binding cost improvements** are read by the karma ledger (`FocusCost.of`): a flat change or a multiplier change for the kind of focus, limited by the focus's text when the improvement names one.
