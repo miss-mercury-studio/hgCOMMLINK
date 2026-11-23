@@ -419,11 +419,39 @@ class CareerAdvancement(
     /** Take a bought item out again while the character is in creation (career uses the log's undo). False when there is no such item, or in career. */
     fun removePurchase(guid: String): Boolean {
         if (!inCreation) return false
-        val aw = ArmorWeaponEditor(file, data)
-        val removed = GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
-            aw.removeAccessory(guid) || aw.removeArmorMod(guid) || CyberwareEditor(file, data).remove(guid) || removeMartialArtItem(guid)
+        val removed = removeAny(guid)
         if (removed) NuyenLedger.sync(file, settings, data)
         return removed
+    }
+
+    private fun removeAny(guid: String, includeArts: Boolean = true): Boolean {
+        val aw = ArmorWeaponEditor(file, data)
+        return GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
+            aw.removeAccessory(guid) || aw.removeArmorMod(guid) || CyberwareEditor(file, data).remove(guid) || (includeArts && removeMartialArtItem(guid))
+    }
+
+    /**
+     * Sell an item in career for [percent] of what it is worth (its price with whatever is fitted to it, as the nuyen ledger prices it):
+     * the item leaves the character and the nuyen is added to the log as "Selling Item". Returns the nuyen received, or null when there
+     * is no such item or the character is in creation. A sale is not undoable from the log.
+     */
+    fun sellPurchase(guid: String, percent: Int, now: LocalDateTime = LocalDateTime.now()): Double? {
+        if (inCreation || percent !in 0..100) return null
+        val name = nameOfItem(guid) ?: return null
+        val before = NuyenLedger.of(file, settings, data).spent
+        if (!removeAny(guid, includeArts = false)) return null
+        val value = (before - NuyenLedger.of(file, settings, data).spent).coerceAtLeast(0.0) * percent / 100.0
+        log.add("Nuyen", value, "Selling Item $name", "SellItem", objectId = guid, now = now)
+        return value
+    }
+
+    private fun nameOfItem(guid: String): String? {
+        val all = file.doc.getElementsByTagName("guid")
+        for (i in 0 until all.length) {
+            val g = all.item(i) as org.w3c.dom.Element
+            if (g.textContent.trim().equals(guid, true)) return (g.parentNode as? org.w3c.dom.Element)?.text("name")?.trim()
+        }
+        return null
     }
 
     // ---- armor and weapons

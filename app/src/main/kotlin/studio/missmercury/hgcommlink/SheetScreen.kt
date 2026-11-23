@@ -112,6 +112,26 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
     }
 }
 
+/** A small "sell" link under an item in career. */
+@Composable
+private fun SellLink(onClick: () -> Unit) {
+    Text("sell", Modifier.clickable(onClick = onClick).padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = DrainAmber)
+}
+
+/** The share of an item's price to take when selling it. */
+@Composable
+private fun SellSheet(name: String, onSell: (Int) -> Unit, onDismiss: () -> Unit) {
+    TerminalSheet("Sell $name", onDismiss) { close ->
+        Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Take this share of what it is worth, with whatever is fitted to it. A sale cannot be undone from the log.", style = MaterialTheme.typography.bodySmall, color = MutedSilver)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(100, 75, 50, 25).forEach { pct -> TerminalButton("$pct%", { close(); onSell(pct) }, Modifier.weight(1f)) }
+            }
+            TerminalButton("Cancel", close, Modifier.fillMaxWidth())
+        }
+    }
+}
+
 /** A small "remove" link under an item bought in creation (career uses undo from the log). */
 @Composable
 private fun RemoveLink(onClick: () -> Unit) {
@@ -609,6 +629,9 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     var attaching by remember { mutableStateOf<Pair<String, String>?>(null) }
     var loading by remember { mutableStateOf<String?>(null) }
     var installing by remember { mutableStateOf<Pair<String, Double?>?>(null) }
+    var selling by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val career = s.career != null
+    selling?.let { (guid, name) -> SellSheet(name, { pct -> vm.sellPurchase(guid, pct) }) { selling = null } }
     Column(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (g.armorSets.isNotEmpty()) item { SubHeader("Armor") }
@@ -621,6 +644,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
                         if (a.gear.isNotEmpty()) Small("Gear: " + a.gear.joinToString(", "))
                         a.capacityLeft?.let { Small("Capacity left %.0f".format(it)) }
                         if (creating && a.guid.isNotEmpty()) RemoveLink { vm.removePurchase(a.guid) }
+                        if (career && a.guid.isNotEmpty()) SellLink { selling = a.guid to a.name }
                         if (canBuy && a.guid.isNotEmpty()) Text("+ mod", Modifier.clickable { attaching = "mod" to a.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
                         if (canBuy && a.guid.isNotEmpty() && (a.capacityLeft ?: 0.0) > 0.0) Text("+ gear", Modifier.clickable { installing = a.guid to a.capacityLeft }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
                     }
@@ -638,6 +662,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
                     "RC ${w.rc}", w.conceal.takeIf { it != "0" }?.let { "conceal $it" }).filterNotNull().filter { it.isNotBlank() }.joinToString("  ·  "))
                 Small(w.accessories.groupingBy { it }.eachCount().entries.joinToString(", ") { (n, c) -> if (c > 1) "$n x$c" else n })
                 if (creating && w.guid.isNotEmpty() && w.removable) RemoveLink { vm.removePurchase(w.guid) }
+                if (career && w.guid.isNotEmpty() && w.removable) SellLink { selling = w.guid to w.name }
                 if (canBuy && w.guid.isNotEmpty() && w.canLoad) Text("load ammo", Modifier.clickable { loading = w.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
                 if (canBuy && w.guid.isNotEmpty() && w.loadedClips > 0) Text("unload ammo", Modifier.clickable { vm.unloadAmmo(w.guid) }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
                 if (canBuy && w.guid.isNotEmpty() && w.allowAccessory) Text("+ accessory", Modifier.clickable { attaching = "accessory" to w.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
@@ -651,6 +676,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
                 Row2(it.name + if (it.rating > 0) " (rating ${it.rating})" else "", if (it.quantity != "1") "x${it.quantity}" else "")
                 Small(listOf(it.category, it.children.joinToString(", ")).filter { x -> x.isNotBlank() }.joinToString("  ·  "))
                 if (creating && it.guid.isNotEmpty()) RemoveLink { vm.removePurchase(it.guid) }
+                if (career && it.guid.isNotEmpty()) SellLink { selling = it.guid to it.name }
             }
         }
     }
