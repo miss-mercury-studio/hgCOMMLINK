@@ -112,7 +112,7 @@ class WeaponEngine(
             w.t("reach"), accuracy, signed(conceal), accessories.map { it.t("name") }, w.t("guid"),
             allowAccessory = w.t("allowaccessory").equals("True", true) && w.t("weapontype") != "gear" && w.t("included") != "True",
             canLoad = w.t("requireammo").equals("True", true) && w.t("type").equals("Ranged", true) && w.t("weapontype") != "gear" && w.t("ammo").let { it.isNotEmpty() && it != "0" },
-            removable = w.t("included") != "True" && w.t("weapontype") != "gear",
+            removable = w.t("included") != "True" && w.t("weapontype") != "gear" && !category.equals("Unarmed", true) && !w.t("name").equals("Unarmed Attack", true),
             loadedClips = w.child("clips")?.children("clip").orEmpty().count { (it.t("count").toIntOrNull() ?: 0) > 0 },
         )
     }

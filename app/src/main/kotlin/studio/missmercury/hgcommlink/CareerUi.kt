@@ -242,7 +242,7 @@ fun BuyWareDialog(bioware: Boolean, vm: AppViewModel, nuyen: String, essence: Do
             PickItem(
                 o.id, o.name,
                 listOfNotNull(
-                    o.category, o.cost?.let { "from ¥" + formatNuyen(it) } ?: "price not readable yet", o.essence?.let { "ess " + "%.2f".format(java.util.Locale.ROOT, it) },
+                    o.category, o.cost?.let { "from ¥" + formatNuyen(it) } ?: "price not readable yet", o.essence?.takeIf { parent == null || o.addsToParent }?.let { "ess " + "%.2f".format(java.util.Locale.ROOT, it) },
                     o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + chummer.core.engine.GearEditor.availText(it, if (o.maxRating > 0) maxOf(o.minRating, 1) else 0) }, o.problem?.let { "not supported yet: $it" },
                     if (o.unsupported.isNotEmpty()) "some bonuses not applied yet" else null,
                 ).joinToString("  ·  "),
@@ -270,6 +270,7 @@ fun BuyWareDialog(bioware: Boolean, vm: AppViewModel, nuyen: String, essence: Do
                     when {
                         o.problem != null -> "This item is not supported yet: ${o.problem}."
                         cost == null || ess == null -> "The price or essence of this item cannot be worked out yet."
+                        parent != null && !o.addsToParent -> "Costs ¥${formatNuyen(cost)}, no essence (a plug-in); you have ¥$nuyen."
                         else -> "Costs ¥${formatNuyen(cost)} and ${"%.2f".format(java.util.Locale.ROOT, ess)} essence; you have ¥$nuyen and ${"%.2f".format(java.util.Locale.ROOT, essence)} essence."
                     },
                     style = MaterialTheme.typography.labelSmall, color = if (ok) MutedSilver else DrainAmber,

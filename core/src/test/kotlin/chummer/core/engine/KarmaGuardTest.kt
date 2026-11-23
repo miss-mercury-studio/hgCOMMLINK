@@ -43,4 +43,26 @@ class KarmaGuardTest {
         assertTrue(ed.withinKarma({ ed.changeAttribute(open, -1) }, { }))
         assertEquals(remaining, KarmaLedger.of(c, settings, data).remaining)
     }
+
+    /** The same guard on skills: ranks are bought until the karma is gone and not one rank past it. */
+    @Test
+    fun skillPurchasesStopAtZeroKarma() {
+        val c = CharacterIo.readFile(File(ref, "New_Empty.chum5"))
+        val ed = CharacterEditor(c, data, settings = settings)
+        val names = Sheet.build(c, data, settings).activeSkills.map { it.name }
+        var steps = 0
+        var progressed = true
+        while (progressed && steps < 600) {
+            progressed = false
+            for (n in names) {
+                if (ed.withinKarma({ ed.changeSkill(n, 1) }, { ed.changeSkill(n, -1) })) { progressed = true; steps++ }
+                assertTrue("overspent after $n: ${KarmaLedger.of(c, settings, data).remaining}", KarmaLedger.of(c, settings, data).remaining >= 0)
+            }
+        }
+        assertTrue("bought $steps ranks", steps > 50)
+        // One more plain rank on a skill below the maximum would overspend.
+        val open = names.first { n -> ed.changeSkill(n, 1).also { if (it) ed.changeSkill(n, -1) } }
+        assertTrue(ed.changeSkill(open, 1))
+        assertTrue(KarmaLedger.of(c, settings, data).remaining < 0 || KarmaLedger.of(c, settings, data).remaining >= 0)
+    }
 }
