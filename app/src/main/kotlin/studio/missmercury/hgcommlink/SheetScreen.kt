@@ -939,7 +939,7 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(sp.name, fontWeight = FontWeight.Bold)
-                    Small(listOf(sp.category, "type ${sp.type}", sp.range, "duration ${sp.duration}", "drain ${sp.dv}").filter { it.isNotBlank() }.joinToString("  ·  "))
+                    Small(listOfNotNull(if (sp.alchemical) "PREPARATION" else null, sp.category, "type ${sp.type}", sp.range, "duration ${sp.duration}", "drain ${sp.dv}").filter { it.isNotBlank() }.joinToString("  ·  "))
                     Small(sp.descriptors)
                 }
                 if (creation) StepButton("×", 36) { vm.removeSpell(sp.guid) }
@@ -967,7 +967,7 @@ private fun Magic(s: Sheet, vm: AppViewModel) {
     }
     if (creation && showMagician) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TerminalButton("+ Spell", { addingSpell = true }, Modifier.weight(1f))
-        TerminalButton("+ Preparation", { addingPreparation = true }, Modifier.weight(1f))
+        TerminalButton("+ Prep", { addingPreparation = true }, Modifier.weight(1f))
     }
     }
     if (addingPower) AddPowerDialog(vm) { addingPower = false }

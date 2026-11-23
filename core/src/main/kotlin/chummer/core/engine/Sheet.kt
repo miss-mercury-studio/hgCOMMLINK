@@ -93,7 +93,7 @@ data class Sheet(
         val pluginCapacity: Map<String, Double>,
     )
 
-    data class SpellLine(val guid: String, val name: String, val category: String, val type: String, val range: String, val duration: String, val dv: String, val descriptors: String)
+    data class SpellLine(val guid: String, val name: String, val category: String, val type: String, val range: String, val duration: String, val dv: String, val descriptors: String, val alchemical: Boolean = false)
     data class MagicLines(val tradition: String, val spells: List<SpellLine>)
     data class GroupLine(val name: String, val karma: Int)
     data class KnowledgeLine(
@@ -181,7 +181,7 @@ data class Sheet(
                         SpellLine(
                             it.text("guid").orEmpty().trim(), it.text("name").orEmpty().trim(), it.text("category").orEmpty().trim(),
                             it.text("type").orEmpty().trim(), it.text("range").orEmpty().trim(), it.text("duration").orEmpty().trim(),
-                            it.text("dv").orEmpty().trim(), it.text("descriptors").orEmpty().trim(),
+                            it.text("dv").orEmpty().trim(), it.text("descriptors").orEmpty().trim(), it.text("alchemical")?.trim().equals("True", true),
                         )
                     },
                 ) else null,
