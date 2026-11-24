@@ -3,6 +3,7 @@
 
   python tools/data_sets.py fingerprint PATH        PATH is a Chummer release zip, a Chummer folder, or a data folder
   python tools/data_sets.py test --zip Chummer5.226.0.zip [--checkout ../chummer5a]
+  python tools/data_sets.py gate                    full core tests on every data set in chummer-supported.txt
   python tools/data_sets.py check                   fail unless chummer-supported.txt lists the pinned data (needs ../chummer5a at the pin)
 
 The fingerprint is a SHA-256 over the top-level data/*.xml files: for each file, sorted by name, its name and the SHA-256 of its
@@ -77,8 +78,8 @@ def supported():
         for line in open(SUPPORTED, encoding="utf-8"):
             line = line.strip()
             if line and not line.startswith("#"):
-                fp, _, label = line.partition(" ")
-                rows.append((fp, label.strip()))
+                fp, name, source = [x.strip() for x in line.split("|")]
+                rows.append((fp, name, source))
     return rows
 
 
@@ -88,18 +89,82 @@ def cmd_fingerprint(a):
 
 def cmd_check(a):
     pin, fp = pinned_fingerprint(a.checkout)
-    if any(f == fp for f, _ in supported()):
+    if any(f == fp for f, _, _ in supported()):
         print(f"ok: the pinned data ({pin[:8]}) is in chummer-supported.txt")
     else:
-        sys.exit(f"chummer-supported.txt does not list the pinned data.\nAdd:  {fp} Chummer nightly (pin {pin[:8]})")
+        sys.exit(f"chummer-supported.txt does not list the pinned data.\nAdd:  {fp} | Chummer nightly (pin {pin[:8]}) | pin")
+
+
+REPO = "chummer5a/chummer5a"
+CACHE = os.path.join(os.path.expanduser("~"), ".cache", "hgcommlink-chummer")
+
+
+def fetch_release(tag, want_fingerprint):
+    """The zip of a chummer5a release, downloaded once and kept. Fails if its data is not the data that was tested."""
+    d = os.path.join(CACHE, tag)
+    os.makedirs(d, exist_ok=True)
+    zips = [f for f in os.listdir(d) if f.endswith(".zip")]
+    if not zips:
+        subprocess.run(["gh", "release", "download", tag, "-R", REPO, "-p", "*.zip", "-D", d], check=True)
+        zips = [f for f in os.listdir(d) if f.endswith(".zip")]
+    if len(zips) != 1:
+        sys.exit(f"Expected one zip for release {tag}, found {zips}")
+    path = os.path.join(d, zips[0])
+    got = fingerprint_of(path)
+    if got != want_fingerprint:
+        os.remove(path)
+        sys.exit(f"Release {tag} no longer has the tested data (fingerprint {got[:12]}, listed {want_fingerprint[:12]}). "
+                 "Chummer may have replaced the file; re-test it before listing it again.")
+    return path
+
+
+def gradle_cmd(args):
+    return [os.path.join(ROOT, "gradlew.bat" if os.name == "nt" else "gradlew"), *args]
+
+
+def gate(checkout, extra=()):
+    """The release gate: the full core tests on every supported data set. Returns a list of problems (empty when all pass)."""
+    problems = []
+    checkout = os.path.abspath(checkout)
+    pin = open(PIN).read().strip()
+    head = subprocess.run(["git", "-C", checkout, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    if head != pin:
+        return [f"The Chummer checkout ({checkout}) is at {head[:8]}, not the pin {pin[:8]}. Check it out first."]
+    rows = supported()
+    pinned = pinned_fingerprint(checkout)[1]
+    if not any(src == "pin" and fp == pinned for fp, _, src in rows):
+        return ["chummer-supported.txt does not list the pinned data with source 'pin'. Run: python tools/data_sets.py check"]
+    for fp, name, src in rows:
+        print(f"== {name}", flush=True)
+        if src == "pin":
+            code = subprocess.run(gradle_cmd([f"-Pchummer.src={checkout.replace(chr(92), '/')}", ":core:test", "--continue", *extra]), cwd=ROOT, shell=(os.name == "nt")).returncode
+        elif src.startswith("release:"):
+            code = run_tests(fetch_release(src[len("release:"):], fp), checkout, list(extra))
+        else:
+            problems.append(f"{name}: unknown source {src!r}")
+            continue
+        if code != 0:
+            problems.append(f"The core tests fail on {name}.")
+    return problems
+
+
+def cmd_gate(a):
+    problems = gate(a.checkout)
+    if problems:
+        sys.exit("Data set gate failed:\n  - " + "\n  - ".join(problems))
+    print("Every supported data set passes the core tests.")
 
 
 def cmd_test(a):
-    checkout = os.path.abspath(a.checkout)
+    sys.exit(run_tests(a.zip, os.path.abspath(a.checkout), a.gradle))
+
+
+def run_tests(zip_path, checkout, gradle_args):
+    """Build a folder of one release's data plus the pinned checkout's test characters, and run :core:test on it. Returns the exit code."""
     pin = open(PIN).read().strip()
     work = tempfile.mkdtemp(prefix="chummer-data-set-")
     try:
-        with zipfile.ZipFile(a.zip) as z:
+        with zipfile.ZipFile(zip_path) as z:
             droot, _ = read_zip_data(z)
             base = droot[:-len("data")].rstrip("/")  # the zip's Chummer root, or "" when it is flat
             for n in z.namelist():
@@ -114,10 +179,9 @@ def cmd_test(a):
         tar = os.path.join(work, "tests.tar")
         subprocess.run(["git", "-C", checkout, "archive", "-o", tar, pin, "Chummer.Tests/TestFiles"], check=True)
         subprocess.run(["tar", "-xf", tar, "-C", work], check=True)
-        gradlew = os.path.join(ROOT, "gradlew.bat" if os.name == "nt" else "gradlew")
         src = work.replace("\\", "/")
-        print(f"Testing against {a.zip} (fingerprint {fingerprint_of(a.zip)[:12]}) in {work}")
-        sys.exit(subprocess.run([gradlew, f"-Pchummer.src={src}", ":core:test", "--continue"] + a.gradle, cwd=ROOT, shell=(os.name == "nt")).returncode)
+        print(f"Testing against {zip_path} (fingerprint {fingerprint_of(zip_path)[:12]}) in {work}", flush=True)
+        return subprocess.run(gradle_cmd([f"-Pchummer.src={src}", ":core:test", "--continue", *gradle_args]), cwd=ROOT, shell=(os.name == "nt")).returncode
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -129,6 +193,8 @@ def main():
     c = sub.add_parser("check"); c.add_argument("--checkout", default=os.path.join(ROOT, "..", "chummer5a")); c.set_defaults(fn=cmd_check)
     t = sub.add_parser("test"); t.add_argument("--zip", required=True); t.add_argument("--checkout", default=os.path.join(ROOT, "..", "chummer5a"))
     t.add_argument("gradle", nargs="*", help="extra Gradle arguments"); t.set_defaults(fn=cmd_test)
+    g = sub.add_parser("gate", help="full core tests on every supported data set")
+    g.add_argument("--checkout", default=os.path.join(ROOT, "..", "chummer5a")); g.set_defaults(fn=cmd_gate)
     a = p.parse_args()
     a.fn(a)
 

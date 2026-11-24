@@ -14,7 +14,7 @@ Android app (Kotlin, Compose) plus a pure-Kotlin `core` engine that reproduces C
 ## Releases (never without asking)
 
 - Do **not** bump `app.versionName`, create a `v*` tag, or push a tag on your own. Each release is the user's decision.
-- When the user asks for a release, run `python tools/release.py X.Y.Z --dry-run` first and show the entries going out, then run it without `--dry-run`, and only add `--push` if the user says to push. The script checks the tree, the branch, that `[Unreleased]` has entries, and runs the change log test.
+- When the user asks for a release, run `python tools/release.py X.Y.Z --dry-run` first and show the entries going out, then run it without `--dry-run`, and only add `--push` if the user says to push. The script checks the tree, the branch, that `[Unreleased]` has entries, runs the full core tests on every Chummer data set in `chummer-supported.txt` (the data players are told to use; needs `../chummer5a` at the pin and takes several minutes), and runs the change log test.
 - Never put the signing key, its passwords, or the Discord webhook URL in the repo, in output, or in commit messages. The key lives in `C:\Users\kross\hgcommlink-signing\` and in GitHub secrets.
 
 ## Builds and the phone

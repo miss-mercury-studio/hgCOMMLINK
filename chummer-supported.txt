@@ -1,6 +1,8 @@
-# Chummer game data sets this app is checked against: the data fingerprint, then a name shown to players.
+# Chummer game data sets this app is checked against. One per line:  fingerprint | name shown to players | source
+#   source "pin"          the data in the chummer5a checkout at chummer-pin.txt (tested with the normal :core:test run)
+#   source "release:TAG"  the zip attached to that chummer5a release; this is also what the app's "Get Chummer" button links to
 # A fingerprint is made by: python tools/data_sets.py fingerprint <release zip or Chummer folder>
 # Add a line only after the core tests pass on that data (python tools/data_sets.py test --zip <release zip>).
-# The pinned data (chummer-pin.txt) must always be listed; the release workflow checks it.
-b4bfed0657d7214955f6be023649ae9445455ae3814943fd0ec79697dbfcb28c Chummer 5.226.0
-3254e50b9b7ee1ab58fce4417ec9bbb174663e701520ffe40e6df4fd47b246a4 Chummer nightly (pin dcdede6e)
+# The pinned data must always be listed. tools/release.py runs the full tests on every line before it tags a release.
+3254e50b9b7ee1ab58fce4417ec9bbb174663e701520ffe40e6df4fd47b246a4 | Chummer nightly 5.226.248 | pin
+b4bfed0657d7214955f6be023649ae9445455ae3814943fd0ec79697dbfcb28c | Chummer 5.226.0 | release:5.226.0

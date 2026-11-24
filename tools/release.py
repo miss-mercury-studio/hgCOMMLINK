@@ -4,7 +4,8 @@ Does the manual steps in docs/RELEASING.md, with checks, so they cannot be done 
   1. refuses unless the tree is clean, on master, up to date with origin, and the tag is new;
   2. refuses an empty [Unreleased] section or a version that is not higher than the current one;
   3. renames [Unreleased] to [VERSION] - today, adds a fresh empty [Unreleased], sets app.versionName;
-  4. runs the change log test, commits "Release VERSION" and tags vVERSION;
+  4. runs the full core tests on every Chummer data set in chummer-supported.txt (the release gate), then the
+     change log test, commits "Release VERSION" and tags vVERSION;
   5. with --push, pushes master and the tag, which starts the release workflow. Without it, prints the command.
 
 Nothing is pushed unless you pass --push. --dry-run changes nothing and only reports what it would do.
@@ -48,6 +49,8 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="check and report; change nothing")
     ap.add_argument("--root", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), help=argparse.SUPPRESS)
     ap.add_argument("--skip-tests", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--skip-data-tests", action="store_true", help="skip the full tests on every supported Chummer data set (slow; only for emergencies)")
+    ap.add_argument("--chummer", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "chummer5a"), help="the chummer5a checkout at chummer-pin.txt")
     ap.add_argument("--no-remote", action="store_true", help=argparse.SUPPRESS)
     a = ap.parse_args()
     root = os.path.abspath(a.root)
@@ -100,6 +103,15 @@ def main():
     if a.dry_run:
         print("\nDry run: nothing changed.")
         return
+
+    # The gate runs before anything is edited: players bring their own Chummer data, so every data set we say we support must pass.
+    if not a.skip_tests and not a.skip_data_tests:
+        print("Running the full core tests on every supported Chummer data set (a few minutes each)...", flush=True)
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import data_sets
+        failed = data_sets.gate(a.chummer)
+        if failed:
+            sys.exit("Not releasing:\n  - " + "\n  - ".join(failed))
 
     with open(log_path, "w", encoding="utf-8", newline="") as f:
         f.write(new_log.replace("\n", nl))

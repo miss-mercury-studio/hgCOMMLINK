@@ -11,7 +11,7 @@ How a version gets from this repo to testers' phones, and how feedback and bug r
    python tools/release.py 0.1.2               # rename [Unreleased], bump the version, run the change log test, commit, tag
    git push origin master v0.1.2               # or add --push to the line above
    ```
-   The script refuses if the tree is dirty, you are not on master, master is behind origin, the tag exists, `[Unreleased]` is empty, or the version is not higher than the current one. Nothing is pushed unless you ask.
+   Before it edits anything it also runs the **data set gate**: the full core tests on every Chummer data set in [chummer-supported.txt](../chummer-supported.txt) (the pinned nightly, and the stable release players are sent to). That takes a few minutes per set, needs `../chummer5a` checked out at the pin, and downloads each stable release once into `~/.cache/hgcommlink-chummer`. Players bring their own Chummer data, so a release is not cut unless the data we tell them to use passes. `--skip-data-tests` exists for emergencies only. The script refuses if the tree is dirty, you are not on master, master is behind origin, the tag exists, `[Unreleased]` is empty, or the version is not higher than the current one. Nothing is pushed unless you ask.
 3. The push of the tag starts [release.yml](../.github/workflows/release.yml): it builds the signed APK, creates the GitHub Release with the change log section as its notes, and attaches `hgCOMMLINK-x.y.z.apk`. The repo's Discord webhook (see "The Discord announcement" below) sees the new release and posts it to `#releases`; the workflow itself does not talk to Discord.
 
 Doing it by hand is the same three things: rename `[Unreleased]` to `[x.y.z] - date` (and add a fresh empty one above it), set `app.versionName=x.y.z` in [gradle.properties](../gradle.properties), then commit, tag `vx.y.z` and push both.
@@ -73,7 +73,7 @@ Repo, Settings, Secrets and variables, Actions, "New repository secret":
 
 The APK ships Chummer's game data, so CI checks out [chummer5a](https://github.com/chummer5a/chummer5a) at the commit in [chummer-pin.txt](../chummer-pin.txt). Releases use that commit, not whatever upstream is today, so a build is repeatable. To take newer game data: update the pin, run the tests locally against that checkout, and note it in the change log.
 
-[chummer-supported.txt](../chummer-supported.txt) lists the Chummer data sets the engine is checked against (by fingerprint), and the release workflow fails if the pinned data is not on it. Players of the Play edition bring their own data, usually Chummer's latest stable release, so test that too:
+[chummer-supported.txt](../chummer-supported.txt) lists the Chummer data sets the engine is checked against (by fingerprint, with a source: the pin, or a chummer5a release tag), and the release workflow fails if the pinned data is not on it. `python tools/data_sets.py gate` runs the full tests on every line; `tools/release.py` does that before tagging. Players of the Play edition bring their own data, usually Chummer's latest stable release, so test that too:
 
 ```
 python tools/data_sets.py test --zip Chummer5.226.0.zip     # runs :core:test on that release's data (needs ../chummer5a at the pin for the test characters)
