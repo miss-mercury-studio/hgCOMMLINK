@@ -39,7 +39,15 @@ android {
         }
     }
     buildTypes {
+        // The debug build is a separate app (its own id, name, data and folder permission), so it installs beside the
+        // release build instead of fighting it over the signature. Test a release any time without removing the debug app.
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            manifestPlaceholders["appLabel"] = "hgCOMMLINK (debug)"
+        }
         release {
+            manifestPlaceholders["appLabel"] = "hgCOMMLINK"
             signingConfig = signingConfigs.findByName("release")
         }
     }
