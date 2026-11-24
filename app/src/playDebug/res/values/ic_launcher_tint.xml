@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Play-edition debug app: blue wash. -->
+    <color name="ic_launcher_tint">#661E88FF</color>
+</resources>
