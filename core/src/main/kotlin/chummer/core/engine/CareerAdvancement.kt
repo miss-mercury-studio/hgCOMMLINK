@@ -122,6 +122,7 @@ class CareerAdvancement(
         val g = file.skillGroups()[name] ?: return Offer(null, 0, false)
         val rating = g.first + g.second
         if (rating >= rules.maxSkillRating) return Offer(null, rating, false)
+        if (!SkillGroupRules.stateOf(file, data, settings, name).karmaUnbroken) return Offer(null, rating, false)
         val base = if (rating == 0) k("karmanewskillgroup", 5) else (rating + 1) * k("karmaimproveskillgroup", 5)
         return offer(modified(base, rating + 1, name to "SkillGroupKarmaCost"), rating)
     }

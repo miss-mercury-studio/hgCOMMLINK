@@ -230,7 +230,17 @@ class CharacterEditor(
             val highest = members.maxOfOrNull { m -> (m.text("base")?.trim()?.toIntOrNull() ?: 0) + (m.text("karma")?.trim()?.toIntOrNull() ?: 0) + karma + base } ?: (karma + base)
             if (highest + 1 > rules.maxSkillRatingCreate) return false
         }
-        return stepRow(row, delta, base, karma, PointsLedger.of(file, data)?.groups)
+        // Chummer locks a group whose members differ: its points need no member with points of its own, its karma needs the members level.
+        val state = SkillGroupRules.stateOf(file, data, settings, name)
+        val pool = PointsLedger.of(file, data)?.groups
+        if (delta > 0) {
+            val usePoints = state.baseUnbroken && pool != null && pool.left > 0
+            if (!usePoints && !state.karmaUnbroken) return false
+            return stepRow(row, delta, base, karma, if (usePoints) pool else null)
+        }
+        if (karma > 0 && !state.karmaUnbroken) return false
+        if (karma <= 0 && !state.baseUnbroken) return false
+        return stepRow(row, delta, base, karma, pool)
     }
 
     private fun knowledgeRow(guid: String): Element? =

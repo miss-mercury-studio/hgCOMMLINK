@@ -6,6 +6,12 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ## [Unreleased]
 
+### Fixed
+- **Skill group ranks show at once.** A group you raise with points now shows its new rank in the group list straight away, instead of only on the main skills page.
+- **Skill groups lock the way Chummer's do.** When a skill in a group is bought on its own so the skills differ, the group is marked "locked" and cannot be raised, and its karma stops counting toward the skills, as in Chummer.
+- **Buying a first rank no longer moves the skill.** The row stays where it is while you buy ranks, so you can keep tapping +. Skills you have not rated at the start sit under "Other skills" until you reopen the tab.
+- **Starting nuyen in Priority and Sum-to-Ten creation.** The nuyen from your resources priority now shows and can be spent as soon as the character is made. Before, it only appeared after you changed the karma-to-nuyen setting once.
+
 ## [0.1.1] - 2026-11-24
 
 First release built and signed by the release process.

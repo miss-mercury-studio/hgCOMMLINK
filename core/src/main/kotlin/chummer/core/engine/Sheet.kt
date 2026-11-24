@@ -101,7 +101,12 @@ data class Sheet(
 
     data class SpellLine(val guid: String, val name: String, val category: String, val type: String, val range: String, val duration: String, val dv: String, val descriptors: String, val alchemical: Boolean = false)
     data class MagicLines(val tradition: String, val spells: List<SpellLine>)
-    data class GroupLine(val name: String, val karma: Int)
+    /** A skill group: its own points and karma, what counts toward its members ([rank]), and whether Chummer would lock it ([locked]). */
+    data class GroupLine(val name: String, val karma: Int, val base: Int = 0, val baseUnbroken: Boolean = true, val karmaUnbroken: Boolean = true) {
+        /** The karma only counts while the group is unbroken, as in Chummer. */
+        val rank get() = base + if (karmaUnbroken) karma else 0
+        val locked get() = !baseUnbroken && !karmaUnbroken
+    }
     data class KnowledgeLine(
         val guid: String, val name: String, val type: String, val points: Int, val karma: Int,
         val native: Boolean, val rating: Int, val pool: Int,
@@ -147,8 +152,11 @@ data class Sheet(
             val wound = d.woundModifier(physicalFilled, stunFilled)
             val skillEngine = SkillEngine(set, attrs, rules, career, magicEnabled = magic, resonanceEnabled = resonance, woundModifier = wound)
             val groups = c.skillGroups()
+            val groupStates = groups.keys.associateWith { SkillGroupRules.stateOf(c, data, settings, set, it) }
             val skills = SkillEngine.skillsOf(c, data).map { raw ->
-                raw to skillEngine.calculate(raw, groups[raw.group]?.first ?: 0, groups[raw.group]?.second ?: 0)
+                // A broken group's karma stops counting toward its members (Chummer's SkillGroup.Karma).
+                val karma = if (groupStates[raw.group]?.karmaUnbroken == false) 0 else groups[raw.group]?.second ?: 0
+                raw to skillEngine.calculate(raw, groups[raw.group]?.first ?: 0, karma)
             }
             val active = skills.filter { !it.first.isKnowledge && it.second.enabled }.map { it.second }.sortedBy { it.name }
             val knowledge = skills.filter { it.first.isKnowledge }.map { it.second }.sortedBy { it.name }
@@ -182,7 +190,7 @@ data class Sheet(
                     "Direct spell, physical" to (res["directphysicalresist"] ?: 0),
                 ),
                 activeSkills = active, knowledgeSkills = knowledge,
-                skillGroups = c.skillGroups().map { (n, v) -> GroupLine(n, v.second) }.sortedBy { it.name },
+                skillGroups = c.skillGroups().map { (n, v) -> GroupLine(n, v.second, v.first, groupStates[n]?.baseUnbroken ?: true, groupStates[n]?.karmaUnbroken ?: true) }.sortedBy { it.name },
                 knowledge = c.skills().filter { it.isKnowledge }.map { row ->
                     val r = skills.firstOrNull { it.first.name == row.name && it.first.isKnowledge }?.second
                     KnowledgeLine(row.guid, row.name, row.type.ifEmpty { row.category }, row.base, row.karma, row.isNativeLanguage, r?.rating ?: 0, r?.pool ?: 0)

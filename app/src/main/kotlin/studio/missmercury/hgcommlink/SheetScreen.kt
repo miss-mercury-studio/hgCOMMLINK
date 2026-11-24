@@ -357,26 +357,31 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
     val buy = if (s.karmaLedger != null) vm else null
     val career = s.career
     val karma = s.karma.toIntOrNull() ?: 0
+    val ratedAtOpen = remember { s.activeSkills.filter { it.rating > 0 }.map { it.name }.toSet() }
     Column(Modifier.fillMaxSize()) {
         TerminalField(query, { query = it }, "search skills", Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
             // Skill groups: folded away until wanted, since there are eleven of them.
             if ((buy != null || career != null) && q.isEmpty() && s.skillGroups.isNotEmpty()) {
                 item {
-                    val bought = s.skillGroups.count { it.karma > 0 }
+                    val bought = s.skillGroups.count { it.rank > 0 }
                     CollapsibleHeader("Skill groups", groupsOpen, { groupsOpen = !groupsOpen }, summary = if (bought > 0) "$bought bought" else null)
                 }
                 if (groupsOpen) itemsIndexed(s.skillGroups, key = { i, it -> "g-$i-" + it.name }) { _, g ->
                     Column {
                         Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(g.name, Modifier.weight(1f), color = if (g.karma > 0) Quicksilver else MutedSilver)
+                            Column(Modifier.weight(1f)) {
+                                Text(g.name, color = if (g.rank > 0) Quicksilver else MutedSilver)
+                                // Chummer locks a group once its member skills differ; say so instead of leaving dead buttons.
+                                if (g.locked) Text("locked: its skills differ", style = MaterialTheme.typography.labelSmall, color = DrainAmber)
+                            }
                             if (career != null) {
-                                Text("${g.karma}", Modifier.padding(end = 8.dp), style = MaterialTheme.typography.titleMedium)
-                                UpgradeButton(career.groupCosts[g.name], karma) { vm.improveGroup(g.name) }
+                                Text("${g.rank}", Modifier.padding(end = 8.dp), style = MaterialTheme.typography.titleMedium)
+                                if (!g.locked) UpgradeButton(career.groupCosts[g.name], karma) { vm.improveGroup(g.name) }
                             } else {
-                                StepButton("−", 44) { vm.changeSkillGroup(g.name, -1) }
-                                Text("${g.karma}", Modifier.width(24.dp), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
-                                StepButton("+", 44) { vm.changeSkillGroup(g.name, 1) }
+                                if (!g.locked) StepButton("−", 44) { vm.changeSkillGroup(g.name, -1) }
+                                Text("${g.rank}", Modifier.width(24.dp), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                                if (!g.locked) StepButton("+", 44) { vm.changeSkillGroup(g.name, 1) }
                             }
                         }
                         Hairline(color = TerminalGrid.copy(alpha = 0.6f))
@@ -402,11 +407,12 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
                 }
             }
             // Skills the character has come first; the rest are listed after, as Chummer does.
-            val (rated, unrated) = s.activeSkills.filter(::matches).partition { it.rating > 0 }
+            // The split is taken when the tab opens, so buying a first rank does not move the row out from under the finger (issue #4).
+            val (rated, unrated) = s.activeSkills.filter(::matches).partition { it.name in ratedAtOpen }
             if (rated.isNotEmpty()) item { SubHeader("Active skills") }
             // Keys carry the position: a character file can hold a blank or repeated skill name, and a repeated key crashes the list.
             itemsIndexed(rated, key = { i, it -> "a-$i-" + it.name }) { _, it -> SkillRow(it, buy, career, karma, vm, s.skillSpecs[it.name]) }
-            if (unrated.isNotEmpty()) item { SubHeader(if (rated.isEmpty()) "Active skills" else "Unrated") }
+            if (unrated.isNotEmpty()) item { SubHeader(if (rated.isEmpty()) "Active skills" else "Other skills") }
             itemsIndexed(unrated, key = { i, it -> "u-$i-" + it.name }) { _, it -> SkillRow(it, buy, career, karma, vm, s.skillSpecs[it.name]) }
         }
         if (buy != null) PinnedAction("+ Knowledge skill") { addingKnowledge = true }
