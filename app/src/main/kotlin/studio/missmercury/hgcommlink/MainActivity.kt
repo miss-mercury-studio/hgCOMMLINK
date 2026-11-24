@@ -139,6 +139,10 @@ private fun App(vm: AppViewModel) {
         if (uri != null) vm.chooseFolder(uri)
     }
 
+    val dataPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) vm.addGameData(uri)
+    }
+
     BackHandler(enabled = open != null) { vm.close() }
     var whatsNew by remember { mutableStateOf(false) }
     if (whatsNew) WhatsNewSheet { whatsNew = false }
@@ -167,6 +171,9 @@ private fun App(vm: AppViewModel) {
                             TerminalMenuItem("Choose a shared folder", onClick = { menu = false; folderPicker.launch(null) })
                             if (vm.isSharedFolder) {
                                 TerminalMenuItem("Use app storage", onClick = { menu = false; vm.useAppFolder() })
+                            }
+                            if (!BuildConfig.BUNDLED_GAME_DATA && vm.gameDataReady) {
+                                TerminalMenuItem("Update game data", onClick = { menu = false; dataPicker.launch(null) })
                             }
                             TerminalMenuItem("Refresh", onClick = { menu = false; vm.refresh() })
                             TerminalMenuItem("What's new", onClick = { menu = false; whatsNew = true })
@@ -215,7 +222,7 @@ private fun App(vm: AppViewModel) {
         },
         bottomBar = {
             // The two things done most on this screen, under the thumb.
-            if (open == null) {
+            if (open == null && vm.gameDataReady) {
                 Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TerminalButton("New", { showNew = true }, Modifier.weight(1f), filled = true)
                     TerminalButton("Critter", { showCritter = true }, Modifier.weight(1f))
@@ -227,7 +234,11 @@ private fun App(vm: AppViewModel) {
         Column(Modifier.padding(padding).fillMaxSize()) {
             if (showNew) NewCharacterDialog(vm) { showNew = false }
             if (showCritter) NewCritterDialog(vm) { showCritter = false }
-            if (open != null) SheetScreen(open, vm) else CharacterList(vm)
+            when {
+                open != null -> SheetScreen(open, vm)
+                !vm.gameDataReady -> GameDataSetup(vm.importingGameData) { dataPicker.launch(null) }
+                else -> CharacterList(vm)
+            }
         }
     }
 }

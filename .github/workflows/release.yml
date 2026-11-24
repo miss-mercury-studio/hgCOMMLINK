@@ -38,7 +38,7 @@ jobs:
       - name: Test the change log
         run: ./gradlew -Pchummer.src=$GITHUB_WORKSPACE/../chummer5a :core:test --tests "chummer.core.ChangelogTest"
 
-      - name: Build the signed APK
+      - name: Build the signed APK (GitHub edition) and app bundle (Play edition)
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
           HGCOMMLINK_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
@@ -47,9 +47,18 @@ jobs:
         run: |
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
           export HGCOMMLINK_STORE_FILE="$RUNNER_TEMP/release.jks"
-          ./gradlew -Pchummer.src=$GITHUB_WORKSPACE/../chummer5a :app:assembleRelease
-          cp app/build/outputs/apk/release/app-release.apk "hgCOMMLINK-$VERSION.apk"
+          ./gradlew -Pchummer.src=$GITHUB_WORKSPACE/../chummer5a :app:assembleGithubRelease :app:bundlePlayRelease
+          cp app/build/outputs/apk/github/release/app-github-release.apk "hgCOMMLINK-$VERSION.apk"
+          cp app/build/outputs/bundle/playRelease/app-play-release.aab "hgCOMMLINK-$VERSION-play.aab"
           rm "$RUNNER_TEMP/release.jks"
+
+      # The Play edition has no game data and is never attached to the public release. Download it from the run's artifacts and upload it to Play by hand.
+      - name: Keep the Play bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: play-bundle-${{ env.VERSION }}
+          path: hgCOMMLINK-${{ env.VERSION }}-play.aab
+          retention-days: 30
 
       - name: Create the GitHub release
         env:

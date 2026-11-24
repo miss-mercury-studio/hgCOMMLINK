@@ -36,6 +36,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var isSharedFolder by mutableStateOf(false); private set
     var open by mutableStateOf<OpenCharacter?>(null); private set
 
+    /** False in the Play edition until the player adds Chummer's game data; the app shows a setup screen instead of the character list. */
+    var gameDataReady by mutableStateOf(gameData.hasData()); private set
+    var importingGameData by mutableStateOf(false); private set
+
     /** One-shot message for a snackbar; the UI clears it after showing. */
     var message by mutableStateOf<String?>(null)
 
@@ -103,7 +107,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         null
     } ?: uri.lastPathSegment?.substringAfterLast('/')
 
+    /** Play edition: copy the game data from the Chummer folder the player picked. Also used to update it later. */
+    fun addGameData(tree: Uri) {
+        if (importingGameData) return
+        viewModelScope.launch {
+            importingGameData = true
+            try {
+                message = io { gameData.importFrom(tree) }
+                gameDataReady = true
+            } catch (e: Exception) {
+                message = e.message ?: "Could not add the game data."
+            } finally {
+                importingGameData = false
+            }
+        }
+    }
+
     fun openFile(file: StoredFile) {
+        if (!gameDataReady) { message = "Add Chummer's game data first."; return }
         viewModelScope.launch {
             try {
                 val character = io { repo.load(file.id) }

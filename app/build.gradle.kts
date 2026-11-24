@@ -52,7 +52,27 @@ android {
         }
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    // Two editions of one app (same package, same signing key, so they can replace each other):
+    //  - github: the APK on GitHub Releases. Ships Chummer's game data inside.
+    //  - play:   the Google Play bundle. Ships no game data; the player points the app at their own Chummer folder on first run.
+    flavorDimensions += "edition"
+    productFlavors {
+        create("github") {
+            dimension = "edition"
+            buildConfigField("boolean", "BUNDLED_GAME_DATA", "true")
+            buildConfigField("String", "EDITION", "\"github\"")
+        }
+        create("play") {
+            dimension = "edition"
+            buildConfigField("boolean", "BUNDLED_GAME_DATA", "false")
+            buildConfigField("String", "EDITION", "\"play\"")
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -80,7 +100,8 @@ dependencies {
     debugImplementation(libs.compose.tooling)
 }
 
-// Chummer's game data ships unmodified inside the APK; the app unpacks it on first run.
+// Chummer's game data ships unmodified inside the github edition's APK (the play edition has none); the app unpacks it on first run.
+// Only the github edition needs the chummer5a checkout (-Pchummer.src).
 val chummerSrc = providers.gradleProperty("chummer.src")
 val copyChummerData = tasks.register<Copy>("copyChummerData") {
     from(File(chummerSrc.get(), "Chummer/data")) {
@@ -97,12 +118,16 @@ val copyChummerLang = tasks.register<Copy>("copyChummerLang") {
     from(File(chummerSrc.get(), "Chummer/lang")) { include("en-us.xml") }
     into(layout.buildDirectory.dir("generated/chummerAssets/chummer-lang"))
 }
-// The change log ships in the APK for the What's new sheet.
+// The change log ships in both editions for the What's new sheet.
 val copyChangelog = tasks.register<Copy>("copyChangelog") {
     from(rootProject.file("CHANGELOG.md"))
-    into(layout.buildDirectory.dir("generated/chummerAssets"))
+    into(layout.buildDirectory.dir("generated/changelogAssets"))
 }
-android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/chummerAssets"))
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(copyChummerData, copyChummerCustomData, copyChummerLang, copyChangelog) }
-// Lint reads the same generated assets, so it must wait for them too.
-tasks.matching { it.name.contains("lint", ignoreCase = true) }.configureEach { dependsOn(copyChummerData, copyChummerCustomData, copyChummerLang, copyChangelog) }
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/changelogAssets"))
+android.sourceSets.getByName("github").assets.srcDir(layout.buildDirectory.dir("generated/chummerAssets"))
+// Asset merging and lint read the same generated folders, so they must wait for them. Task names carry the flavor
+// ("mergeGithubDebugAssets", "lintAnalyzePlayRelease"): only the github ones need Chummer's files.
+tasks.matching { (it.name.startsWith("merge") && it.name.endsWith("Assets")) || it.name.contains("lint", ignoreCase = true) }.configureEach {
+    dependsOn(copyChangelog)
+    if (name.contains("Github")) dependsOn(copyChummerData, copyChummerCustomData, copyChummerLang)
+}

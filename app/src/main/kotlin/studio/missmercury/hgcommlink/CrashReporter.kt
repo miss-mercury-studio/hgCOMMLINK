@@ -54,7 +54,7 @@ object CrashReporter {
 
     fun appVersion(context: Context): String = runCatching {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
-        "${info.versionName} (${info.longVersionCode})"
+        "${info.versionName} (${info.longVersionCode}, ${BuildConfig.EDITION})"
     }.getOrDefault("unknown")
 
     fun device() = "${Build.MANUFACTURER} ${Build.MODEL}"

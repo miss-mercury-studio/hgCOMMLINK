@@ -12,7 +12,7 @@ How a version gets from this repo to testers' phones, and how feedback and bug r
    git push origin master v0.1.2               # or add --push to the line above
    ```
    The script refuses if the tree is dirty, you are not on master, master is behind origin, the tag exists, `[Unreleased]` is empty, or the version is not higher than the current one. Nothing is pushed unless you ask.
-3. The push of the tag starts [release.yml](../.github/workflows/release.yml): it builds the signed APK, creates the GitHub Release with the change log section as its notes, and attaches `hgCOMMLINK-x.y.z.apk`. The repo's Discord webhook (see "The Discord announcement" below) sees the new release and posts it to `#releases`; the workflow itself does not talk to Discord.
+3. The push of the tag starts [release.yml](../.github/workflows/release.yml): it builds the signed GitHub-edition APK and the Play-edition app bundle, creates the GitHub Release with the change log section as its notes, and attaches `hgCOMMLINK-x.y.z.apk`. The bundle (`hgCOMMLINK-x.y.z-play.aab`) is kept as an artifact of the workflow run for 30 days, not attached to the release; download it from the run's page and upload it to Play by hand. The repo's Discord webhook (see "The Discord announcement" below) sees the new release and posts it to `#releases`; the workflow itself does not talk to Discord.
 
 Doing it by hand is the same three things: rename `[Unreleased]` to `[x.y.z] - date` (and add a fresh empty one above it), set `app.versionName=x.y.z` in [gradle.properties](../gradle.properties), then commit, tag `vx.y.z` and push both.
 
@@ -44,11 +44,11 @@ Where things are:
 
 **To back it up:** copy the whole `hgcommlink-signing` folder into a password manager's secure attachments (or an encrypted drive). Keep it somewhere that is not this PC. Do this now.
 
-**Local release build** (on this PC, no GitHub needed): `./gradlew :app:assembleRelease`. Gradle finds `keystore.properties` itself; the APK lands in `app/build/outputs/apk/release/`. Without the file the build is simply unsigned.
+**Local release build** (on this PC, no GitHub needed): `./gradlew :app:assembleGithubRelease` for the APK (lands in `app/build/outputs/apk/github/release/`) and `./gradlew :app:bundlePlayRelease` for the Play bundle (`app/build/outputs/bundle/playRelease/app-play-release.aab`). Gradle finds `keystore.properties` itself. Without the file the build is simply unsigned.
 
 **Check a signature:** `apksigner verify --print-certs app-release.apk` (in the Android SDK's `build-tools`). The SHA-256 must match the fingerprint above.
 
-**Debug and release are two separate apps.** The debug build has its own id (`studio.missmercury.hgcommlink.debug`) and shows as "hgCOMMLINK (debug)" in the launcher, with a `-debug` version. It is signed with Android Studio's debug key, the release with the permanent key, and Android treats them as different apps, so they install **side by side**: use `installDebug` all day, and install a release APK whenever you want to test one, with no uninstalling either way. Each has its own characters, backups and folder permission, so point the debug app at a test folder (or the same folder, if you are careful about editing the same character in both).
+**Debug and release are two separate apps.** The debug build has its own id (`studio.missmercury.hgcommlink.debug`) and shows as "hgCOMMLINK (debug)" in the launcher, with a `-debug` version. It is signed with Android Studio's debug key, the release with the permanent key, and Android treats them as different apps, so they install **side by side**: use `installGithubDebug` all day, and install a release APK whenever you want to test one, with no uninstalling either way. Each has its own characters, backups and folder permission, so point the debug app at a test folder (or the same folder, if you are careful about editing the same character in both).
 
 Commands that name the app need the right id: `adb shell am force-stop studio.missmercury.hgcommlink.debug`, `adb shell run-as studio.missmercury.hgcommlink.debug ...` (only the debug build allows `run-as`), `adb logcat -b crash -d`.
 
@@ -69,9 +69,22 @@ Repo, Settings, Secrets and variables, Actions, "New repository secret":
 | `RELEASE_KEY_ALIAS` | `hgcommlink` |
 | `RELEASE_KEY_PASSWORD` | `keyPassword` from `keystore.properties` |
 
+## Two editions
+
+One codebase, two build flavors, the same package id and the same signing key (so an install from one can be replaced by the other):
+
+| | `github` | `play` |
+|---|---|---|
+| Where | GitHub Releases (APK) | Google Play (bundle) |
+| Chummer's game data | Inside the APK (about 9 MB), unpacked on first run | **Not included.** The player chooses their own Chummer folder on first run (and can update it from the menu); the app copies `data`, `lang` and `customdata` into app storage |
+| Needs the chummer5a checkout to build | Yes | No |
+| Gradle tasks | `assembleGithubRelease`, `installGithubDebug` | `bundlePlayRelease`, `installPlayDebug` |
+
+The code reads `BuildConfig.BUNDLED_GAME_DATA` (see `GameDataStore` and `GameDataImporter`). The edition name is added to the version line in crash reports. The debug builds of both editions share one id, so installing one replaces the other and keeps its data: the Play edition then sees the GitHub debug build's unpacked data and will not show the first-run screen. To test that screen, clear the debug app's storage first (Settings, Apps; this deletes characters kept in app storage).
+
 ## Chummer's data
 
-The APK ships Chummer's game data, so CI checks out [chummer5a](https://github.com/chummer5a/chummer5a) at the commit in [chummer-pin.txt](../chummer-pin.txt). Releases use that commit, not whatever upstream is today, so a build is repeatable. To take newer game data: update the pin, run the tests locally against that checkout, and note it in the change log.
+The GitHub edition's APK ships Chummer's game data (the Play edition does not), so CI checks out [chummer5a](https://github.com/chummer5a/chummer5a) at the commit in [chummer-pin.txt](../chummer-pin.txt). Releases use that commit, not whatever upstream is today, so a build is repeatable. To take newer game data: update the pin, run the tests locally against that checkout, and note it in the change log.
 
 ## Getting the APK to testers
 

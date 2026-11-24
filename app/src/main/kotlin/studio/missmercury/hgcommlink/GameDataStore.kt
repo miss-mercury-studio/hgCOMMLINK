@@ -19,9 +19,12 @@ import chummer.core.text
 import java.io.File
 
 /**
- * Chummer's game data and custom data: unpacked from the APK assets on first run (and after each app update),
- * then loaded and kept for the life of the process. The loaded pack is rebuilt when the character's custom data
- * choice, or the files in it, change.
+ * Chummer's game data and custom data, then loaded and kept for the life of the process. The loaded pack is rebuilt when the
+ * character's custom data choice, or the files in it, change.
+ *
+ * Where the data comes from depends on the edition: the GitHub edition unpacks it from the APK's assets on first run (and after each
+ * app update); the Play edition has none in the APK and uses the copy the player added from their own Chummer folder
+ * ([GameDataImporter]), which an app update never touches.
  */
 class GameDataStore(private val context: Context) {
     private var pack: DataPack? = null
@@ -50,13 +53,36 @@ class GameDataStore(private val context: Context) {
         }
     }
 
-    private fun dataDir() = unpack("chummer-data", "chummer-data")
+    /** Whether Chummer's game data is on the device: always in the GitHub edition, once the player has added it in the Play edition. */
+    fun hasData(): Boolean = BuildConfig.BUNDLED_GAME_DATA || GameDataImporter.installed(context)
 
-    /** Chummer's texts by key (for example the English text of a limit condition), read from the bundled language file. */
-    private val translations: Map<String, String> by lazy {
-        parseXml(File(unpack("chummer-lang", "chummer-lang"), "en-us.xml")).documentElement.child("strings")?.children("string").orEmpty()
-            .associate { (it.child("key")?.textContent ?: "").trim() to (it.child("text")?.textContent ?: "").trim() }
+    /** A folder of game data: unpacked from the APK, or (Play edition) the copy the player added. */
+    private fun gameDir(assetDir: String, target: String): File =
+        if (BuildConfig.BUNDLED_GAME_DATA) unpack(assetDir, target) else File(context.filesDir, target)
+
+    /** Add the game data from the Chummer folder the player picked (Play edition), and drop everything built from the old data. */
+    fun importFrom(tree: android.net.Uri): String {
+        val summary = GameDataImporter.import(context, tree)
+        synchronized(this) { pack = null; packKey = null }
+        synchronized(catalogs) { catalogs.clear() }
+        synchronized(settingsCache) { settingsCache.clear() }
+        translationsCache = null
+        File(context.filesDir, "amended-cache").deleteRecursively()
+        return summary
     }
+
+    private fun dataDir() = gameDir("chummer-data", "chummer-data")
+
+    /** Chummer's texts by key (for example the English text of a limit condition), read from the language file. A missing file gives none. */
+    @Volatile private var translationsCache: Map<String, String>? = null
+    private val translations: Map<String, String>
+        get() = translationsCache ?: run {
+            val file = File(gameDir("chummer-lang", "chummer-lang"), "en-us.xml")
+            if (!file.isFile) return emptyMap()
+            parseXml(file).documentElement.child("strings")?.children("string").orEmpty()
+                .associate { (it.child("key")?.textContent ?: "").trim() to (it.child("text")?.textContent ?: "").trim() }
+                .also { translationsCache = it }
+        }
 
     private val catalogs = HashMap<String, Any>()
 
@@ -131,7 +157,7 @@ class GameDataStore(private val context: Context) {
 
     /** The career karma and nuyen tools for a finished character. */
     fun career(c: CharacterFile) = chummer.core.engine.CareerAdvancement(c, synchronized(this) { pack ?: error("Game data is not loaded yet") }, settingsFor(c))
-    private fun chummerCustomDir() = unpack("chummer-customdata", "chummer-customdata")
+    private fun chummerCustomDir() = gameDir("chummer-customdata", "chummer-customdata")
 
     /** Settings profiles copied from the user's folder (see CharacterRepository.syncSideFiles). */
     val userSettingsDir: File get() = File(context.filesDir, "user-settings")
