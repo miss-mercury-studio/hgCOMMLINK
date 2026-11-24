@@ -1,0 +1,21 @@
+name: Triage
+
+# Every new issue, from whatever source, lands in one inbox: filter the Issues tab with  label:needs-triage
+# Take the label off when you have looked at it. See docs/FEEDBACK.md.
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark as needing triage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: gh issue edit "$ISSUE" --repo "$REPO" --add-label needs-triage

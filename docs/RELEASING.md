@@ -121,8 +121,13 @@ Screenshot if you have one:
 
 Triage: a bug that reproduces becomes a GitHub Issue (the repo has a bug and a feedback form under [.github/ISSUE_TEMPLATE](../.github/ISSUE_TEMPLATE)), labelled `from-discord`, with a link back to the thread. Fixed bugs go into the change log under `### Fixed` with a plain-language line, so testers see it in What's new and in `#releases`. Close the Discord thread when the release that fixes it ships.
 
+## Related docs
+
+- [FEEDBACK.md](FEEDBACK.md): how crash reports, app feedback, Discord, GitHub and Google Play reports all become GitHub issues.
+- [PLAY_STORE.md](PLAY_STORE.md): a draft of the Google Play closed beta (listing text, forms, decisions to make first).
+
 ## Not built yet
 
-- A crash handler that saves the last stack trace and offers "Share crash report" on the next launch, so testers do not need logcat.
-- A "Send feedback" menu item that opens a prefilled issue with the version and device.
 - An in-app "update available" check.
+- Automatic upload of the app bundle to Google Play.
+- Capturing app freezes (only crashes are caught by the app; Play Console shows freezes once the app is on Play).

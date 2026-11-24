@@ -55,6 +55,8 @@ Your own `.chum5` files are never committed (see `.gitignore`).
 
 - [CHANGELOG.md](CHANGELOG.md): what changed in each version (also shown in the app under What's new).
 - [docs/RELEASING.md](docs/RELEASING.md): cutting a release, the signing key, and where feedback and bug reports go.
+- [docs/FEEDBACK.md](docs/FEEDBACK.md): how crash reports and feedback from every source become GitHub issues.
+- [docs/PLAY_STORE.md](docs/PLAY_STORE.md): draft metadata for a Google Play closed beta.
 - [docs/PLAN.md](docs/PLAN.md): goals, decisions, milestones, findings about Chummer's rules, outstanding items and the progress log.
 
 ## License and credits
