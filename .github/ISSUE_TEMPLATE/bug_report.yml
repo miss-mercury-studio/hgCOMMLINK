@@ -26,6 +26,12 @@ body:
       label: What did you expect, and what happened instead?
     validations: { required: true }
   - type: textarea
+    id: crash
+    attributes:
+      label: Crash report
+      description: Filled in by the app's Report on GitHub button after a crash. Leave empty otherwise.
+      render: text
+  - type: textarea
     id: extra
     attributes:
       label: Anything else

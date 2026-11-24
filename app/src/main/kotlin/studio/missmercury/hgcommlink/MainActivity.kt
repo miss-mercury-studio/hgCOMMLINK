@@ -142,6 +142,10 @@ private fun App(vm: AppViewModel) {
     BackHandler(enabled = open != null) { vm.close() }
     var whatsNew by remember { mutableStateOf(false) }
     if (whatsNew) WhatsNewSheet { whatsNew = false }
+    // After a crash, the next launch offers to report it (the report was saved by CrashReporter).
+    val appContext = LocalContext.current
+    var crash by remember { mutableStateOf(CrashReporter.pending(appContext)) }
+    crash?.let { report -> CrashReportSheet(report) { CrashReporter.clear(appContext); crash = null } }
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = Quicksilver,
@@ -166,6 +170,8 @@ private fun App(vm: AppViewModel) {
                             }
                             TerminalMenuItem("Refresh", onClick = { menu = false; vm.refresh() })
                             TerminalMenuItem("What's new", onClick = { menu = false; whatsNew = true })
+                            TerminalMenuItem("Report a problem", onClick = { menu = false; CrashReporter.open(appContext, CrashReporter.bugUrl(appContext, null)) })
+                            TerminalMenuItem("Send feedback", onClick = { menu = false; CrashReporter.open(appContext, CrashReporter.feedbackUrl(appContext)) })
                         }
                     },
                 )
