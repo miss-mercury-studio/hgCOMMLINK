@@ -28,6 +28,9 @@ jobs:
           git clone --filter=blob:none https://github.com/chummer5a/chummer5a.git ../chummer5a
           git -C ../chummer5a checkout "$(cat chummer-pin.txt)"
 
+      - name: Check the pinned game data is on the supported list
+        run: python3 tools/data_sets.py check --checkout ../chummer5a
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

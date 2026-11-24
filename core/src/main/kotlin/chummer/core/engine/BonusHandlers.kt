@@ -500,6 +500,8 @@ object BonusHandlers {
                 skill != null -> if (ctx.choice.isNotEmpty()) out += improvement(ctx, type, unique, value(node.t("bonus"), ctx.rating) ?: 0.0, ctx.choice)
                 category != null -> if (ctx.choice.isNotEmpty()) out += improvement(ctx, type, unique, value(category.t("value")?.takeIf { it.isNotEmpty() } ?: node.t("bonus"), ctx.rating) ?: 0.0, ctx.choice)
                 node.child("name") != null -> out += improvement(ctx, type, unique, value(node.t("bonus"), ctx.rating) ?: 0.0, node.t("name").orEmpty())
+                // The form in Chummer 5.226.0's data: a fixed category with its own name and value (later builds put both on the node).
+                node.child("category")?.child("name") != null -> node.child("category")!!.let { c -> out += improvement(ctx, type, unique, value(c.t("value"), ctx.rating) ?: 0.0, c.t("name").orEmpty()) }
             }
         }
 

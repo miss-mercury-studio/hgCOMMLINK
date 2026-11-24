@@ -73,6 +73,15 @@ Repo, Settings, Secrets and variables, Actions, "New repository secret":
 
 The APK ships Chummer's game data, so CI checks out [chummer5a](https://github.com/chummer5a/chummer5a) at the commit in [chummer-pin.txt](../chummer-pin.txt). Releases use that commit, not whatever upstream is today, so a build is repeatable. To take newer game data: update the pin, run the tests locally against that checkout, and note it in the change log.
 
+[chummer-supported.txt](../chummer-supported.txt) lists the Chummer data sets the engine is checked against (by fingerprint), and the release workflow fails if the pinned data is not on it. Players of the Play edition bring their own data, usually Chummer's latest stable release, so test that too:
+
+```
+python tools/data_sets.py test --zip Chummer5.226.0.zip     # runs :core:test on that release's data (needs ../chummer5a at the pin for the test characters)
+python tools/data_sets.py fingerprint Chummer5.226.0.zip    # the line to add to chummer-supported.txt once the tests pass
+```
+
+Chummer changes its data format between builds (for example how `weaponcategorydice` is written), so a new release can need engine changes before it is listed.
+
 ## Getting the APK to testers
 
 - Public repo: testers open the repo's **Releases** page on their phone and tap the `.apk` (Android asks to allow installs from the browser the first time).
