@@ -6,6 +6,8 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-24
+
 ### Fixed
 - **Skill group ranks show at once.** A group you raise with points now shows its new rank in the group list straight away, instead of only on the main skills page.
 - **Skill groups lock the way Chummer's do.** When a skill in a group is bought on its own so the skills differ, the group is marked "locked" and cannot be raised, and its karma stops counting toward the skills, as in Chummer.
