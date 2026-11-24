@@ -1,0 +1,41 @@
+name: Change log check
+
+# On pull requests: if app or core code changed, CHANGELOG.md must change too, unless the change is not player-visible
+# (add the "no-changelog" label to the pull request). See CLAUDE.md and docs/RELEASING.md.
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a change log entry for code changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
+        run: |
+          changed=$(git diff --name-only "$BASE" "$HEAD")
+          if [ "$SKIP" = "true" ]; then echo "Labelled no-changelog; skipping."; exit 0; fi
+          if echo "$changed" | grep -qE '^(app/src/main|core/src/main)/'; then
+            if echo "$changed" | grep -qx 'CHANGELOG.md'; then
+              # The entry must be under [Unreleased], not in an already released version.
+              if git diff "$BASE" "$HEAD" -- CHANGELOG.md | grep -E '^\+- ' > /dev/null; then
+                echo "Change log updated."
+              else
+                echo "::error::CHANGELOG.md changed but no '- ' entry was added under [Unreleased]."
+                exit 1
+              fi
+            else
+              echo "::error::App or core code changed but CHANGELOG.md did not. Add a line under [Unreleased], or add the 'no-changelog' label if players will not notice this change."
+              exit 1
+            fi
+          else
+            echo "No app or core code changed."
+          fi

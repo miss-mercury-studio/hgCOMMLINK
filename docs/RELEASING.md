@@ -4,17 +4,21 @@ How a version gets from this repo to testers' phones, and how feedback and bug r
 
 ## The short version
 
-1. Fix things. Add a line for each user-visible change under `## [Unreleased]` in [CHANGELOG.md](../CHANGELOG.md).
-2. When ready to release, rename `[Unreleased]` to `[x.y.z] - YYYY-MM-DD` (and add a fresh empty `[Unreleased]` above it).
-3. Set `app.versionName=x.y.z` in [gradle.properties](../gradle.properties).
-4. Commit, then tag and push:
+1. While you work, add a line for each player-visible change under `## [Unreleased]` in [CHANGELOG.md](../CHANGELOG.md). (Claude does this by itself; see [CLAUDE.md](../CLAUDE.md).)
+2. When you want to release, run:
    ```
-   git tag vx.y.z
-   git push origin master vx.y.z
+   python tools/release.py 0.1.2 --dry-run     # check, and show the entries going out
+   python tools/release.py 0.1.2               # rename [Unreleased], bump the version, run the change log test, commit, tag
+   git push origin master v0.1.2               # or add --push to the line above
    ```
-5. GitHub Actions ([release.yml](../.github/workflows/release.yml)) builds the signed APK, creates the GitHub Release with the change log section as its notes, attaches `hgCOMMLINK-x.y.z.apk`, and posts the notes to Discord `#releases` if the webhook is set.
+   The script refuses if the tree is dirty, you are not on master, master is behind origin, the tag exists, `[Unreleased]` is empty, or the version is not higher than the current one. Nothing is pushed unless you ask.
+3. The push of the tag starts [release.yml](../.github/workflows/release.yml): it builds the signed APK, creates the GitHub Release with the change log section as its notes, and attaches `hgCOMMLINK-x.y.z.apk`. The repo's Discord webhook (see "The Discord announcement" below) sees the new release and posts it to `#releases`; the workflow itself does not talk to Discord.
+
+Doing it by hand is the same three things: rename `[Unreleased]` to `[x.y.z] - date` (and add a fresh empty one above it), set `app.versionName=x.y.z` in [gradle.properties](../gradle.properties), then commit, tag `vx.y.z` and push both.
 
 The workflow refuses to run if the tag, `app.versionName` and the change log disagree, and a unit test fails if the newest change log entry does not match `app.versionName`. So a stale log cannot ship.
+
+**On pull requests**, [changelog-check.yml](../.github/workflows/changelog-check.yml) fails if app or core code changed without a new `[Unreleased]` entry. Add the `no-changelog` label to a pull request that players will not notice (tests, refactors, CI). It does not run on direct pushes to master.
 
 **Version numbers** are SemVer: `0.1.1` is a fix, `0.2.0` is new features, `1.0.0` is "feature complete enough to call it done". Android's internal `versionCode` is worked out from it (`major*10000 + minor*100 + patch`), so it always rises with the version and never needs editing.
 
@@ -44,7 +48,15 @@ Where things are:
 
 **Check a signature:** `apksigner verify --print-certs app-release.apk` (in the Android SDK's `build-tools`). The SHA-256 must match the fingerprint above.
 
-**Debug builds are signed with a different key** (Android Studio's debug key). A debug build and a release build cannot update each other. That is why the first release-signed install on a phone that has a debug build needs an uninstall: export characters first (share them out of the app), or just keep using debug builds on your own phone.
+**Debug and release are two separate apps.** The debug build has its own id (`studio.missmercury.hgcommlink.debug`) and shows as "hgCOMMLINK (debug)" in the launcher, with a `-debug` version. It is signed with Android Studio's debug key, the release with the permanent key, and Android treats them as different apps, so they install **side by side**: use `installDebug` all day, and install a release APK whenever you want to test one, with no uninstalling either way. Each has its own characters, backups and folder permission, so point the debug app at a test folder (or the same folder, if you are careful about editing the same character in both).
+
+Commands that name the app need the right id: `adb shell am force-stop studio.missmercury.hgcommlink.debug`, `adb shell run-as studio.missmercury.hgcommlink.debug ...` (only the debug build allows `run-as`), `adb logcat -b crash -d`.
+
+**Phones that still have the old debug build** (installed before this change, id `studio.missmercury.hgcommlink`, debug-signed) must uninstall it once before the release installs. See "Switching from the old debug build" below.
+
+### Switching from the old debug build (one time)
+
+Testers who installed a debug build before 0.1.1 see "App not installed" when they try the release APK. Android refuses an update signed with a different key. They uninstall the old app first, then install the release, then use the menu, "Choose a shared folder", and pick the same folder as before to bring their characters back. Characters kept in app storage (no shared folder chosen) are deleted by the uninstall, so share them out of the app first. The game data is inside the APK and needs no export.
 
 ### GitHub secrets the workflow needs
 
@@ -56,7 +68,6 @@ Repo, Settings, Secrets and variables, Actions, "New repository secret":
 | `RELEASE_STORE_PASSWORD` | `storePassword` from `keystore.properties` |
 | `RELEASE_KEY_ALIAS` | `hgcommlink` |
 | `RELEASE_KEY_PASSWORD` | `keyPassword` from `keystore.properties` |
-| `DISCORD_RELEASES_WEBHOOK` | Optional. The `#releases` channel's webhook URL (Channel settings, Integrations, Webhooks, New webhook, Copy URL). Treat it like a password. |
 
 ## Chummer's data
 
@@ -66,7 +77,28 @@ The APK ships Chummer's game data, so CI checks out [chummer5a](https://github.c
 
 - Public repo: testers open the repo's **Releases** page on their phone and tap the `.apk` (Android asks to allow installs from the browser the first time).
 - **Obtainium** (a free app) can watch the repo's releases and install updates automatically. Point it at the repo URL. Recommended for regular testers.
-- Each release is also announced in Discord `#releases` with the notes and a link.
+- Each release is also announced in Discord `#releases` by the repo webhook, with the notes and a link.
+
+## The Discord announcement
+
+Discord posts come from a **GitHub repo webhook**, not from the release workflow, and there is no Discord secret in Actions. Setup, once:
+
+1. Discord: `#releases` channel settings, Integrations, Webhooks, New webhook, Copy Webhook URL.
+2. GitHub: repo Settings, Webhooks, Add webhook:
+   - Payload URL: the Discord URL with `/github` added on the end (`https://discord.com/api/webhooks/<id>/<token>/github`).
+   - Content type: `application/json`.
+   - Secret: leave empty (Discord does not use one).
+   - Events: "Let me select individual events", tick only **Releases**.
+3. Treat the Discord URL like a password: it lets anyone post to the channel. If it leaks, delete the webhook in Discord and add a new one.
+
+A new webhook only sends a test "ping", which Discord accepts but does not show. A post appears when a **release** is published.
+
+**Resending an announcement.** Redelivering an old delivery in GitHub replays the stored payload, with its old links (after the move to the org it still pointed at the old owner). To send a fresh one with current links, unpublish and publish the release again:
+```
+gh release edit vX.Y.Z --draft=true
+gh release edit vX.Y.Z --draft=false
+```
+The tag, notes and APK are untouched. Check the webhook's Recent Deliveries tab: `published` should be 204.
 
 ## Discord and GitHub: where feedback goes
 

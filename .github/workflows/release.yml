@@ -11,8 +11,6 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    env:
-      DISCORD_WEBHOOK: ${{ secrets.DISCORD_RELEASES_WEBHOOK }}
     steps:
       - uses: actions/checkout@v4
 
@@ -59,17 +57,3 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" "hgCOMMLINK-$VERSION.apk" \
             --title "hgCOMMLINK $VERSION" --notes-file release-notes.md
-
-      # Optional: set the DISCORD_RELEASES_WEBHOOK secret to post the notes to #releases.
-      - name: Announce on Discord
-        if: ${{ env.DISCORD_WEBHOOK != '' }}
-        run: |
-          python3 - <<'PY'
-          import json, os, urllib.request
-          v = os.environ["VERSION"]
-          notes = open("release-notes.md", encoding="utf-8").read()[:3500]
-          url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/tag/v{v}"
-          body = {"embeds": [{"title": f"hgCOMMLINK {v}", "url": url, "description": notes, "color": 0x00E676}]}
-          req = urllib.request.Request(os.environ["DISCORD_WEBHOOK"], json.dumps(body).encode(), {"Content-Type": "application/json", "User-Agent": "hgcommlink-release"})
-          urllib.request.urlopen(req)
-          PY
