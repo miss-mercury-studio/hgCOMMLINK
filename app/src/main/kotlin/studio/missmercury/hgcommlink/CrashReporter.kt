@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import chummer.core.CrashReport
+import chummer.core.data.GameDataVersion
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -36,7 +37,7 @@ object CrashReporter {
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             try {
                 file(app).writeText(
-                    CrashReport.format(appVersion(app), device(), android(), now(), thread.name, error.stackTraceToString()),
+                    CrashReport.format(appVersion(app), device(), android(), now(), thread.name, error.stackTraceToString(), gameData(app)),
                 )
             } catch (_: Throwable) {
                 // Never let reporting hide the crash itself.
@@ -57,6 +58,11 @@ object CrashReporter {
         "${info.versionName} (${info.longVersionCode}, ${BuildConfig.EDITION})"
     }.getOrDefault("unknown")
 
+    /** The game data in use, from what was saved when it was last identified (a crash report must not load the data). */
+    fun gameData(context: Context): String? = GameDataInfo.saved(context)?.let { v ->
+        GameDataVersion.identify(v.fingerprint, v.build, GameDataInfo.supported(context), v.source, v.importedAt).line
+    }
+
     fun device() = "${Build.MANUFACTURER} ${Build.MODEL}"
     fun android() = "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
     private fun now() = SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date())
@@ -64,6 +70,7 @@ object CrashReporter {
     /** A pre-filled "Bug report" issue. [report] is the crash text, or null for a plain problem report. */
     fun bugUrl(context: Context, report: String?): String {
         val fields = linkedMapOf("version" to appVersion(context), "device" to "${device()}, Android ${android()}")
+        gameData(context)?.let { fields["gamedata"] = it }
         if (report != null) fields["steps"] = "The app closed on me while I was: "
         val title = report?.substringAfter("\n\n", report)?.let { "Crash: " + CrashReport.headline(it) }
         return CrashReport.issueUrl(REPO, "bug_report.yml", listOf("bug", "from-app"), title, fields, report)

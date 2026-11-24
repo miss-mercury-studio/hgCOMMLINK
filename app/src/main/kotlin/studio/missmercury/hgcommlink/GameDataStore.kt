@@ -6,6 +6,9 @@ import chummer.core.DataPack
 import chummer.core.data.CharacterSettings
 import chummer.core.data.CustomDataDir
 import chummer.core.data.CustomDataLocator
+import chummer.core.data.DataStatus
+import chummer.core.data.GameDataFingerprint
+import chummer.core.data.GameDataVersion
 import chummer.core.child
 import chummer.core.children
 import chummer.core.engine.CharacterEditor
@@ -60,15 +63,46 @@ class GameDataStore(private val context: Context) {
     private fun gameDir(assetDir: String, target: String): File =
         if (BuildConfig.BUNDLED_GAME_DATA) unpack(assetDir, target) else File(context.filesDir, target)
 
-    /** Add the game data from the Chummer folder the player picked (Play edition), and drop everything built from the old data. */
-    fun importFrom(tree: android.net.Uri): String {
-        val summary = GameDataImporter.import(context, tree)
+    /**
+     * Add the game data from the Chummer release zip or folder the player picked (Play edition), and drop everything built from the old
+     * data. Returns what the new data is and whether this app is checked against it.
+     */
+    fun import(uri: android.net.Uri, zip: Boolean, progress: (String) -> Unit = {}): GameDataVersion {
+        val r = if (zip) GameDataImporter.importZip(context, uri, progress) else GameDataImporter.importFolder(context, uri, progress)
         synchronized(this) { pack = null; packKey = null }
         synchronized(catalogs) { catalogs.clear() }
         synchronized(settingsCache) { settingsCache.clear() }
         translationsCache = null
         File(context.filesDir, "amended-cache").deleteRecursively()
-        return summary
+        val v = GameDataVersion.identify(
+            r.fingerprint, r.build, GameDataInfo.supported(context), if (zip) "zip" else "folder",
+            java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date()),
+        )
+        GameDataInfo.save(context, v)
+        versionCache = v
+        return v
+    }
+
+    @Volatile private var versionCache: GameDataVersion? = null
+
+    /**
+     * Which game data is in use and whether this app is checked against it; null before the Play edition has any. Hashes the data the
+     * first time (about a tenth of a second), so call it off the main thread. The GitHub edition always hashes what it unpacked, since an
+     * app update can change it; the Play edition remembers what was recorded when the player added the data.
+     */
+    fun version(): GameDataVersion? {
+        versionCache?.let { return it }
+        if (!hasData()) return null
+        return synchronized(this) {
+            versionCache ?: run {
+                val saved = if (BuildConfig.BUNDLED_GAME_DATA) null else GameDataInfo.saved(context)
+                val fingerprint = saved?.fingerprint ?: GameDataFingerprint.ofDirectory(dataDir())
+                GameDataVersion.identify(
+                    fingerprint, saved?.build, GameDataInfo.supported(context),
+                    saved?.source ?: if (BuildConfig.BUNDLED_GAME_DATA) "bundled" else "folder", saved?.importedAt,
+                ).also { GameDataInfo.save(context, it); versionCache = it }
+            }
+        }
     }
 
     private fun dataDir() = gameDir("chummer-data", "chummer-data")
@@ -271,12 +305,16 @@ class GameDataStore(private val context: Context) {
         lap("settings")
         val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(settings.customData)
         lap("locate custom data (${resolved.dirs.size} folders)")
+        val dataVersion = version()
         val warning = when {
             settings.isFallback -> "Settings profile not on this device: default rules used, numbers may differ. " +
                 "Put the profile's .xml in your characters folder."
             resolved.missing.isNotEmpty() ->
                 "${resolved.missing.size} custom data folder(s) from this profile were not found, so items they change may show " +
                     "Chummer's original values. Put their files (including manifest.xml) in your characters folder."
+            dataVersion?.status == DataStatus.UNCHECKED ->
+                "Game data is ${dataVersion.label}. This app has not been checked against it, so numbers may differ from Chummer's. " +
+                    "Menu, Game data, shows which version it was checked with."
             else -> null
         }
         val data = packFor(resolved.dirs)

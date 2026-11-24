@@ -43,6 +43,10 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
     val installed = rememberVersionName()
     TerminalSheet("What's new", onDismiss, tall = true) {
         Text("Installed: v$installed", style = MaterialTheme.typography.labelSmall, color = MutedSilver, modifier = Modifier.padding(bottom = 4.dp))
+        val context = LocalContext.current
+        studio.missmercury.hgcommlink.CrashReporter.gameData(context)?.let {
+            Text("Game data: $it", style = MaterialTheme.typography.labelSmall, color = MutedSilver, modifier = Modifier.padding(bottom = 4.dp))
+        }
         LazyColumn(Modifier.weight(1f)) {
             if (releases.isEmpty()) item { Text("The change log could not be read.", Modifier.padding(vertical = 16.dp), color = MutedSilver) }
             items(releases, key = { it.version }) { r ->

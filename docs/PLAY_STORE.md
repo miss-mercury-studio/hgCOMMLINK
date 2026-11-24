@@ -43,7 +43,7 @@ A working draft for a **closed beta** on Google Play. Nothing here has been subm
 hgCOMMLINK is an unofficial, free fan tool for creating and managing Shadowrun 5th Edition characters on your phone. It reads and writes Chummer 5 character files (.chum5), so characters move between this app and desktop Chummer without losing anything, and it aims to produce the same numbers Chummer does.
 
 GAME DATA
-hgCOMMLINK does not include Shadowrun's rules data. On first run it asks you to choose your own copy of Chummer 5a (download it free from github.com/chummer5a/chummer5a, or copy the folder from your PC); the files are copied into the app and nothing is downloaded or sent. You can update them later from the menu.
+hgCOMMLINK does not include Shadowrun's rules data. On first run, a Get Chummer button opens the free Chummer 5a download page in your browser; download the release zip it names, then choose that zip in the app (no unzipping). The files are copied into the app and the app itself downloads and sends nothing. Menu, Game data shows which Chummer version is in use.
 
 WHAT IT DOES
 • Open, edit and save .chum5 characters, with desktop-only data kept intact

@@ -9,6 +9,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import chummer.core.CharacterFile
+import chummer.core.data.DataStatus
+import chummer.core.data.GameDataVersion
+import chummer.core.data.SupportedData
 import chummer.core.engine.Sheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,6 +42,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** False in the Play edition until the player adds Chummer's game data; the app shows a setup screen instead of the character list. */
     var gameDataReady by mutableStateOf(gameData.hasData()); private set
     var importingGameData by mutableStateOf(false); private set
+    /** What the game data is and whether this app is checked against it; null until it is read, or while the Play edition has none. */
+    var gameDataVersion by mutableStateOf<GameDataVersion?>(null); private set
+    /** What the import is doing now ("Reading the zip", "Copied 50 files"). */
+    var gameDataProgress by mutableStateOf<String?>(null); private set
 
     /** One-shot message for a snackbar; the UI clears it after showing. */
     var message by mutableStateOf<String?>(null)
@@ -48,7 +55,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         refresh()
+        // Hashing the data takes a moment; it is done once, off the main thread, so every screen can say which version is in use.
+        viewModelScope.launch { gameDataVersion = runCatching { io { gameData.version() } }.getOrNull() }
     }
+
+    /** The release the "Get Chummer" button sends the player to: the newest one this app is checked against. */
+    fun recommendedData() = SupportedData.recommended(GameDataInfo.supported(getApplication()))
 
     private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }
 
@@ -107,18 +119,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         null
     } ?: uri.lastPathSegment?.substringAfterLast('/')
 
-    /** Play edition: copy the game data from the Chummer folder the player picked. Also used to update it later. */
-    fun addGameData(tree: Uri) {
+    /** Play edition: copy the game data from the Chummer release zip, or the folder, the player picked. Also used to update it later. */
+    fun addGameData(uri: Uri, zip: Boolean) {
         if (importingGameData) return
         viewModelScope.launch {
             importingGameData = true
+            gameDataProgress = "Reading"
             try {
-                message = io { gameData.importFrom(tree) }
+                val v = io { gameData.import(uri, zip) { gameDataProgress = it } }
+                gameDataVersion = v
                 gameDataReady = true
+                message = if (v.status == DataStatus.SUPPORTED) "Added ${v.label}."
+                else "Added ${v.label}. This app has not been checked against it, so numbers may differ from Chummer's."
             } catch (e: Exception) {
                 message = e.message ?: "Could not add the game data."
             } finally {
                 importingGameData = false
+                gameDataProgress = null
             }
         }
     }

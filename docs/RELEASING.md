@@ -80,7 +80,7 @@ One codebase, two build flavors, the same package id and the same signing key (s
 | Needs the chummer5a checkout to build | Yes | No |
 | Gradle tasks | `assembleGithubRelease`, `installGithubDebug` | `bundlePlayRelease`, `installPlayDebug` |
 
-The code reads `BuildConfig.BUNDLED_GAME_DATA` (see `GameDataStore` and `GameDataImporter`). The edition name is added to the version line in crash reports. The debug builds of both editions share one id, so installing one replaces the other and keeps its data: the Play edition then sees the GitHub debug build's unpacked data and will not show the first-run screen. To test that screen, clear the debug app's storage first (Settings, Apps; this deletes characters kept in app storage).
+The code reads `BuildConfig.BUNDLED_GAME_DATA` (see `GameDataStore` and `GameDataImporter`). The edition name is added to the version line in crash reports. The Play edition's debug build is its own app (`studio.missmercury.hgcommlink.debug.play`, "hgCOMMLINK (play debug)"), so it installs beside the GitHub debug build and its first-run game data screen can be tried without clearing anything. Zips for it: `adb push Chummer5.226.0.zip /sdcard/Download/`.
 
 ## Chummer's data
 

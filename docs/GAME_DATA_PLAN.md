@@ -1,6 +1,6 @@
 # Game data for the Play edition: plan
 
-Status: plan only, nothing here is built yet except the first-run folder import (commit `d59788a`, branch `play-edition`).
+Status: Phase 0 is done on `master`. Phases 1 to 4 are built on branch `play-edition` (zip and folder import, the version type and fingerprint, the version shown in the setup screen, the Game data sheet, What's new, sheet warnings and bug and crash reports, and the Get Chummer button). Not yet tried on a phone: the first-run screen and the real import (the phone was locked). Still open: Phase 5's phone test, the remember-a-download-in-progress stretch, and updating the Play listing text for the final wording.
 
 The Google Play edition ships without Chummer's game data (see [RELEASING.md](RELEASING.md), "Two editions"). This plan is "tier 1": make getting the data as easy as it can be **without the app touching the network**, and make the data's version visible everywhere it matters. The player brings the files; the app never downloads them. Tier 2 (in-app download of pinned, hashed files) is deliberately out of scope until after the beta, because it needs the INTERNET permission and changes the privacy policy, the listing and the Data Safety answers.
 

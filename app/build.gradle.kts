@@ -83,6 +83,15 @@ android {
     }
 }
 
+// The Play edition's debug build is its own app (id ".debug.play"), so it can be tried on a phone that has the GitHub edition's debug build
+// (its first-run game data screen only shows when the app has no data, and the GitHub debug build already unpacked it).
+androidComponents {
+    onVariants(selector().withBuildType("debug").withFlavor("edition" to "play")) { variant ->
+        variant.applicationId.set("studio.missmercury.hgcommlink.debug.play")
+        variant.manifestPlaceholders.put("appLabel", "hgCOMMLINK (play debug)")
+    }
+}
+
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
@@ -120,7 +129,8 @@ val copyChummerLang = tasks.register<Copy>("copyChummerLang") {
 }
 // The change log ships in both editions for the What's new sheet.
 val copyChangelog = tasks.register<Copy>("copyChangelog") {
-    from(rootProject.file("CHANGELOG.md"))
+    // The list of Chummer data sets the app is checked against ships too, so it can say whether the player's data is one of them.
+    from(rootProject.file("CHANGELOG.md"), rootProject.file("chummer-supported.txt"))
     into(layout.buildDirectory.dir("generated/changelogAssets"))
 }
 android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/changelogAssets"))

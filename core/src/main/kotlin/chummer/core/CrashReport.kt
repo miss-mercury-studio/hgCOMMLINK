@@ -16,8 +16,9 @@ object CrashReport {
     /** How much of a stack trace is kept. The top frames and the "Caused by" lines carry the answer. */
     private const val TRACE_LIMIT = 3500
 
-    fun format(app: String, device: String, android: String, time: String, thread: String, trace: String): String = buildString {
+    fun format(app: String, device: String, android: String, time: String, thread: String, trace: String, gameData: String? = null): String = buildString {
         appendLine("hgCOMMLINK $app")
+        if (gameData != null) appendLine("Game data: $gameData")
         appendLine("Device: $device")
         appendLine("Android: $android")
         appendLine("Time: $time")

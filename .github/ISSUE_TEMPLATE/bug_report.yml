@@ -10,6 +10,12 @@ body:
       placeholder: "0.1.1"
     validations: { required: true }
   - type: input
+    id: gamedata
+    attributes:
+      label: Game data
+      description: Menu, then Game data. Filled in for you when you report from the app.
+      placeholder: "Chummer 5.226.0 [b4bfed06]"
+  - type: input
     id: device
     attributes:
       label: Phone and Android version

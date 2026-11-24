@@ -67,6 +67,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import chummer.core.CharacterFile
+import chummer.core.data.SupportedData
 import studio.missmercury.hgcommlink.storage.StoredFile
 
 class MainActivity : ComponentActivity() {
@@ -107,6 +108,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** The document picker, opened at the Downloads folder: that is where the Chummer zip lands. */
+private class OpenZipInDownloads : ActivityResultContracts.OpenDocument() {
+    override fun createIntent(context: android.content.Context, input: Array<String>): Intent =
+        super.createIntent(context, input).putExtra(
+            android.provider.DocumentsContract.EXTRA_INITIAL_URI, Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload"),
+        )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun App(vm: AppViewModel) {
@@ -139,8 +148,21 @@ private fun App(vm: AppViewModel) {
         if (uri != null) vm.chooseFolder(uri)
     }
 
-    val dataPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) vm.addGameData(uri)
+    // Chummer's game data (Play edition): the release zip, or a folder. "Get Chummer" opens the release page in the browser; the app itself uses no network.
+    val dataFolderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) vm.addGameData(uri, zip = false)
+    }
+    val dataZipPicker = rememberLauncherForActivityResult(OpenZipInDownloads()) { uri ->
+        if (uri != null) vm.addGameData(uri, zip = true)
+    }
+    val getChummer = { vm.recommendedData()?.releaseTag?.let { CrashReporter.open(ctx, SupportedData.releaseUrl(it)) } ?: CrashReporter.open(ctx, "https://github.com/chummer5a/chummer5a/releases") }
+    val pickZip = { dataZipPicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/x-zip", "application/octet-stream")) }
+    var showData by remember { mutableStateOf(false) }
+    if (showData) {
+        GameDataSheet(
+            vm.gameDataVersion, vm.recommendedData(), canChange = !BuildConfig.BUNDLED_GAME_DATA, importing = vm.importingGameData, progress = vm.gameDataProgress,
+            onGet = { getChummer() }, onZip = { pickZip() }, onFolder = { dataFolderPicker.launch(null) }, onDismiss = { showData = false },
+        )
     }
 
     BackHandler(enabled = open != null) { vm.close() }
@@ -172,9 +194,7 @@ private fun App(vm: AppViewModel) {
                             if (vm.isSharedFolder) {
                                 TerminalMenuItem("Use app storage", onClick = { menu = false; vm.useAppFolder() })
                             }
-                            if (!BuildConfig.BUNDLED_GAME_DATA && vm.gameDataReady) {
-                                TerminalMenuItem("Update game data", onClick = { menu = false; dataPicker.launch(null) })
-                            }
+                            if (vm.gameDataReady) TerminalMenuItem("Game data", onClick = { menu = false; showData = true })
                             TerminalMenuItem("Refresh", onClick = { menu = false; vm.refresh() })
                             TerminalMenuItem("What's new", onClick = { menu = false; whatsNew = true })
                             TerminalMenuItem("Report a problem", onClick = { menu = false; CrashReporter.open(appContext, CrashReporter.bugUrl(appContext, null)) })
@@ -236,7 +256,10 @@ private fun App(vm: AppViewModel) {
             if (showCritter) NewCritterDialog(vm) { showCritter = false }
             when {
                 open != null -> SheetScreen(open, vm)
-                !vm.gameDataReady -> GameDataSetup(vm.importingGameData) { dataPicker.launch(null) }
+                !vm.gameDataReady -> GameDataSetup(
+                    vm.importingGameData, vm.gameDataProgress, vm.recommendedData(),
+                    onGet = { getChummer() }, onZip = { pickZip() }, onFolder = { dataFolderPicker.launch(null) },
+                )
                 else -> CharacterList(vm)
             }
         }

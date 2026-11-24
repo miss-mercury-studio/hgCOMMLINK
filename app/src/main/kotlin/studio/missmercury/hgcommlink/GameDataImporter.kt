@@ -2,15 +2,19 @@ package studio.missmercury.hgcommlink
 
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.documentfile.provider.DocumentFile
+import chummer.core.data.GameDataFingerprint
+import chummer.core.data.GameDataImportException
+import chummer.core.data.GameDataZip
 import java.io.File
 
 /**
- * The Play edition ships no game data. The player points the app at their own copy of Chummer 5a (an unzipped download of the
- * release, or a clone of the repository) and this copies the files the rules engine reads into app storage, where
- * [GameDataStore] looks for them. Nothing leaves the phone and nothing is downloaded.
+ * The Play edition ships no game data. The player gives the app their own copy of Chummer 5a, as the release zip or as the unpacked
+ * folder, and this copies the files the rules engine reads into app storage, where [GameDataStore] looks for them. Nothing leaves
+ * the phone and nothing is downloaded. (The zip and folder readers are the same two things, one on a file and one on a folder tree.)
  *
- * The copy is made beside the live data and swapped in at the end, so a folder that fails half way never leaves the app without data.
+ * The copy is made beside the live data and swapped in at the end, so a choice that fails half way never leaves the app without data.
  */
 object GameDataImporter {
     /** What the app reads, as folders under the app's files directory (the same names the GitHub edition unpacks into). */
@@ -23,40 +27,79 @@ object GameDataImporter {
 
     private const val SEARCH_DEPTH = 3
 
-    class Found(val data: DocumentFile, val lang: DocumentFile?, val custom: DocumentFile?)
+    /** What was installed: how many files, Chummer's build number if the changelog was there, and the fingerprint of the data. */
+    class Imported(val files: Int, val build: String?, val fingerprint: String)
+
+    class Found(val data: DocumentFile, val lang: DocumentFile?, val custom: DocumentFile?, val changelog: DocumentFile?)
 
     fun installed(context: Context): Boolean = File(File(context.filesDir, DATA), MARKER).isFile
 
-    /** Copy the game data found in [tree] (the folder the player picked) into app storage. Returns a one-line summary for the player. */
-    fun import(context: Context, tree: Uri): String {
-        val root = DocumentFile.fromTreeUri(context, tree) ?: error("That folder could not be opened.")
-        val found = find(root) ?: error(
-            "No Chummer game data found there. Choose the Chummer folder: the one that contains \"data\" (with $MARKER), \"lang\" and \"customdata\".",
-        )
+    private fun staging(context: Context) = File(context.filesDir, "game-data-staging").also { it.deleteRecursively(); it.mkdirs() }
 
-        val staging = File(context.filesDir, "game-data-staging").also { it.deleteRecursively(); it.mkdirs() }
+    /** Install the data from the Chummer release zip [uri]. The zip is copied to the cache first (a zip cannot be read in one pass without its end). */
+    fun importZip(context: Context, uri: Uri, progress: (String) -> Unit = {}): Imported {
+        val size = context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { if (it.moveToFirst() && !it.isNull(0)) it.getLong(0) else null }
+        if (size != null && size > GameDataZip.MAX_ZIP_BYTES) {
+            throw GameDataImportException("That file is ${size / (1024 * 1024)} MB, far bigger than a Chummer release (about 45 MB). Download the release zip from the Chummer releases page, not the source code.")
+        }
+        val copy = File(context.cacheDir, "chummer-import.zip")
+        val staging = staging(context)
+        try {
+            progress("Reading the zip")
+            val input = context.contentResolver.openInputStream(uri) ?: throw GameDataImportException("That file could not be read.")
+            input.use { i ->
+                copy.outputStream().use { o ->
+                    // The limit also protects a file whose size was not reported.
+                    val buffer = ByteArray(256 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val n = i.read(buffer)
+                        if (n < 0) break
+                        total += n
+                        if (total > GameDataZip.MAX_ZIP_BYTES) throw GameDataImportException("That file is far bigger than a Chummer release (about 45 MB). Download the release zip from the Chummer releases page, not the source code.")
+                        o.write(buffer, 0, n)
+                    }
+                }
+            }
+            val r = GameDataZip.extract(copy, staging) { progress("Copied $it files") }
+            return swapIn(context, staging, r.files, r.build)
+        } finally {
+            copy.delete()
+            staging.deleteRecursively()
+        }
+    }
+
+    /** Install the data from a folder the player picked (the unpacked release, or the folder holding it). */
+    fun importFolder(context: Context, tree: Uri, progress: (String) -> Unit = {}): Imported {
+        val root = DocumentFile.fromTreeUri(context, tree) ?: throw GameDataImportException("That folder could not be opened.")
+        val found = find(root) ?: throw GameDataImportException(
+            "No Chummer game data found there. Choose the Chummer folder: the one that contains \"data\" (with $MARKER), \"lang\" and \"customdata\". Or choose the release zip.",
+        )
+        val staging = staging(context)
         try {
             var files = copyDir(context, found.data, File(staging, DATA), recurse = false) { it.endsWith(".xml") }
-            found.lang?.let { lang ->
-                lang.findFile("en-us.xml")?.let { copyFile(context, it, File(File(staging, LANG).apply { mkdirs() }, "en-us.xml")); files++ }
-            }
+            found.lang?.findFile("en-us.xml")?.let { copyFile(context, it, File(File(staging, LANG).apply { mkdirs() }, "en-us.xml")); files++ }
             found.custom?.let { files += copyDir(context, it, File(staging, CUSTOM)) { n -> !n.endsWith(".xsd") } }
-            File(staging, CUSTOM).mkdirs()
-            File(staging, LANG).mkdirs()
-
-            // Swap in. Each target is replaced as a whole folder.
-            for (name in listOf(DATA, LANG, CUSTOM)) {
-                val target = File(context.filesDir, name)
-                target.deleteRecursively()
-                check(File(staging, name).renameTo(target)) { "Could not store the game data." }
-            }
-            return buildString {
-                append("Game data added ($files files).")
-                if (found.lang == null) append(" No \"lang\" folder found, so a few texts may be missing.")
-            }
+            progress("Copied $files files")
+            val build = found.changelog?.let { f -> runCatching { context.contentResolver.openInputStream(f.uri)?.bufferedReader()?.use { GameDataZip.buildOf(it.readText()) } }.getOrNull() }
+            return swapIn(context, staging, files, build)
         } finally {
             staging.deleteRecursively()
         }
+    }
+
+    /** Replace the live folders with the staged ones, each as a whole. */
+    private fun swapIn(context: Context, staging: File, files: Int, build: String?): Imported {
+        if (!File(File(staging, DATA), MARKER).isFile) throw GameDataImportException("No Chummer game data found.")
+        File(staging, CUSTOM).mkdirs()
+        File(staging, LANG).mkdirs()
+        val fingerprint = GameDataFingerprint.ofDirectory(File(staging, DATA))
+        for (name in listOf(DATA, LANG, CUSTOM)) {
+            val target = File(context.filesDir, name)
+            target.deleteRecursively()
+            if (!File(staging, name).renameTo(target)) throw GameDataImportException("Could not store the game data.")
+        }
+        return Imported(files, build, fingerprint)
     }
 
     /**
@@ -66,9 +109,7 @@ object GameDataImporter {
     fun find(dir: DocumentFile): Found? {
         var level = listOf(dir)
         repeat(SEARCH_DEPTH + 1) {
-            for (d in level) {
-                at(d)?.let { return it }
-            }
+            for (d in level) at(d)?.let { return it }
             level = level.flatMap { it.listFiles().filter { f -> f.isDirectory } }
             if (level.isEmpty()) return null
         }
@@ -77,10 +118,10 @@ object GameDataImporter {
 
     private fun at(dir: DocumentFile): Found? {
         dir.findFile("data")?.takeIf { it.isDirectory && it.findFile(MARKER) != null }?.let {
-            return Found(it, dir.findFile("lang")?.takeIf(DocumentFile::isDirectory), dir.findFile("customdata")?.takeIf(DocumentFile::isDirectory))
+            return Found(it, dir.findFile("lang")?.takeIf(DocumentFile::isDirectory), dir.findFile("customdata")?.takeIf(DocumentFile::isDirectory), dir.findFile("changelog.txt"))
         }
         // The player chose the data folder itself: no way to reach its siblings, so the language file is left out.
-        if (dir.findFile(MARKER) != null) return Found(dir, null, null)
+        if (dir.findFile(MARKER) != null) return Found(dir, null, null, null)
         return null
     }
 
@@ -96,7 +137,7 @@ object GameDataImporter {
     }
 
     private fun copyFile(context: Context, from: DocumentFile, to: File) {
-        val input = context.contentResolver.openInputStream(from.uri) ?: error("Could not read ${from.name}.")
+        val input = context.contentResolver.openInputStream(from.uri) ?: throw GameDataImportException("Could not read ${from.name}.")
         input.use { i -> to.outputStream().use { o -> i.copyTo(o) } }
     }
 }
