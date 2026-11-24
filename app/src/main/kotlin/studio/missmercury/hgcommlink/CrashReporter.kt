@@ -63,8 +63,7 @@ object CrashReporter {
 
     /** A pre-filled "Bug report" issue. [report] is the crash text, or null for a plain problem report. */
     fun bugUrl(context: Context, report: String?): String {
-        val fields = linkedMapOf("version" to appVersion(context), "device" to "${device()}, Android ${android()}")
-        if (report != null) fields["steps"] = "The app closed on me while I was: "
+        val fields = mapOf("version" to appVersion(context), "device" to "${device()}, Android ${android()}")
         val title = report?.substringAfter("\n\n", report)?.let { "Crash: " + CrashReport.headline(it) }
         return CrashReport.issueUrl(REPO, "bug_report.yml", listOf("bug", "from-app"), title, fields, report)
     }
