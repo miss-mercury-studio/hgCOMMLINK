@@ -10,6 +10,9 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 - **Crash reports.** If the app closes unexpectedly, the next time you open it a sheet shows what happened and lets you report it on GitHub or share it anywhere. It contains the app version, your phone and the error, never your characters, and nothing is sent unless you choose to.
 - **Report a problem** and **Send feedback** in the menu, which open a pre-filled form on GitHub.
 
+### Fixed
+- **Exceptional Attribute on Magic.** Spending the special attribute point to take Magic from 6 to 7 now shows 7 on the stats and skills screens, not just in the attribute editor. Other attributes raised past their normal maximum are fixed the same way (#1).
+
 ## [0.1.2] - 2026-11-24
 
 ### Fixed

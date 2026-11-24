@@ -45,4 +45,13 @@ class ExceptionalAttributeCreationTest {
         assertEquals(7, AttributeEngine.forFile(c, settings.toRuleSettings())["MAG"]!!.value)
         assertEquals(Pool(1, 1), PointsLedger.of(c, data)!!.special)
     }
+
+    @Test
+    fun theSeventhPointShowsInTheTotalAndOnTheSheet() {
+        val (c, editor) = magician()
+        editor.addQuality(id("qualities.xml", "quality", "Exceptional Attribute"), extra = "MAG")
+        assertTrue(editor.changeAttribute("MAG", 1))
+        assertEquals(7, AttributeEngine.forFile(c, settings.toRuleSettings())["MAG"]!!.totalValue)
+        assertEquals(7, Sheet.build(c, data, settings).attributes.first { it.name == "MAG" }.total)
+    }
 }
