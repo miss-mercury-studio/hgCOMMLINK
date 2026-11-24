@@ -304,6 +304,11 @@ object BonusHandlers {
                 out += improvement(ctx, "SpecificQuality", unique, 0.0, guid)
             }
         }
+        // The older form, in Chummer 5.226.0's traditions: one quality named straight in the bonus (no addqualities around it).
+        put("addquality") { node, ctx, unique, out ->
+            val guid = ctx.addQuality(node.textContent.trim(), node.attr("select").orEmpty()) ?: return@put
+            out += improvement(ctx, "SpecificQuality", unique, 0.0, guid)
+        }
 
         // Unlocks a group of skills (for example the magical skills for a Magician); the editor adds the skills themselves.
         put("unlockskills") { node, ctx, unique, out ->

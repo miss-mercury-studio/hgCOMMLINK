@@ -80,7 +80,9 @@ python tools/data_sets.py test --zip Chummer5.226.0.zip     # runs :core:test on
 python tools/data_sets.py fingerprint Chummer5.226.0.zip    # the line to add to chummer-supported.txt once the tests pass
 ```
 
-Chummer changes its data format between builds (for example how `weaponcategorydice` is written), so a new release can need engine changes before it is listed.
+Chummer changes its data format between builds (for example how `weaponcategorydice` is written), so a new release can need engine changes before it is listed. `DataSetDriftTest` helps: it fails when a data set has a kind of bonus node (`bonus-shapes.txt`) that no checked data set had, or a catalog that comes out empty. After making sure the engine reads the new shapes, add them with `./gradlew -Pchummer.updateShapes=true :core:test --tests chummer.core.engine.DataSetDriftTest` (run it once per data set; it merges).
+
+[chummer-watch.yml](../.github/workflows/chummer-watch.yml) checks every Monday whether Chummer has a newer stable release than the supported list. If so it runs the drift test on that release and opens an issue with the result and the steps to support it. Nothing changes for players until you add the release to the list.
 
 ## Getting the APK to testers
 

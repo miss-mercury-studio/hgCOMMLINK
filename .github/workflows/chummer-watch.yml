@@ -1,0 +1,87 @@
+name: Watch Chummer releases
+
+# Players bring their own Chummer data, and the app sends them to the stable release named in chummer-supported.txt. When Chummer
+# publishes a newer stable release, this checks it with the data drift test (the part of the tests that needs only public files)
+# and opens an issue, so a person runs the full tests before it is listed. See docs/GAME_DATA_PLAN.md.
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find Chummer's newest stable release
+        id: latest
+        run: |
+          tag=$(gh api repos/chummer5a/chummer5a/releases/latest --jq .tag_name)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if grep -qE "\| *release:${tag} *$" chummer-supported.txt; then
+            echo "known=true" >> "$GITHUB_OUTPUT"
+            echo "Chummer $tag is already on the supported list."
+          else
+            echo "known=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out Chummer at the pinned commit (for its test characters)
+        if: steps.latest.outputs.known == 'false'
+        run: |
+          git clone --filter=blob:none https://github.com/chummer5a/chummer5a.git ../chummer5a
+          git -C ../chummer5a checkout "$(cat chummer-pin.txt)"
+
+      - uses: actions/setup-java@v4
+        if: steps.latest.outputs.known == 'false'
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.latest.outputs.known == 'false'
+
+      - name: Run the drift test on the new release's data
+        if: steps.latest.outputs.known == 'false'
+        id: drift
+        run: |
+          tag="${{ steps.latest.outputs.tag }}"
+          mkdir -p "$RUNNER_TEMP/zip"
+          gh release download "$tag" -R chummer5a/chummer5a -p '*.zip' -D "$RUNNER_TEMP/zip"
+          zip=$(ls "$RUNNER_TEMP"/zip/*.zip | head -1)
+          echo "fingerprint=$(python3 tools/data_sets.py fingerprint "$zip")" >> "$GITHUB_OUTPUT"
+          if python3 tools/data_sets.py test --zip "$zip" --checkout ../chummer5a -- --tests chummer.core.engine.DataSetDriftTest; then
+            echo "result=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=FAILED" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open an issue
+        if: steps.latest.outputs.known == 'false'
+        run: |
+          tag="${{ steps.latest.outputs.tag }}"
+          title="Chummer $tag is out and not on the supported list"
+          if [ -n "$(gh issue list --state all --search "in:title \"$title\"" --json number --jq '.[0].number')" ]; then
+            echo "There is already an issue for $tag."
+            exit 0
+          fi
+          cat > body.md <<EOF
+          Chummer published **$tag**. It is not in \`chummer-supported.txt\`, so the Play edition marks it "Unchecked" and the "Get Chummer" button still sends players to the listed release.
+
+          - Data drift test on its data (new bonus shapes, empty catalogs): **${{ steps.drift.outputs.result }}**
+          - Data fingerprint: \`${{ steps.drift.outputs.fingerprint }}\`
+
+          To support it:
+          1. \`python tools/data_sets.py test --zip <the release zip>\` (full core tests; needs the local reference characters).
+          2. Fix the engine where it fails. If the drift test lists new bonus shapes, make sure \`BonusHandlers\` reads them, then add them: \`./gradlew -Pchummer.updateShapes=true :core:test --tests chummer.core.engine.DataSetDriftTest\`.
+          3. Add the line to \`chummer-supported.txt\` (fingerprint | Chummer x.y.z | release:$tag).
+
+          Until then nothing changes for players. This issue was opened by the Watch Chummer releases workflow.
+          EOF
+          gh issue create --title "$title" --body-file body.md
