@@ -276,6 +276,8 @@ object NewCharacter {
             editor.addQuality(id, qualitySource = "Metatype")
         }
         root.child("karma")!!.textContent = KarmaLedger.of(character, settings, data).remaining.toString()
+        // The stored nuyen is what is left of the budget; without this it stayed 0 until the first edit (issue #2).
+        NuyenLedger.sync(character, settings, data)
         return character
     }
 }
