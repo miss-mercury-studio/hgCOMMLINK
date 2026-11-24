@@ -226,7 +226,7 @@ data class Sheet(
             return CareerLines(
                 attributeCosts = attributes.associateWith { adv.attributeOffer(it).cost },
                 skillCosts = rows.associate { it.guid to adv.skillOffer(it.guid).cost },
-                skillIds = rows.filter { !it.isKnowledge }.associate { it.name to it.guid },
+                skillIds = rows.filter { !it.isKnowledge }.associate { it.name.ifEmpty { data[it.suid]?.name.orEmpty() } to it.guid },
                 groupCosts = c.skillGroups().keys.associateWith { adv.groupOffer(it).cost },
                 expenses = entries.reversed(),
                 undoable = entries.filter { log.canUndo(it) }.map { it.guid }.toSet(),

@@ -140,6 +140,8 @@ private fun App(vm: AppViewModel) {
     }
 
     BackHandler(enabled = open != null) { vm.close() }
+    var whatsNew by remember { mutableStateOf(false) }
+    if (whatsNew) WhatsNewSheet { whatsNew = false }
 
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = Quicksilver,
@@ -163,6 +165,7 @@ private fun App(vm: AppViewModel) {
                                 TerminalMenuItem("Use app storage", onClick = { menu = false; vm.useAppFolder() })
                             }
                             TerminalMenuItem("Refresh", onClick = { menu = false; vm.refresh() })
+                            TerminalMenuItem("What's new", onClick = { menu = false; whatsNew = true })
                         }
                     },
                 )

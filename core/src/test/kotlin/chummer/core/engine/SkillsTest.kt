@@ -120,4 +120,16 @@ class SkillsTest {
             println("  %-26s %-4s attr=%d rating=%d pool=%d".format(r.name, r.attribute, attrs[r.attribute]?.totalValue ?: -1, res.rating, res.pool))
         }
     }
+
+    /** Chummer's own files often store no `<name>` for active skills, only the id. A blank name hid every row and crashed the list. */
+    @Test
+    fun skillsWithoutAStoredNameAreNamedFromTheData() {
+        val file = File(src, "Chummer.Tests/TestFiles/Ghile Mear.chum5")
+        val c = CharacterIo.readFile(file)
+        assertTrue("fixture should store no names", c.skills().filter { !it.isKnowledge }.all { it.name.isEmpty() })
+        val names = SkillEngine.skillsOf(c, pack).filter { !it.isKnowledge }.map { it.name }
+        assertTrue(names.isNotEmpty())
+        assertTrue("every active skill is named", names.all { it.isNotBlank() })
+        assertEquals("names are unique", names.size, names.toSet().size)
+    }
 }

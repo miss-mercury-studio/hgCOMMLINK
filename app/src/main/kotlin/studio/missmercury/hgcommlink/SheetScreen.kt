@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.PaddingValues
@@ -365,7 +366,7 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
                     val bought = s.skillGroups.count { it.karma > 0 }
                     CollapsibleHeader("Skill groups", groupsOpen, { groupsOpen = !groupsOpen }, summary = if (bought > 0) "$bought bought" else null)
                 }
-                if (groupsOpen) items(s.skillGroups, key = { "g-" + it.name }) { g ->
+                if (groupsOpen) itemsIndexed(s.skillGroups, key = { i, it -> "g-$i-" + it.name }) { _, g ->
                     Column {
                         Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(g.name, Modifier.weight(1f), color = if (g.karma > 0) Quicksilver else MutedSilver)
@@ -403,9 +404,10 @@ private fun Skills(s: Sheet, vm: AppViewModel) {
             // Skills the character has come first; the rest are listed after, as Chummer does.
             val (rated, unrated) = s.activeSkills.filter(::matches).partition { it.rating > 0 }
             if (rated.isNotEmpty()) item { SubHeader("Active skills") }
-            items(rated, key = { "a-" + it.name }) { SkillRow(it, buy, career, karma, vm, s.skillSpecs[it.name]) }
+            // Keys carry the position: a character file can hold a blank or repeated skill name, and a repeated key crashes the list.
+            itemsIndexed(rated, key = { i, it -> "a-$i-" + it.name }) { _, it -> SkillRow(it, buy, career, karma, vm, s.skillSpecs[it.name]) }
             if (unrated.isNotEmpty()) item { SubHeader(if (rated.isEmpty()) "Active skills" else "Unrated") }
-            items(unrated, key = { "u-" + it.name }) { SkillRow(it, buy, career, karma, vm, s.skillSpecs[it.name]) }
+            itemsIndexed(unrated, key = { i, it -> "u-$i-" + it.name }) { _, it -> SkillRow(it, buy, career, karma, vm, s.skillSpecs[it.name]) }
         }
         if (buy != null) PinnedAction("+ Knowledge skill") { addingKnowledge = true }
     }

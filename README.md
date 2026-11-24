@@ -53,6 +53,8 @@ Your own `.chum5` files are never committed (see `.gitignore`).
 
 ## Project documents
 
+- [CHANGELOG.md](CHANGELOG.md): what changed in each version (also shown in the app under What's new).
+- [docs/RELEASING.md](docs/RELEASING.md): cutting a release, the signing key, and where feedback and bug reports go.
 - [docs/PLAN.md](docs/PLAN.md): goals, decisions, milestones, findings about Chummer's rules, outstanding items and the progress log.
 
 ## License and credits

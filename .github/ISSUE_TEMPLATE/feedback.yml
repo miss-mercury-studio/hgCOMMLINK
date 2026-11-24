@@ -1,0 +1,13 @@
+name: Feedback or feature request
+description: An idea, a rules mismatch with Chummer, or something confusing
+labels: [feedback]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like to see changed?
+    validations: { required: true }
+  - type: textarea
+    id: why
+    attributes:
+      label: What were you trying to do?

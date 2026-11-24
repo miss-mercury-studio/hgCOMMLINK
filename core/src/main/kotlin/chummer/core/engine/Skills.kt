@@ -162,7 +162,8 @@ class SkillEngine(
                     // Knowledge skills cannot default.
                     out += Raw(s.name, s.category, knowledgeAttribute(s.type), "", false, s.base, s.karma, true, s.isNativeLanguage)
                 } else {
-                    out += Raw(s.name, s.category.ifEmpty { entry?.category.orEmpty() }, attribute, group, def, s.base, s.karma, false)
+                    // Chummer saves only the skill's id for active skills in many files (no <name>), so the name comes from the data.
+                    out += Raw(s.name.ifEmpty { entry?.name.orEmpty() }, s.category.ifEmpty { entry?.category.orEmpty() }, attribute, group, def, s.base, s.karma, false)
                 }
             }
             return out

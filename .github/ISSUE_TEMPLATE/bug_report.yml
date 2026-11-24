@@ -1,0 +1,32 @@
+name: Bug report
+description: Something in the app is wrong or crashes
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Menu, then What's new, shows "Installed".
+      placeholder: "0.1.1"
+    validations: { required: true }
+  - type: input
+    id: device
+    attributes:
+      label: Phone and Android version
+      placeholder: Galaxy S24 Ultra, Android 16
+  - type: textarea
+    id: steps
+    attributes:
+      label: What did you do?
+      description: Steps from opening the app, and the character's build method if it matters (Karma, Priority, Sum-to-Ten).
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect, and what happened instead?
+    validations: { required: true }
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots help. Do not attach characters you want to keep private.

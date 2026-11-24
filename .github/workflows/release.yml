@@ -1,0 +1,75 @@
+name: Release
+
+# Runs when a version tag is pushed (git tag v0.1.2 && git push origin v0.1.2). See docs/RELEASING.md.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_RELEASES_WEBHOOK }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the app version and the change log
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          declared=$(grep '^app.versionName=' gradle.properties | cut -d= -f2)
+          [ "$version" = "$declared" ] || { echo "Tag $GITHUB_REF_NAME but gradle.properties says $declared"; exit 1; }
+          python3 tools/release_notes.py "$version" > release-notes.md
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      # The build ships Chummer's game data, so it needs a checkout of chummer5a at the commit in chummer-pin.txt.
+      - name: Check out Chummer at the pinned commit
+        run: |
+          git clone --filter=blob:none https://github.com/chummer5a/chummer5a.git ../chummer5a
+          git -C ../chummer5a checkout "$(cat chummer-pin.txt)"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test the change log
+        run: ./gradlew -Pchummer.src=$GITHUB_WORKSPACE/../chummer5a :core:test --tests "chummer.core.ChangelogTest"
+
+      - name: Build the signed APK
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          HGCOMMLINK_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          HGCOMMLINK_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          HGCOMMLINK_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          export HGCOMMLINK_STORE_FILE="$RUNNER_TEMP/release.jks"
+          ./gradlew -Pchummer.src=$GITHUB_WORKSPACE/../chummer5a :app:assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "hgCOMMLINK-$VERSION.apk"
+          rm "$RUNNER_TEMP/release.jks"
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "hgCOMMLINK-$VERSION.apk" \
+            --title "hgCOMMLINK $VERSION" --notes-file release-notes.md
+
+      # Optional: set the DISCORD_RELEASES_WEBHOOK secret to post the notes to #releases.
+      - name: Announce on Discord
+        if: ${{ env.DISCORD_WEBHOOK != '' }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          v = os.environ["VERSION"]
+          notes = open("release-notes.md", encoding="utf-8").read()[:3500]
+          url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/tag/v{v}"
+          body = {"embeds": [{"title": f"hgCOMMLINK {v}", "url": url, "description": notes, "color": 0x00E676}]}
+          req = urllib.request.Request(os.environ["DISCORD_WEBHOOK"], json.dumps(body).encode(), {"Content-Type": "application/json", "User-Agent": "hgcommlink-release"})
+          urllib.request.urlopen(req)
+          PY
