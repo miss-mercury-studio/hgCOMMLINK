@@ -304,6 +304,11 @@ object BonusHandlers {
                 out += improvement(ctx, "SpecificQuality", unique, 0.0, guid)
             }
         }
+        // The older form, in Chummer 5.226.0's traditions: one quality named straight in the bonus (no addqualities around it).
+        put("addquality") { node, ctx, unique, out ->
+            val guid = ctx.addQuality(node.textContent.trim(), node.attr("select").orEmpty()) ?: return@put
+            out += improvement(ctx, "SpecificQuality", unique, 0.0, guid)
+        }
 
         // Unlocks a group of skills (for example the magical skills for a Magician); the editor adds the skills themselves.
         put("unlockskills") { node, ctx, unique, out ->
@@ -500,6 +505,8 @@ object BonusHandlers {
                 skill != null -> if (ctx.choice.isNotEmpty()) out += improvement(ctx, type, unique, value(node.t("bonus"), ctx.rating) ?: 0.0, ctx.choice)
                 category != null -> if (ctx.choice.isNotEmpty()) out += improvement(ctx, type, unique, value(category.t("value")?.takeIf { it.isNotEmpty() } ?: node.t("bonus"), ctx.rating) ?: 0.0, ctx.choice)
                 node.child("name") != null -> out += improvement(ctx, type, unique, value(node.t("bonus"), ctx.rating) ?: 0.0, node.t("name").orEmpty())
+                // The form in Chummer 5.226.0's data: a fixed category with its own name and value (later builds put both on the node).
+                node.child("category")?.child("name") != null -> node.child("category")!!.let { c -> out += improvement(ctx, type, unique, value(c.t("value"), ctx.rating) ?: 0.0, c.t("name").orEmpty()) }
             }
         }
 
