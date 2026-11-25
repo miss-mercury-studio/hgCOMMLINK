@@ -48,9 +48,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }
 
-    fun refresh() {
+    /** Reload the list. [quiet] keeps the list on screen while it reloads (used when coming back from a character). */
+    fun refresh(quiet: Boolean = false) {
         viewModelScope.launch {
-            loading = true
+            if (!quiet) loading = true
             try {
                 entries = io { repo.list() }
             } catch (e: Exception) {
@@ -444,6 +445,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun close() {
         open = null
+        // The character may have changed (finished creation, a purchase, a new name): its summary on the list must follow. Only the changed file is re-read.
+        refresh(quiet = true)
     }
 
     fun delete(file: StoredFile) {

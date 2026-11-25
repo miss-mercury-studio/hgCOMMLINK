@@ -276,22 +276,30 @@ private fun CharacterList(vm: AppViewModel) {
     }
 }
 
-/** The top bar as a shell prompt: hg@commlink:~/viper$ with a blinking cursor. */
+/** The top bar as a shell prompt: hg@commlink:~/viper$ with a blinking cursor. When that is too long for the bar, it shortens to "> viper" so the name keeps its room. */
 @Composable
 private fun AppTitle(text: String) {
     val blink by androidx.compose.animation.core.rememberInfiniteTransition(label = "prompt").animateFloat(
         0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(550), androidx.compose.animation.core.RepeatMode.Reverse), label = "prompt",
     )
+    var short by remember(text) { mutableStateOf(false) }
     Text(
         androidx.compose.ui.text.buildAnnotatedString {
-            withStyle(androidx.compose.ui.text.SpanStyle(color = PhosphorGreen)) { append("hg@commlink") }
-            withStyle(androidx.compose.ui.text.SpanStyle(color = MutedSilver)) { append(":") }
-            withStyle(androidx.compose.ui.text.SpanStyle(color = AstralMagenta)) { append("~/" + text.lowercase().replace(' ', '_')) }
-            withStyle(androidx.compose.ui.text.SpanStyle(color = MutedSilver)) { append("$ ") }
+            if (short) {
+                withStyle(androidx.compose.ui.text.SpanStyle(color = PhosphorGreen)) { append("> ") }
+            } else {
+                withStyle(androidx.compose.ui.text.SpanStyle(color = PhosphorGreen)) { append("hg@commlink") }
+                withStyle(androidx.compose.ui.text.SpanStyle(color = MutedSilver)) { append(":") }
+                withStyle(androidx.compose.ui.text.SpanStyle(color = AstralMagenta)) { append("~/") }
+            }
+            withStyle(androidx.compose.ui.text.SpanStyle(color = AstralMagenta)) { append(text.lowercase().replace(' ', '_')) }
+            // The long prompt ends in "$"; the short one is just "> name" and the cursor.
+            withStyle(androidx.compose.ui.text.SpanStyle(color = MutedSilver)) { append(if (short) " " else "$ ") }
             withStyle(androidx.compose.ui.text.SpanStyle(color = PhosphorGreen.copy(alpha = if (blink > 0.5f) 1f else 0f))) { append("█") }
         },
         style = MaterialTheme.typography.titleMedium.copy(shadow = androidx.compose.ui.graphics.Shadow(PhosphorGreen.copy(alpha = 0.45f), blurRadius = 16f)),
         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        onTextLayout = { if (it.hasVisualOverflow && !short) short = true },
     )
 }
 
