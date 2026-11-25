@@ -340,14 +340,10 @@ class GameDataStore(private val context: Context) {
         lap("locate custom data (${resolved.dirs.size} folders)")
         val dataVersion = version()
         val warning = when {
-            settings.isFallback -> "Settings profile not on this device: default rules used, numbers may differ. " +
-                "Put the profile's .xml in your characters folder."
+            settings.isFallback -> "Settings profile not found: default rules used. Add its .xml to your characters folder."
             resolved.missing.isNotEmpty() ->
-                "${resolved.missing.size} custom data folder(s) from this profile were not found, so items they change may show " +
-                    "Chummer's original values. Put their files (including manifest.xml) in your characters folder."
-            dataVersion?.status == DataStatus.UNCHECKED ->
-                "Game data is ${dataVersion.label}, unverified: this app has never run the numbers on it, so they may differ from Chummer's. " +
-                    "Menu, Game data, shows which version is verified."
+                "${resolved.missing.size} custom data folder(s) not found: values may be Chummer's originals. Add them to your characters folder."
+            dataVersion?.status == DataStatus.UNCHECKED -> "${dataVersion.label} is unverified: numbers may differ. See Menu > Game data."
             else -> null
         }
         val data = packFor(resolved.dirs)

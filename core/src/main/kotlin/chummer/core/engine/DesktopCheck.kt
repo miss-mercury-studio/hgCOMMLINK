@@ -13,7 +13,7 @@ object DesktopCheck {
     fun problems(c: CharacterFile): List<String> = buildList {
         // Chummer stalls while loading an A.I. that has cyberware or bioware (found with a 0.1.5 character).
         if (isAI(c) && c.root.child("cyberwares")?.children("cyberware").orEmpty().isNotEmpty()) {
-            add("This A.I. has cyberware or bioware. Desktop Chummer gets stuck loading it. An A.I. cannot have ware.")
+            add("Chummer hangs on an A.I. with ware.")
         }
     }
 }

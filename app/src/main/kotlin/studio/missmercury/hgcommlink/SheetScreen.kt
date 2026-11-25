@@ -198,15 +198,20 @@ private fun Header(s: Sheet, warning: String?) {
             )
         }
         s.review?.problems?.forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
-        s.desktopProblems.forEach { Text("⚠ $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
-        if (warning != null) {
-            // One line until tapped, so a long explanation does not push the sheet down.
-            Text(
-                if (showWarning) warning else "⚠ $warning",
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error,
-                maxLines = if (showWarning) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth().clickable { showWarning = !showWarning }.padding(vertical = 2.dp),
-            )
+        // Every warning (desktop Chummer problems, unverified game data) sits in one block: a line each until tapped, then all in full.
+        val warnings = s.desktopProblems + listOfNotNull(warning)
+        if (warnings.isNotEmpty()) {
+            Column(Modifier.fillMaxWidth().clickable { showWarning = !showWarning }.padding(vertical = 2.dp)) {
+                warnings.forEach {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("⚠", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                        Text(
+                            it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error,
+                            maxLines = if (showWarning) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
         }
     }
 }

@@ -158,7 +158,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val v = io { gameData.import(uri, zip) { gameDataProgress = it } }
                 gameDataVersion = v
                 message = if (v.status == DataStatus.SUPPORTED) "Added ${v.label}."
-                else "Added ${v.label}, unverified: this app has never run the numbers on it, so they may differ from Chummer's."
+                else "Added ${v.label}, unverified: numbers may differ from Chummer's."
             } catch (e: Exception) {
                 message = e.message ?: "Could not add the game data."
             } finally {

@@ -261,7 +261,7 @@ private fun App(vm: AppViewModel) {
                 )
                 shareWarning?.let { text ->
                     ConfirmSheet(
-                        "Desktop Chummer may not open this", text, "Share anyway",
+                        "Chummer may not open this", text, "Share anyway",
                         onConfirm = { shareWarning = null; vm.shareIntent(open.file)?.let { ctx.startActivity(Intent.createChooser(it, "Share ${open.file.name}")) } },
                         onDismiss = { shareWarning = null },
                     )

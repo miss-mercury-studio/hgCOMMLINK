@@ -63,6 +63,11 @@ object CrashReporter {
         GameDataVersion.identify(v.fingerprint, v.build, GameDataInfo.supported(context), v.source, v.importedAt, v.release, v.commit).line
     }
 
+    /** The same, short enough for a narrow screen (no commit or fingerprint). */
+    fun gameDataBrief(context: Context): String? = GameDataInfo.saved(context)?.let { v ->
+        GameDataVersion.identify(v.fingerprint, v.build, GameDataInfo.supported(context), v.source, v.importedAt, v.release, v.commit).brief
+    }
+
     fun device() = "${Build.MANUFACTURER} ${Build.MODEL}"
     fun android() = "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
     private fun now() = SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date())

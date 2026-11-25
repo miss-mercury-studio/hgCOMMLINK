@@ -89,6 +89,12 @@ data class GameDataVersion(
      */
     val channel: String? get() = release?.let { if (it.endsWith(".0")) "STABLE" else "NIGHTLY" }
 
+    /** Short form for a narrow screen: "Chummer 5.226.248 · nightly · unverified" (no commit or fingerprint). */
+    val brief: String get() = (listOf(label) + listOfNotNull(
+        if (isCustom) (channel?.lowercase() ?: "custom") else null,
+        if (status == DataStatus.UNCHECKED) "unverified" else null,
+    )).joinToString(" · ")
+
     /** One line for reports and screens: label, what is different about it, the commit and the start of the fingerprint. */
     val line: String get() {
         val notes = listOfNotNull(

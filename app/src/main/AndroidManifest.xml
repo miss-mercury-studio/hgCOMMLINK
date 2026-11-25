@@ -19,12 +19,21 @@
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
+                <!-- Android ignores pathPattern unless a host is declared; without it this filter matched every file, APKs included. -->
                 <data android:scheme="content" />
                 <data android:scheme="file" />
+                <data android:host="*" />
                 <data android:mimeType="*/*" />
                 <data android:pathPattern=".*\\.chum5" />
                 <data android:pathPattern=".*\\..*\\.chum5" />
                 <data android:pathPattern=".*\\..*\\..*\\.chum5" />
+            </intent-filter>
+            <!-- Mail and chat apps hand over content links with no file name in them, usually as a generic binary. An APK has its own type, so it is not matched. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/octet-stream" />
             </intent-filter>
             <!-- Share-to from other apps. -->
             <intent-filter>

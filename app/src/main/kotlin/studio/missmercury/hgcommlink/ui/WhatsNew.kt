@@ -42,11 +42,12 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
     val releases = rememberReleases()
     val installed = rememberVersionName()
     TerminalSheet("What's new", onDismiss, tall = true) {
-        Text("Installed: v$installed", style = MaterialTheme.typography.labelSmall, color = MutedSilver, modifier = Modifier.padding(bottom = 4.dp))
         val context = LocalContext.current
-        studio.missmercury.hgcommlink.CrashReporter.gameData(context)?.let {
-            Text("Game data: $it", style = MaterialTheme.typography.labelSmall, color = MutedSilver, modifier = Modifier.padding(bottom = 4.dp))
-        }
+        val data = studio.missmercury.hgcommlink.CrashReporter.gameDataBrief(context)
+        Text(
+            "v$installed" + (data?.let { "\n$it" } ?: ""),
+            style = MaterialTheme.typography.labelSmall, color = MutedSilver, modifier = Modifier.padding(bottom = 4.dp),
+        )
         LazyColumn(Modifier.weight(1f)) {
             if (releases.isEmpty()) item { Text("The change log could not be read.", Modifier.padding(vertical = 16.dp), color = MutedSilver) }
             items(releases, key = { it.version }) { r ->
@@ -57,7 +58,12 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
                     }
                     r.sections.forEach { sec ->
                         if (sec.title.isNotBlank()) Text(sec.title.uppercase(), style = MaterialTheme.typography.labelSmall, color = MutedSilver, modifier = Modifier.padding(top = 6.dp))
-                        sec.items.forEach { Text(bullet(it), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp)) }
+                        sec.items.forEach {
+                            Row(Modifier.padding(start = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("•", style = MaterialTheme.typography.bodySmall, color = PhosphorGreen)
+                                Text(bullet(it), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                            }
+                        }
                     }
                     Hairline(color = TerminalGrid.copy(alpha = 0.6f), modifier = Modifier.padding(top = 10.dp))
                 }
@@ -66,9 +72,8 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
     }
 }
 
-/** "• " plus the line, with **bold** runs shown bold and the markers removed. */
+/** The line with **bold** runs shown bold and the markers removed. */
 private fun bullet(text: String): AnnotatedString = buildAnnotatedString {
-    append("• ")
     text.replace("`", "").split("**").forEachIndexed { i, part ->
         if (i % 2 == 1) withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(part) } else append(part)
     }
