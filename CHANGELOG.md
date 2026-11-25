@@ -7,14 +7,17 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 ## [Unreleased]
 
 ### Added
+- **Weapons show the ammunition loaded in them.** Each gun on the Gear tab shows what is in its active clip and how many rounds (for example Loaded: APDS ×42), or Empty when it has none. The damage and AP shown already include that ammunition's bonus.
 - **Cyberware and bioware can be edited while you create a character.** Tap an item on the Ware tab to change its grade or rating without buying it again. The sheet shows the price and essence before and after, only the difference in nuyen is spent, and it refuses a change you cannot afford or that is over the availability limit.
 - **Cyberware and bioware can be upgraded in career mode.** The Ware tab shows an **Upgrade** button on each item that has a better grade, for example Standard to Alphaware. It charges only the difference in price (plug-ins fitted to the item are upgraded too), the essence you get back shows at once, and the button is dimmed when you cannot afford it. The log has an undo that puts the old grade and the nuyen back.
 
 ### Changed
 - **Long character names no longer get cut off in the title bar.** When the full title does not fit, it shortens to `> name` so the name shows in full.
+- **The Gear tab is easier to read.** Armor, weapons, vehicles and gear are now grouped under their own headings, each item is a card with its figures as tags (a vehicle's handling, speed and body, a weapon's mode, accuracy and recoil), and the buttons match the Ware tab. Gear cards are compact, so a long kit takes less scrolling.
 - **The Ware tab is easier to read.** Each item is now a card, with cyberware and bioware grouped under their own headings, grade and rating shown as tags, plug-ins listed inside the item they belong to, and the Upgrade, Plug-in, Sell and Remove buttons all the same size.
 
 ### Fixed
+- **Flechette weapons now use the right figures with flechette ammunition.** A weapon that already fires flechettes (a slivergun, for example) gets nothing extra from Flechette Rounds, and Stick-n-Shock Flechette Rounds lower its damage by 2 and its AP by 5, as Chummer does. Before, they were treated like ammunition for an ordinary gun.
 - **The character list now updates when you go back to it.** Finishing a character and starting career mode, or any change to a character, shows on its card straight away instead of after a manual refresh.
 - **Numbers and buttons no longer get cut off on smaller screens or with a larger font.** The nuyen box now always shows how much is left, bottom buttons such as New, Critter and Import shrink to fit instead of losing letters, panel titles no longer break apart, armor and gear names no longer run into their values, and the tab bar scrolls sideways when the tabs do not fit.
 - **Creating a new character works again.** In the 0.1.4 download, New character failed with "the new character skeleton is missing". The built-in template was left out of the app, so no new characters could be made.

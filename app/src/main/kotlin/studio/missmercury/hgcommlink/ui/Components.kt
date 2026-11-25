@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
@@ -189,6 +190,72 @@ fun CardAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier
     ) {
         Text(label.uppercase(), style = MaterialTheme.typography.labelMedium, color = accent, textAlign = TextAlign.Center)
     }
+}
+
+/** The heading over a group of list items: its name in the group's colour, how many there are, and a rule. */
+@Composable
+fun GroupHeader(title: String, count: Int, accent: Color) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("// ${title.uppercase()}", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = accent)
+            Text("$count ${if (count == 1) "item" else "items"}", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+        }
+        Hairline(Modifier.padding(top = 4.dp), color = accent.copy(alpha = 0.4f))
+    }
+}
+
+/**
+ * One list item as a card: a bar in the group's colour down the left edge, then whatever [content] holds (a [CardTitle], [CardTags], notes and
+ * [CardActions]). The bar is drawn behind the content, so the card is exactly as tall as what is in it, wrapped actions included.
+ * [compact] tightens the padding, for long lists of simple items.
+ */
+@Composable
+fun ItemCard(accent: Color, modifier: Modifier = Modifier, compact: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+    Box(
+        modifier.fillMaxWidth().background(MercurySlate).border(1.dp, TerminalGrid)
+            .drawBehind { drawRect(accent.copy(alpha = 0.85f), size = androidx.compose.ui.geometry.Size(4.dp.toPx(), size.height)) },
+    ) {
+        val v = if (compact) 8.dp else 12.dp
+        Column(Modifier.fillMaxWidth().padding(start = 16.dp, top = v, end = 12.dp, bottom = v), verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp), content = content)
+    }
+}
+
+/** An item's name, with a figure on the right (essence, damage, quantity) and, under it, a small hint such as "EDIT ›" when tapping the card does something. */
+@Composable
+fun CardTitle(name: String, modifier: Modifier = Modifier, trailing: String? = null, hint: String? = null, bold: Boolean = true) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+        Text(
+            name, Modifier.weight(1f), fontWeight = if (bold) androidx.compose.ui.text.font.FontWeight.Bold else null, color = Quicksilver,
+            style = if (bold) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium,
+        )
+        if (!trailing.isNullOrBlank() || hint != null) Column(horizontalAlignment = Alignment.End) {
+            if (!trailing.isNullOrBlank()) Text(trailing, style = MaterialTheme.typography.labelMedium, color = MutedSilver, textAlign = TextAlign.End)
+            if (hint != null) Text(hint, style = MaterialTheme.typography.labelSmall, color = PhosphorGreen.copy(alpha = 0.8f))
+        }
+    }
+}
+
+/** Small tags for an item's grade, rating, category and figures; they wrap. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun CardTags(tags: List<Pair<String, Color>>) {
+    if (tags.isEmpty()) return
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        tags.forEach { (text, accent) -> Tag(text, accent) }
+    }
+}
+
+/** A muted line of detail under an item's tags. */
+@Composable
+fun CardNote(text: String) {
+    if (text.isNotBlank()) Text(text, style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+}
+
+/** The row of [CardAction]s at the foot of a card; they wrap onto more lines when they do not fit. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun CardActions(content: @Composable androidx.compose.foundation.layout.FlowRowScope.() -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
 }
 
 /** A bracketed − / + control, [-] and [+]. */

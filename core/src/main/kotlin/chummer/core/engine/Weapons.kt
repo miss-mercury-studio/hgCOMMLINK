@@ -29,6 +29,9 @@ data class WeaponTotals(
     val removable: Boolean = false,
     /** Clips that hold rounds now (they can be unloaded). */
     val loadedClips: Int = 0,
+    /** The ammunition in the active clip, by its gear name ("Ammo: APDS"), and how many rounds are in it; empty when nothing is loaded. */
+    val loadedAmmo: String = "",
+    val loadedRounds: Int = 0,
 )
 
 /**
@@ -82,12 +85,29 @@ class WeaponEngine(
         return gearByGuid[clip.t("id")]
     }
 
+    /** The clip holding the rounds in the weapon's active slot. */
+    private fun activeClip(w: Element): Element? {
+        val slot = ammoSlots[w.t("guid")] ?: w.t("activeammoslot").toIntOrNull() ?: return null
+        return w.child("clips")?.children("clip")?.getOrNull(slot - 1)
+    }
+
+    /**
+     * The bonus the loaded ammunition gives this weapon, as Chummer picks it: a flechette weapon (its damage says `(f)`, and it is not a
+     * thrown or placed item, category Gear) uses the ammo's own flechette bonus when it has one; every other weapon uses its normal bonus.
+     * So Flechette Rounds add their damage and AP to a rifle, but give nothing more to a slivergun that already fires flechettes.
+     */
+    private fun ammoBonus(w: Element): Element? {
+        val gear = loadedAmmo(w) ?: return null
+        val flechetteWeapon = w.t("damage").contains("(f)") && w.t("ammocategory").ifEmpty { w.t("category") } != "Gear"
+        return (if (flechetteWeapon) gear.child("flechetteweaponbonus") else null) ?: gear.child("weaponbonus")
+    }
+
     private fun totals(w: Element): WeaponTotals {
         val name = w.t("name")
         val category = w.t("category")
         val rating = w.t("rating").toIntOrNull() ?: 0
         val accessories = w.child("accessories")?.children("accessory").orEmpty().filter { it.t("equipped").equals("True", true) }
-        val ammo = loadedAmmo(w)?.child("weaponbonus")
+        val ammo = ammoBonus(w)
 
         // ---- damage ----
         var damageText = ammo?.t("damagereplace")?.takeIf { it.isNotEmpty() } ?: w.t("damage")
@@ -114,6 +134,7 @@ class WeaponEngine(
             canLoad = w.t("requireammo").equals("True", true) && w.t("type").equals("Ranged", true) && w.t("weapontype") != "gear" && w.t("ammo").let { it.isNotEmpty() && it != "0" },
             removable = w.t("included") != "True" && w.t("weapontype") != "gear" && !category.equals("Unarmed", true) && !w.t("name").equals("Unarmed Attack", true),
             loadedClips = w.child("clips")?.children("clip").orEmpty().count { (it.t("count").toIntOrNull() ?: 0) > 0 },
+            loadedAmmo = loadedAmmo(w)?.t("name").orEmpty(), loadedRounds = activeClip(w)?.t("count")?.toIntOrNull() ?: 0,
         )
     }
 
@@ -173,7 +194,7 @@ class WeaponEngine(
     }
 
     private fun accuracy(stored: String, accessories: List<Element>, ammo: Element?, rating: Int): String {
-        val baseText = stored.trim()
+        val baseText = (ammo?.t("accuracyreplace")?.takeIf { it.isNotEmpty() } ?: stored).trim()
         val base = if (baseText.equals("Physical", true)) physicalLimit.toDouble() else baseText.toDoubleOrNull() ?: return stored
         var bonus = 0.0
         // Smartgun and sight accessories do not stack with each other: only the best counts.

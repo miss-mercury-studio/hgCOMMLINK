@@ -660,60 +660,91 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     var selling by remember { mutableStateOf<Pair<String, String>?>(null) }
     val career = s.career != null
     selling?.let { (guid, name) -> SellSheet(name, { pct -> vm.sellPurchase(guid, pct) }, { vm.discardPurchase(guid) }) { selling = null } }
+    // What a card offers for taking an item away: creation takes it back for free, career sells it.
+    fun remove(guid: String): (() -> Unit)? = if (creating && guid.isNotEmpty()) ({ vm.removePurchase(guid) }) else null
+    fun sell(guid: String, name: String): (() -> Unit)? = if (career && guid.isNotEmpty()) ({ selling = guid to name }) else null
+    val armorCount = g.armorSets.sumOf { it.items.size }
     Column(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (g.armorSets.isNotEmpty()) item { SubHeader("Armor") }
-        items(g.armorSets) { set ->
-            TerminalCard(set.name.ifBlank { "Not in a set" }) {
-                Column(Modifier.fillMaxWidth()) {
-                    set.items.forEach { a ->
-                        Row2(a.name, a.value.let { v -> if (a.equipped) v else "$v (off)" })
-                        Small(a.mods.joinToString(", "))
-                        if (a.gear.isNotEmpty()) Small("Gear: " + a.gear.joinToString(", "))
-                        a.capacityLeft?.let { Small("Capacity left %.0f".format(it)) }
-                        if (creating && a.guid.isNotEmpty()) RemoveLink { vm.removePurchase(a.guid) }
-                        if (career && a.guid.isNotEmpty()) SellLink { selling = a.guid to a.name }
-                        if (canBuy && a.guid.isNotEmpty()) Text("+ mod", Modifier.clickable { attaching = "mod" to a.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
-                        if (canBuy && a.guid.isNotEmpty() && (a.capacityLeft ?: 0.0) > 0.0) Text("+ gear", Modifier.clickable { installing = a.guid to a.capacityLeft }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
-                    }
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item { TelemetryStrip(listOf("ARMOR" to armorCount.toString(), "WEAPONS" to g.weapons.size.toString(), "VEHICLES" to g.vehicles.size.toString(), "GEAR" to g.gear.size.toString())) }
+        if (armorCount > 0) item { GroupHeader("Armor", armorCount, PhosphorGreen) }
+        for (set in g.armorSets) items(set.items) { a ->
+            ItemCard(PhosphorGreen) {
+                CardTitle(a.name, trailing = "ARMOR ${a.value}")
+                CardTags(buildList {
+                    set.name.takeIf { it.isNotBlank() }?.let { add(it to Quicksilver) }
+                    if (!a.equipped) add("Off" to DrainAmber)
+                })
+                CardNote(a.mods.joinToString(", ").let { if (it.isBlank()) "" else "Mods: $it" })
+                if (a.gear.isNotEmpty()) CardNote("Gear: " + a.gear.joinToString(", "))
+                a.capacityLeft?.let { CardNote("Capacity left %.0f".format(java.util.Locale.ROOT, it)) }
+                val sellOrRemove = remove(a.guid) != null || sell(a.guid, a.name) != null
+                if (sellOrRemove || (canBuy && a.guid.isNotEmpty())) CardActions {
+                    if (canBuy && a.guid.isNotEmpty()) CardAction("+ Mod", { attaching = "mod" to a.guid }, accent = PhosphorGreen)
+                    if (canBuy && a.guid.isNotEmpty() && (a.capacityLeft ?: 0.0) > 0.0) CardAction("+ Gear", { installing = a.guid to a.capacityLeft }, accent = PhosphorGreen)
+                    sell(a.guid, a.name)?.let { CardAction("Sell", it, accent = DrainAmber) }
+                    remove(a.guid)?.let { CardAction("Remove", it, accent = CriticalRed) }
                 }
             }
         }
-        if (g.weapons.isNotEmpty()) {
-            item { SubHeader("Weapons") }
-        }
+        if (g.weapons.isNotEmpty()) item { GroupHeader("Weapons", g.weapons.size, CriticalRed) }
         items(g.weapons) { w ->
-            Column {
-                Row2(w.name, w.damage + if (w.ap.isNotBlank() && w.ap != "-") "  AP ${w.ap}" else "", bold = true)
-                Small(listOf(w.category, w.mode.takeIf { it.isNotBlank() && it != "0" }, w.ammo.takeIf { it.isNotBlank() && it != "0" }?.let { "ammo $it" },
-                    w.reach.takeIf { w.type.equals("Melee", true) && it.isNotBlank() }?.let { "reach $it" }, w.accuracy.takeIf { it.isNotBlank() }?.let { "acc $it" },
-                    "RC ${w.rc}", w.conceal.takeIf { it != "0" }?.let { "conceal $it" }).filterNotNull().filter { it.isNotBlank() }.joinToString("  ·  "))
-                Small(w.accessories.groupingBy { it }.eachCount().entries.joinToString(", ") { (n, c) -> if (c > 1) "$n x$c" else n })
-                if (creating && w.guid.isNotEmpty() && w.removable) RemoveLink { vm.removePurchase(w.guid) }
-                if (career && w.guid.isNotEmpty() && w.removable) SellLink { selling = w.guid to w.name }
-                if (canBuy && w.guid.isNotEmpty() && w.canLoad) Text("load ammo", Modifier.clickable { loading = w.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
-                if (canBuy && w.guid.isNotEmpty() && w.loadedClips > 0) Text("unload ammo", Modifier.clickable { vm.unloadAmmo(w.guid) }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
-                if (canBuy && w.guid.isNotEmpty() && w.allowAccessory) Text("+ accessory", Modifier.clickable { attaching = "accessory" to w.guid }.padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
+            ItemCard(CriticalRed) {
+                CardTitle(w.name, trailing = w.damage + if (w.ap.isNotBlank() && w.ap != "-") "  AP ${w.ap}" else "")
+                CardTags(buildList {
+                    // What is in the gun comes first, since it decides the damage and AP shown: "Loaded: APDS x31".
+                    if (w.loadedAmmo.isNotBlank()) add("Loaded: ${w.loadedAmmo.removePrefix("Ammo: ")}${if (w.loadedRounds > 0) " ×${w.loadedRounds}" else ""}" to PhosphorGreen)
+                    else if (w.canLoad) add("Empty" to DrainAmber)
+                    listOfNotNull(
+                        w.category.takeIf { it.isNotBlank() }, w.mode.takeIf { it.isNotBlank() && it != "0" }, w.ammo.takeIf { it.isNotBlank() && it != "0" }?.let { "ammo $it" },
+                        w.reach.takeIf { w.type.equals("Melee", true) && it.isNotBlank() }?.let { "reach $it" }, w.accuracy.takeIf { it.isNotBlank() }?.let { "acc $it" },
+                        "RC ${w.rc}", w.conceal.takeIf { it != "0" }?.let { "conceal $it" },
+                    ).filter { it.isNotBlank() }.forEach { add(it to MutedSilver) }
+                })
+                w.accessories.groupingBy { it }.eachCount().entries.joinToString(", ") { (n, c) -> if (c > 1) "$n x$c" else n }.let { if (it.isNotBlank()) CardNote("Accessories: $it") }
+                val acts = canBuy && w.guid.isNotEmpty() && (w.canLoad || w.loadedClips > 0 || w.allowAccessory)
+                val away = w.removable && (remove(w.guid) != null || sell(w.guid, w.name) != null)
+                if (acts || away) CardActions {
+                    if (acts && w.canLoad) CardAction("Load ammo", { loading = w.guid }, accent = PhosphorGreen)
+                    if (acts && w.loadedClips > 0) CardAction("Unload ammo", { vm.unloadAmmo(w.guid) }, accent = PhosphorGreen)
+                    if (acts && w.allowAccessory) CardAction("+ Accessory", { attaching = "accessory" to w.guid }, accent = PhosphorGreen)
+                    if (w.removable) sell(w.guid, w.name)?.let { CardAction("Sell", it, accent = DrainAmber) }
+                    if (w.removable) remove(w.guid)?.let { CardAction("Remove", it, accent = CriticalRed) }
+                }
             }
         }
-        if (g.vehicles.isNotEmpty()) item { SubHeader("Vehicles") }
+        if (g.vehicles.isNotEmpty()) item { GroupHeader("Vehicles", g.vehicles.size, DrainAmber) }
         items(g.vehicles) { v ->
-            Column {
-                Row2(v.name, v.category, bold = true); Small(v.stats)
-                Small(v.mods.joinToString(", "))
-                if (creating && v.guid.isNotEmpty()) RemoveLink { vm.removePurchase(v.guid) }
-                if (career && v.guid.isNotEmpty()) SellLink { selling = v.guid to v.name }
+            ItemCard(DrainAmber) {
+                CardTitle(v.name, trailing = v.category)
+                // The figures are one line of "Handling 4  Speed 5 ..."; each becomes its own tag so they wrap cleanly.
+                CardTags(v.stats.split("  ").map { it.trim() }.filter { it.isNotEmpty() }.map { it to MutedSilver })
+                if (v.mods.isNotEmpty()) CardNote("Mods: " + v.mods.joinToString(", "))
+                if (remove(v.guid) != null || sell(v.guid, v.name) != null) CardActions {
+                    sell(v.guid, v.name)?.let { CardAction("Sell", it, accent = DrainAmber) }
+                    remove(v.guid)?.let { CardAction("Remove", it, accent = CriticalRed) }
+                }
             }
         }
-        if (g.gear.isNotEmpty()) item { SubHeader("Gear") }
+        if (g.gear.isNotEmpty()) item { GroupHeader("Gear", g.gear.size, Quicksilver) }
         items(g.gear) { it ->
-            Column {
-                Row2(it.name + if (it.rating > 0) " (rating ${it.rating})" else "", if (it.quantity != "1") "x${it.quantity}" else "")
-                Small(listOf(it.category, it.children.joinToString(", ")).filter { x -> x.isNotBlank() }.joinToString("  ·  "))
-                if (creating && it.guid.isNotEmpty()) RemoveLink { vm.removePurchase(it.guid) }
-                if (career && it.guid.isNotEmpty()) SellLink { selling = it.guid to it.name }
+            // Gear comes in dozens, so its cards are compact: the tags and the one action (sell in career, remove in creation) share a line.
+            ItemCard(Quicksilver, compact = true) {
+                CardTitle(it.name, trailing = if (it.quantity != "1") "x${it.quantity}" else null)
+                val tags = buildList {
+                    it.category.takeIf { c -> c.isNotBlank() }?.let { c -> add(c to MutedSilver) }
+                    if (it.rating > 0) add("Rating ${it.rating}" to MutedSilver)
+                    if (it.loaded) add("Loaded" to PhosphorGreen)
+                }
+                val gone: Pair<String, () -> Unit>? = sell(it.guid, it.name)?.let { x -> "Sell" to x } ?: remove(it.guid)?.let { x -> "Remove" to x }
+                if (tags.isNotEmpty() || gone != null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { CardTags(tags) }
+                    if (gone != null) CardAction(gone.first, gone.second, accent = if (gone.first == "Sell") DrainAmber else CriticalRed)
+                }
+                if (it.children.isNotEmpty()) CardNote("Includes: " + it.children.joinToString(", "))
             }
         }
+        if (armorCount + g.weapons.size + g.vehicles.size + g.gear.size == 0) item { Text("Nothing carried.", color = MutedSilver) }
     }
     if (canBuy) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TerminalButton("Gear", { buying = "gear" }, Modifier.weight(1f))
@@ -769,7 +800,7 @@ private fun Ware(g: chummer.core.engine.SheetSections, essence: Double, s: Sheet
         item { TelemetryStrip(listOf("ESSENCE" to formatEssence(essence), "CYBERWARE" to cyber.size.toString(), "BIOWARE" to bio.size.toString())) }
         for ((title, list, accent) in listOf(Triple("Cyberware", cyber, PhosphorGreen), Triple("Bioware", bio, AstralMagenta))) {
             if (list.isEmpty()) continue
-            item { WareGroupHeader(title, list.size, accent) }
+            item { GroupHeader(title, list.size, accent) }
             items(list, key = { it.guid.ifEmpty { it.name } }) { w ->
                 WareCard(
                     w, accent, pluginRoom?.get(w.guid), upgrades[w.guid], edits,
@@ -791,93 +822,52 @@ private fun Ware(g: chummer.core.engine.SheetSections, essence: Double, s: Sheet
     plugging?.let { w -> BuyWareDialog(w.isBioware, vm, s.nuyen, essence, parent = w) { plugging = null } }
 }
 
-/** The heading over a group of items: its name in the group's colour, the count, and a rule. */
-@Composable
-private fun WareGroupHeader(title: String, count: Int, accent: Color) {
-    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("// ${title.uppercase()}", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = accent)
-            Text("$count ${if (count == 1) "item" else "items"}", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
-        }
-        Hairline(Modifier.padding(top = 4.dp), color = accent.copy(alpha = 0.4f))
-    }
-}
-
 /**
- * One installed item as a card: a bar in the group's colour down the left edge, the name and essence, tags for its grade and rating, the
- * plug-ins inside it, and a row of actions. In creation the card is tappable (when it can be edited) and says so.
+ * One installed ware item as a card. In creation the card is tappable (when it can be edited) and says so; plug-ins sit inside it behind a rule.
  */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun WareCard(
     w: chummer.core.engine.SheetSections.WareLine, accent: Color, capacityLeft: Double?, upgrade: chummer.core.engine.WareUpgrade?,
     edits: Map<String, chummer.core.engine.WareEditInfo>, onEdit: (String) -> Unit, onUpgrade: () -> Unit, onRemove: (() -> Unit)?, onSell: (() -> Unit)?, onPlug: () -> Unit,
 ) {
     val editable = w.guid.isNotEmpty() && w.guid in edits
-    // The coloured bar down the left edge is drawn behind the content, so the card is as tall as what is in it (wrapped action chips included).
-    Box(Modifier.fillMaxWidth().background(MercurySlate).border(1.dp, TerminalGrid).drawBehind { drawRect(accent.copy(alpha = 0.85f), size = androidx.compose.ui.geometry.Size(4.dp.toPx(), size.height)) }) {
-        Column(Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(
-                Modifier.fillMaxWidth().then(if (editable) Modifier.clickable { onEdit(w.guid) } else Modifier),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                WareTitle(w, bold = true, editable = editable)
-                WareTags(w)
-            }
-            if (w.children.isNotEmpty()) {
-                // Plug-ins sit inside the card behind a rule, so it is clear what belongs to what.
-                Box(Modifier.fillMaxWidth().padding(start = 4.dp).drawBehind { drawRect(accent.copy(alpha = 0.35f), size = androidx.compose.ui.geometry.Size(1.dp.toPx(), size.height)) }) {
-                    Column(Modifier.fillMaxWidth().padding(start = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        w.children.forEach { c ->
-                            val childEditable = c.guid.isNotEmpty() && c.guid in edits
-                            Column(Modifier.fillMaxWidth().then(if (childEditable) Modifier.clickable { onEdit(c.guid) } else Modifier)) {
-                                WareTitle(c, bold = false, editable = childEditable)
-                                WareTags(c)
-                            }
+    ItemCard(accent) {
+        Column(Modifier.fillMaxWidth().then(if (editable) Modifier.clickable { onEdit(w.guid) } else Modifier), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            CardTitle(w.name, trailing = wareEssence(w), hint = if (editable) "EDIT ›" else null)
+            CardTags(wareTags(w))
+        }
+        if (w.children.isNotEmpty()) {
+            // Plug-ins sit inside the card behind a rule, so it is clear what belongs to what.
+            Box(Modifier.fillMaxWidth().padding(start = 4.dp).drawBehind { drawRect(accent.copy(alpha = 0.35f), size = androidx.compose.ui.geometry.Size(1.dp.toPx(), size.height)) }) {
+                Column(Modifier.fillMaxWidth().padding(start = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    w.children.forEach { c ->
+                        val childEditable = c.guid.isNotEmpty() && c.guid in edits
+                        Column(Modifier.fillMaxWidth().then(if (childEditable) Modifier.clickable { onEdit(c.guid) } else Modifier)) {
+                            CardTitle(c.name, trailing = wareEssence(c), hint = if (childEditable) "EDIT ›" else null, bold = false)
+                            CardTags(wareTags(c))
                         }
                     }
                 }
             }
-            if (upgrade != null || onRemove != null || onSell != null || capacityLeft != null) FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // Career: one grade up for the difference in price. Dimmed and inert when the character cannot pay it.
-                if (upgrade != null) CardAction("Upgrade to ${upgrade.to}  ¥${formatNuyen(upgrade.cost)}", onUpgrade, accent = PhosphorGreen, enabled = upgrade.affordable)
-                if (capacityLeft != null) CardAction(
-                    if (capacityLeft > 0) "+ Plug-in  (${"%.0f".format(java.util.Locale.ROOT, capacityLeft)} left)" else "Plug-ins full", onPlug, accent = Quicksilver, enabled = capacityLeft > 0,
-                )
-                if (onSell != null) CardAction("Sell", onSell, accent = DrainAmber)
-                if (onRemove != null) CardAction("Remove", onRemove, accent = CriticalRed)
-            }
+        }
+        if (upgrade != null || onRemove != null || onSell != null || capacityLeft != null) CardActions {
+            // Career: one grade up for the difference in price. Dimmed and inert when the character cannot pay it.
+            if (upgrade != null) CardAction("Upgrade to ${upgrade.to}  ¥${formatNuyen(upgrade.cost)}", onUpgrade, accent = PhosphorGreen, enabled = upgrade.affordable)
+            if (capacityLeft != null) CardAction(
+                if (capacityLeft > 0) "+ Plug-in  (${"%.0f".format(java.util.Locale.ROOT, capacityLeft)} left)" else "Plug-ins full", onPlug, accent = Quicksilver, enabled = capacityLeft > 0,
+            )
+            if (onSell != null) CardAction("Sell", onSell, accent = DrainAmber)
+            if (onRemove != null) CardAction("Remove", onRemove, accent = CriticalRed)
         }
     }
 }
 
-/** An item's name and, on the right, its essence; the "edit" hint when tapping it opens the editor. */
-@Composable
-private fun WareTitle(w: chummer.core.engine.SheetSections.WareLine, bold: Boolean, editable: Boolean) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        Text(
-            w.name, Modifier.weight(1f), fontWeight = if (bold) FontWeight.Bold else null, color = Quicksilver,
-            style = if (bold) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium,
-        )
-        Column(horizontalAlignment = Alignment.End) {
-            if (w.essence != 0.0) Text("${formatEssence(w.essence)} ESS", style = MaterialTheme.typography.labelMedium, color = MutedSilver)
-            if (editable) Text("EDIT ›", style = MaterialTheme.typography.labelSmall, color = PhosphorGreen.copy(alpha = 0.8f))
-        }
-    }
-}
+private fun wareEssence(w: chummer.core.engine.SheetSections.WareLine) = if (w.essence != 0.0) "${formatEssence(w.essence)} ESS" else null
 
-/** The grade (when it is not Standard) and rating of an item as small tags. */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable
-private fun WareTags(w: chummer.core.engine.SheetSections.WareLine) {
-    val grade = w.grade.takeIf { it.isNotBlank() && !it.equals("Standard", true) }
-    if (grade == null && w.rating <= 0) return
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (grade != null) Tag(grade, DrainAmber)
-        if (w.rating > 0) Tag("Rating ${w.rating}", MutedSilver)
-    }
+/** The grade (when it is not Standard) and rating of an item as tags. */
+private fun wareTags(w: chummer.core.engine.SheetSections.WareLine): List<Pair<String, Color>> = buildList {
+    w.grade.takeIf { it.isNotBlank() && !it.equals("Standard", true) }?.let { add(it to DrainAmber) }
+    if (w.rating > 0) add("Rating ${w.rating}" to MutedSilver)
 }
 
 /**
