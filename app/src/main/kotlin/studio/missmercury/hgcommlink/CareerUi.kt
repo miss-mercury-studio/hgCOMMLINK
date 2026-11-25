@@ -192,7 +192,7 @@ internal fun formatNuyen(v: Double) = if (v == Math.rint(v)) "%,d".format(v.toLo
 /** Pick a weapon accessory ([kind] "accessory", for the weapon with [parentGuid]) or an armor mod ("mod"), choose mount and rating, and pay. */
 @Composable
 fun AttachPartDialog(kind: String, parentGuid: String, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
-    val options = remember(kind) { if (kind == "accessory") vm.accessoryOptions() else vm.armorModOptions() }
+    val options = remember(kind) { if (kind == "accessory") vm.accessoryOptions(parentGuid) else vm.armorModOptions() }
     val items = remember(kind) {
         options.map { o ->
             PickItem(

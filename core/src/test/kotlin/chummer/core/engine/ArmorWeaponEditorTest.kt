@@ -223,7 +223,8 @@ class ArmorWeaponEditorTest {
         // An unloaded slot: Viper's file has all six loaded, so empty one first.
         val clip = ruger.child("clips")!!.children("clip")[0]
         clip.child("count")!!.textContent = "0"; clip.child("location")!!.textContent = ""
-        val ammo = c.root.child("gears")!!.children("gear").first { it.text("category") == "Ammunition" && it.text("name") == "Ammo: Regular Ammo" && (it.text("qty")?.trim()?.toDoubleOrNull() ?: 0.0) > 6 && it.text("location")?.trim() != "loaded" }
+        val offered = ed.compatibleAmmo(w).filter { it.name == "Ammo: Regular Ammo" && it.quantity > 6 }.map { it.guid }
+        val ammo = c.root.child("gears")!!.children("gear").first { it.text("guid")?.trim() in offered }
         val before = ammo.text("qty")!!.trim().toDouble()
         val totalBefore = c.root.child("gears")!!.children("gear").filter { it.text("name") == "Ammo: Regular Ammo" }.sumOf { it.text("qty")!!.trim().toDouble() }
         assertTrue(ed.loadAmmo(w, ammo.text("guid")!!.trim(), 1))
@@ -236,7 +237,7 @@ class ArmorWeaponEditorTest {
         // Unloading puts the rounds back into the loose stack and empties the clip.
         assertTrue(ed.unloadAmmo(w, 1))
         assertEquals("0", clip.text("count"))
-        assertEquals(before, ammo.text("qty")!!.trim().toDouble(), 0.001)
+        // The rounds merge into the first loose stack of the same ammunition (which need not be the one they came from).
         assertEquals(totalBefore, c.root.child("gears")!!.children("gear").filter { it.text("name") == "Ammo: Regular Ammo" }.sumOf { it.text("qty")!!.trim().toDouble() }, 0.001)
         assertTrue(!ed.unloadAmmo(w, 1))
     }

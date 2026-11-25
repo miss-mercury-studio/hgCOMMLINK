@@ -127,7 +127,7 @@ private fun SellLink(onClick: () -> Unit) {
 
 /** The share of an item's price to take when selling it. */
 @Composable
-private fun SellSheet(name: String, onSell: (Int) -> Unit, onRemove: () -> Unit, onDismiss: () -> Unit) {
+internal fun SellSheet(name: String, onSell: (Int) -> Unit, onRemove: () -> Unit, onDismiss: () -> Unit) {
     TerminalSheet("Sell $name", onDismiss) { close ->
         Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Take a share of what it is worth, with whatever is fitted to it, or remove it for nothing (free or included items). Neither can be undone from the log.", style = MaterialTheme.typography.bodySmall, color = MutedSilver)
@@ -655,14 +655,23 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     val creating = s.creationBuy != null
     var buying by remember { mutableStateOf<String?>(null) }
     var attaching by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var loading by remember { mutableStateOf<String?>(null) }
     var installing by remember { mutableStateOf<Pair<String, Double?>?>(null) }
     var selling by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var managing by remember { mutableStateOf<String?>(null) }
     val career = s.career != null
     selling?.let { (guid, name) -> SellSheet(name, { pct -> vm.sellPurchase(guid, pct) }, { vm.discardPurchase(guid) }) { selling = null } }
     // What a card offers for taking an item away: creation takes it back for free, career sells it.
     fun remove(guid: String): (() -> Unit)? = if (creating && guid.isNotEmpty()) ({ vm.removePurchase(guid) }) else null
     fun sell(guid: String, name: String): (() -> Unit)? = if (career && guid.isNotEmpty()) ({ selling = guid to name }) else null
+    // A weapon's own sheet: clips, ammunition, accessories, selling. It follows the weapon as it changes.
+    managing?.let { guid ->
+        val w = g.weapons.firstOrNull { it.guid == guid }
+        if (w == null) managing = null
+        else WeaponSheet(
+            w, vm, s.nuyen, career = career, creating = creating, onAccessory = { attaching = "accessory" to guid },
+            onSell = if (w.removable) sell(guid, w.name) else null, onRemove = if (w.removable) remove(guid) else null, onDismiss = { managing = null },
+        )
+    }
     val armorCount = g.armorSets.sumOf { it.items.size }
     Column(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -689,27 +698,25 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         }
         if (g.weapons.isNotEmpty()) item { GroupHeader("Weapons", g.weapons.size, CriticalRed) }
         items(g.weapons) { w ->
+            // The card says what the weapon is and what is in it; tapping it (when you can change things) opens its sheet with the clip, ammunition and accessory controls.
+            val manage = canBuy && w.guid.isNotEmpty() && (w.clips.isNotEmpty() || w.allowAccessory || w.removable)
             ItemCard(CriticalRed) {
-                CardTitle(w.name, trailing = w.damage + if (w.ap.isNotBlank() && w.ap != "-") "  AP ${w.ap}" else "")
-                CardTags(buildList {
-                    // What is in the gun comes first, since it decides the damage and AP shown: "Loaded: APDS x31".
-                    if (w.loadedAmmo.isNotBlank()) add("Loaded: ${w.loadedAmmo.removePrefix("Ammo: ")}${if (w.loadedRounds > 0) " ×${w.loadedRounds}" else ""}" to PhosphorGreen)
-                    else if (w.canLoad) add("Empty" to DrainAmber)
-                    listOfNotNull(
-                        w.category.takeIf { it.isNotBlank() }, w.mode.takeIf { it.isNotBlank() && it != "0" }, w.ammo.takeIf { it.isNotBlank() && it != "0" }?.let { "ammo $it" },
-                        w.reach.takeIf { w.type.equals("Melee", true) && it.isNotBlank() }?.let { "reach $it" }, w.accuracy.takeIf { it.isNotBlank() }?.let { "acc $it" },
-                        "RC ${w.rc}", w.conceal.takeIf { it != "0" }?.let { "conceal $it" },
-                    ).filter { it.isNotBlank() }.forEach { add(it to MutedSilver) }
-                })
-                w.accessories.groupingBy { it }.eachCount().entries.joinToString(", ") { (n, c) -> if (c > 1) "$n x$c" else n }.let { if (it.isNotBlank()) CardNote("Accessories: $it") }
-                val acts = canBuy && w.guid.isNotEmpty() && (w.canLoad || w.loadedClips > 0 || w.allowAccessory)
-                val away = w.removable && (remove(w.guid) != null || sell(w.guid, w.name) != null)
-                if (acts || away) CardActions {
-                    if (acts && w.canLoad) CardAction("Load ammo", { loading = w.guid }, accent = PhosphorGreen)
-                    if (acts && w.loadedClips > 0) CardAction("Unload ammo", { vm.unloadAmmo(w.guid) }, accent = PhosphorGreen)
-                    if (acts && w.allowAccessory) CardAction("+ Accessory", { attaching = "accessory" to w.guid }, accent = PhosphorGreen)
-                    if (w.removable) sell(w.guid, w.name)?.let { CardAction("Sell", it, accent = DrainAmber) }
-                    if (w.removable) remove(w.guid)?.let { CardAction("Remove", it, accent = CriticalRed) }
+                Column(Modifier.fillMaxWidth().then(if (manage) Modifier.clickable { managing = w.guid } else Modifier), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CardTitle(w.name, trailing = w.damage + if (w.ap.isNotBlank() && w.ap != "-") "  AP ${w.ap}" else "", hint = if (manage) "MANAGE ›" else null)
+                    CardTags(buildList {
+                        // What is in the gun comes first, since it decides the damage and AP shown: "Loaded: APDS ×42".
+                        if (w.loadedAmmo.isNotBlank()) add("Loaded: ${ammoLabel(w.loadedAmmo)}${if (w.loadedRounds > 0) " ×${w.loadedRounds}" else ""}" to PhosphorGreen)
+                        else if (w.canLoad) add("Empty" to DrainAmber)
+                        if (w.clips.size > 1) add("Clip ${w.clips.indexOfFirst { it.active } + 1} of ${w.clips.size}" to MutedSilver)
+                        listOfNotNull(
+                            w.category.takeIf { it.isNotBlank() }, w.mode.takeIf { it.isNotBlank() && it != "0" }, w.ammo.takeIf { it.isNotBlank() && it != "0" }?.let { "ammo $it" },
+                            w.reach.takeIf { w.type.equals("Melee", true) && it.isNotBlank() }?.let { "reach $it" }, w.accuracy.takeIf { it.isNotBlank() }?.let { "acc $it" },
+                            "RC ${w.rc}", w.conceal.takeIf { it != "0" }?.let { "conceal $it" },
+                        ).filter { it.isNotBlank() }.forEach { add(it to MutedSilver) }
+                    })
+                    // The spares: how many clips are loaded and how many rounds that is, without opening the sheet.
+                    if (w.clips.size > 1) CardNote("${w.clips.count { it.rounds > 0 }} of ${w.clips.size} clips loaded  ·  ${w.clips.sumOf { it.rounds }} rounds")
+                    w.accessories.groupingBy { it }.eachCount().entries.joinToString(", ") { (n, c) -> if (c > 1) "$n x$c" else n }.let { if (it.isNotBlank()) CardNote("Accessories: $it") }
                 }
             }
         }
@@ -758,10 +765,6 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     buying?.let { BuyGearDialog(it, vm, s.nuyen) { buying = null } }
     attaching?.let { (kind, guid) -> AttachPartDialog(kind, guid, vm, s.nuyen) { attaching = null } }
     installing?.let { (armor, room) -> ArmorGearDialog(armor, room ?: 0.0, vm, s.nuyen) { installing = null } }
-    loading?.let { weapon ->
-        val ammo = g.gear.filter { it.category == "Ammunition" && !it.loaded && it.guid.isNotEmpty() }
-        PickerSheet("Load ammo", ammo.map { PickItem(it.guid, it.name, "x${it.quantity}") }, onPick = { vm.loadAmmo(weapon, it) }, note = if (ammo.isEmpty()) "No loose ammunition." else "Fills the first empty clip.", onDismiss = { loading = null })
-    }
 }
 
 @Composable

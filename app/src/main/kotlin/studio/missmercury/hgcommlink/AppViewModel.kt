@@ -243,6 +243,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun buyWeapon(id: String) = editCareer("Weapon bought", "Cannot buy that weapon (nuyen, or it comes with accessories that are not supported yet)") { adv, _ -> adv.buyWeapon(id) != null }
 
     fun accessoryOptions() = gameData.accessoryOptions()
+    fun setAccessoryEquipped(accessoryGuid: String, equipped: Boolean) = editCareer(null, "Cannot change that accessory") { adv, _ -> adv.setAccessoryEquipped(accessoryGuid, equipped) }
+    /** The accessories that fit this weapon. */
+    fun accessoryOptions(weaponGuid: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).accessoryOptions(weaponGuid) } ?: gameData.accessoryOptions()
     fun armorModOptions() = gameData.armorModOptions()
     fun accessoryCost(weaponGuid: String, id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).accessoryCost(weaponGuid, id, rating) }
     fun armorModCost(id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).armorModCost(id, rating) }
@@ -264,9 +267,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun upgradeWare(guid: String) = editCareer("Upgraded", "Cannot upgrade that (nuyen or grade)") { adv, _ -> adv.upgradeWare(guid) != null }
     fun buyWare(id: String, grade: String, rating: Int?, parentGuid: String? = null) = editCareer("Installed", "Cannot install that (nuyen, essence or capacity)") { adv, _ -> adv.buyWare(id, grade, rating, parentGuid) != null }
     fun pluginOptions(parentGuid: String) = open?.let { gameData.career(it.character).pluginOptions(parentGuid) }.orEmpty()
-    fun loadAmmo(weaponGuid: String, ammoGuid: String) = editCareer("Ammo loaded", "Cannot load that (no empty clip, or wrong ammunition)") { adv, _ -> adv.loadAmmo(weaponGuid, ammoGuid) }
-
-    fun unloadAmmo(weaponGuid: String) = editCareer("Ammo unloaded", "Nothing to unload") { adv, _ -> adv.unloadAmmo(weaponGuid) }
+    /** The loose ammunition a weapon can be loaded from. */
+    fun compatibleAmmo(weaponGuid: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).compatibleAmmo(weaponGuid) }.orEmpty()
+    fun loadAmmo(weaponGuid: String, ammoGuid: String, slot: Int = 0, rounds: Int? = null) =
+        editCareer("Ammo loaded", "Cannot load that (the clip is full or holds other ammunition, or the ammunition does not fit)") { adv, _ -> adv.loadAmmo(weaponGuid, ammoGuid, slot, rounds) }
+    fun unloadAmmo(weaponGuid: String, slot: Int = 0) = editCareer("Ammo unloaded", "Nothing to unload") { adv, _ -> adv.unloadAmmo(weaponGuid, slot) }
+    fun setActiveClip(weaponGuid: String, slot: Int) = editCareer(null, "That clip is not available") { adv, _ -> adv.setActiveClip(weaponGuid, slot) }
+    fun fireRounds(weaponGuid: String, rounds: Int, slot: Int = 0) = editCareer(null, "Not enough rounds in that clip") { adv, _ -> adv.fireRounds(weaponGuid, rounds, slot) }
 
     /** The newest log entry that can be undone, for the menu shortcut. */
     fun lastUndoable(): chummer.core.engine.ExpenseEntry? =

@@ -156,37 +156,124 @@ class ArmorWeaponEditor(private val file: CharacterFile, private val data: GameD
     private fun allWeapons(list: Element? = root.child("weapons")): List<Element> =
         list?.children("weapon").orEmpty().flatMap { listOf(it) + allWeapons(it.child("underbarrel")) }
 
+    // ---- ammunition and clips
+
+    /** A stack of loose ammunition a weapon can be loaded from. */
+    data class AmmoStack(val guid: String, val name: String, val quantity: Int)
+
+    private val emptyGuid = "00000000-0000-0000-0000-000000000000"
+
+    private fun count(e: Element, tag: String = "count") = e.text(tag)?.trim()?.toIntOrNull() ?: 0
+
+    /** The gear items now sitting in a clip of some weapon (Chummer keeps them in the gear list, tied to the clip by its id). */
+    private fun loadedGuids(): Set<String> = allWeapons().flatMap { it.child("clips")?.children("clip").orEmpty() }
+        .mapNotNull { c -> c.text("id")?.trim()?.lowercase()?.takeIf { it.isNotEmpty() && it != emptyGuid } }.toSet()
+
     /**
-     * Load ammunition into a weapon's clip [slot] (1-based) from an ammunition gear item of the right kind. Takes up to the
-     * weapon's capacity out of the stack; a partly used stack is split, and the loaded rounds become their own gear item in
-     * the "loaded" place. Returns false when the slot or ammunition does not fit.
+     * The owner of each clip slot of a weapon, in Chummer's order: the weapon's own slots first (owner ""), then the slots each Spare Clip style
+     * accessory adds (owner = the accessory's GUID). A weapon file lists only the clips that hold something, so slots past the list are empty.
      */
-    fun loadAmmo(weaponGuid: String, ammoGearGuid: String, slot: Int = 0): Boolean {
-        val weapon = findWeapon(weaponGuid) ?: return false
-        val gears = root.child("gears") ?: return false
-        val ammo = gears.children("gear").firstOrNull { it.text("guid")?.trim().equals(ammoGearGuid, true) } ?: return false
-        if (ammo.text("category")?.trim() != "Ammunition" && ammo.text("category")?.trim() != "Ammo") return false
-        val capacity = Regex("^([0-9]+)").find(weapon.text("ammo")?.trim().orEmpty())?.groupValues?.get(1)?.toIntOrNull() ?: return false
-        val slots = weapon.text("ammoslots")?.trim()?.toIntOrNull() ?: 1
-        var slot = slot
-        val accSlots = (weapon.child("accessories")?.children("accessory").orEmpty()).sumOf { it.text("ammoslots")?.trim()?.toIntOrNull() ?: 0 }
-        val total = maxOf(slots + accSlots, 1)
-        if (slot == 0) {
-            // The first empty clip.
-            val existing = weapon.child("clips")?.children("clip")
-            slot = if (existing == null) 1 else existing.indexOfFirst { (it.text("count")?.trim()?.toIntOrNull() ?: 0) == 0 }.let { if (it < 0) return false else it + 1 }
+    private fun slotOwners(weapon: Element): List<String> {
+        val out = ArrayList<String>()
+        repeat(maxOf(weapon.text("ammoslots")?.trim()?.toIntOrNull() ?: 1, 1)) { out += "" }
+        for (a in weapon.child("accessories")?.children("accessory").orEmpty()) {
+            repeat(a.text("ammoslots")?.trim()?.toIntOrNull() ?: 0) { out += a.text("guid")?.trim().orEmpty() }
         }
-        if (slot !in 1..total) return false
-        val stack = ammo.text("qty")?.trim()?.toDoubleOrNull() ?: return false
-        if (stack <= 0) return false
-        val n = minOf(capacity.toDouble(), stack)
+        return out
+    }
+
+    /** How many clip slots a weapon has. */
+    fun clipSlotCount(weaponGuid: String): Int = findWeapon(weaponGuid)?.let { slotOwners(it).size } ?: 0
+
+    /** The clip at [slot] (1-based), adding empty clips to the list up to it. Null when the weapon has no such slot. */
+    private fun clipAt(weapon: Element, slot: Int): Element? {
+        if (slot !in 1..slotOwners(weapon).size) return null
         val clips = weapon.child("clips") ?: el("clips").also { c ->
-            repeat(total) { c.appendChild(el("clip").also { k -> k.appendChild(el("count", "0")); k.appendChild(el("location")); k.appendChild(el("id", "00000000-0000-0000-0000-000000000000")) }) }
             val after = weapon.child("activeammoslot")
             if (after != null && after.nextSibling != null) weapon.insertBefore(c, after.nextSibling) else weapon.appendChild(c)
         }
-        val clip = clips.children("clip").getOrNull(slot - 1) ?: return false
-        if (clip.text("count")?.trim()?.toIntOrNull() ?: 0 > 0) return false
+        while (clips.children("clip").size < slot) {
+            clips.appendChild(el("clip").also { k -> k.appendChild(el("count", "0")); k.appendChild(el("location")); k.appendChild(el("id", emptyGuid)) })
+        }
+        return clips.children("clip")[slot - 1]
+    }
+
+    private fun clipGear(clip: Element): Element? {
+        val id = clip.text("id")?.trim().orEmpty()
+        if (id.isEmpty() || id == emptyGuid) return null
+        return root.child("gears")?.children("gear")?.firstOrNull { it.text("guid")?.trim().equals(id, true) }
+    }
+
+    /** How many rounds a clip of this weapon holds: its ammo figure, raised by extended-clip accessories (a percentage of the base). 0 for a weapon with no clips. */
+    fun clipCapacity(weaponGuid: String): Int = findWeapon(weaponGuid)?.let(::capacityOf) ?: 0
+
+    private fun capacityOf(weapon: Element): Int {
+        val base = Regex("^([0-9]+)").find(weapon.text("ammo")?.trim().orEmpty())?.groupValues?.get(1)?.toIntOrNull() ?: return 0
+        val percent = weapon.child("accessories")?.children("accessory").orEmpty().sumOf { a ->
+            val t = a.text("ammobonus")?.trim().orEmpty().removePrefix("+")
+            if (t.isEmpty()) 0.0 else chummer.core.Expr.evalOrNull(t.replace("{Rating}", (a.text("rating")?.trim() ?: "0")).replace("Rating", (a.text("rating")?.trim() ?: "0"))) ?: 0.0
+        }
+        return if (percent == 0.0) base else standardRound(base * (1 + percent / 100))
+    }
+
+    /**
+     * The loose ammunition this weapon can be loaded from, as Chummer's reload offers it: ammunition for this kind of weapon (the gear's
+     * `ammoforweapontype` names the weapon's type), made for this weapon's ammunition category (or for any), and flechette ammunition only
+     * for a flechette weapon. Rounds already in a clip are not loose.
+     */
+    fun compatibleAmmo(weaponGuid: String): List<AmmoStack> {
+        val weapon = findWeapon(weaponGuid) ?: return emptyList()
+        val loaded = loadedGuids()
+        val type = weapon.text("weapontype")?.trim().orEmpty()
+        val category = weapon.text("ammocategory")?.trim().orEmpty().ifEmpty { weapon.text("category")?.trim().orEmpty() }
+        val flechette = weapon.text("damage")?.contains("(f)") == true
+        return root.child("gears")?.children("gear").orEmpty().filter { g ->
+            val guid = g.text("guid")?.trim()?.lowercase().orEmpty()
+            val qty = g.text("qty")?.trim()?.toDoubleOrNull() ?: 0.0
+            g.text("category")?.trim() == "Ammunition" && qty >= 1.0 && guid !in loaded && g.text("equipped")?.trim() != "False" &&
+                g.text("ammoforweapontype").orEmpty().split(',').map { it.trim() }.contains(type) &&
+                g.text("extra")?.trim().orEmpty().let { it.isEmpty() || it == category } &&
+                (!flechette || g.text("isflechetteammo")?.trim().equals("True", true))
+        }.map { AmmoStack(it.text("guid")!!.trim(), it.text("name")?.trim().orEmpty(), (it.text("qty")?.trim()?.toDoubleOrNull() ?: 0.0).toInt()) }
+    }
+
+    /**
+     * Load ammunition into a weapon's clip [slot] (1-based; 0 means the first empty clip) from a loose ammunition stack, taking up to [rounds] (the clip's
+     * capacity when null) out of it. A partly used stack is split, and the loaded rounds become their own gear item tied to the clip. A clip that already
+     * holds the same ammunition is topped up instead; one holding something else must be unloaded first. Returns false when the slot, the ammunition
+     * or the amount does not fit.
+     */
+    fun loadAmmo(weaponGuid: String, ammoGearGuid: String, slot: Int = 0, rounds: Int? = null): Boolean {
+        val weapon = findWeapon(weaponGuid) ?: return false
+        val gears = root.child("gears") ?: return false
+        val ammo = gears.children("gear").firstOrNull { it.text("guid")?.trim().equals(ammoGearGuid, true) } ?: return false
+        if (compatibleAmmo(weaponGuid).none { it.guid.equals(ammoGearGuid, true) }) return false
+        val capacity = capacityOf(weapon)
+        if (capacity <= 0) return false
+        val owners = slotOwners(weapon)
+        val index = if (slot > 0) slot else owners.indices.firstOrNull { i ->
+            val c = weapon.child("clips")?.children("clip")?.getOrNull(i)
+            c == null || (count(c) == 0 && clipGear(c) == null)
+        }?.plus(1) ?: return false
+        val clip = clipAt(weapon, index) ?: return false
+        val stack = ammo.text("qty")?.trim()?.toDoubleOrNull() ?: return false
+        val inClip = count(clip)
+        val existing = clipGear(clip)
+        if (existing != null && inClip > 0) {
+            // Top up: the same ammunition only.
+            val same = existing.text("sourceid")?.trim().equals(ammo.text("sourceid")?.trim(), true) && existing.text("rating")?.trim() == ammo.text("rating")?.trim()
+            if (!same) return false
+        }
+        val room = capacity - (if (existing != null) inClip else 0)
+        val want = minOf(rounds ?: room, room, stack.toInt())
+        if (want <= 0) return false
+        val n = want.toDouble()
+        if (existing != null && inClip > 0) {
+            existing.child("qty")!!.textContent = fmtQty((existing.text("qty")?.trim()?.toDoubleOrNull() ?: inClip.toDouble()) + n)
+            if (stack > n) ammo.child("qty")!!.textContent = fmtQty(stack - n) else gears.removeChild(ammo)
+            clip.child("count")!!.textContent = (inClip + want).toString()
+            return true
+        }
         val loadedGuid: String
         if (stack > n) {
             // Split the stack: the rest stays, the loaded rounds become a copy.
@@ -195,51 +282,109 @@ class ArmorWeaponEditor(private val file: CharacterFile, private val data: GameD
             loadedGuid = UUID.randomUUID().toString()
             copy.child("guid")!!.textContent = loadedGuid
             copy.child("qty")!!.textContent = fmtQty(n)
-            copy.child("location")?.textContent = "loaded"
             gears.appendChild(copy)
         } else {
-            ammo.child("location")?.textContent = "loaded"
             loadedGuid = ammo.text("guid")!!.trim()
         }
-        clip.child("count")!!.textContent = n.toInt().toString()
+        clip.child("count")!!.textContent = want.toString()
         clip.child("location")!!.textContent = "loaded"
         clip.child("id")!!.textContent = loadedGuid
         return true
     }
 
     /**
-     * Take the rounds out of a weapon's clip [slot] (1-based; 0 means the last loaded clip) and put them back into the
-     * loose stack of the same ammunition, or leave them as their own loose item. Returns false when no clip holds rounds.
+     * Take the rounds out of a weapon's clip [slot] (1-based; 0 means the last loaded clip) and put them back into the loose stack of the same
+     * ammunition, or leave them as their own loose item. Returns false when no clip holds rounds.
      */
     fun unloadAmmo(weaponGuid: String, slot: Int = 0): Boolean {
         val weapon = findWeapon(weaponGuid) ?: return false
         val clips = weapon.child("clips")?.children("clip").orEmpty()
-        val index = if (slot > 0) slot - 1 else clips.indexOfLast { (it.text("count")?.trim()?.toIntOrNull() ?: 0) > 0 }
+        val index = if (slot > 0) slot - 1 else clips.indexOfLast { count(it) > 0 }
         val clip = clips.getOrNull(index) ?: return false
-        val n = clip.text("count")?.trim()?.toIntOrNull() ?: 0
-        if (n <= 0) return false
+        if (count(clip) <= 0) return false
+        emptyClip(clip, clips)
+        return true
+    }
+
+    /** Empty a clip: its rounds return to a loose stack of the same ammunition (or stay as their own loose item). */
+    private fun emptyClip(clip: Element, clips: List<Element>) {
+        val n = count(clip)
         val id = clip.text("id")?.trim().orEmpty()
         val gears = root.child("gears")
-        val loaded = gears?.children("gear")?.firstOrNull { it.text("guid")?.trim().equals(id, true) }
-        if (loaded != null) {
+        val loaded = clipGear(clip)
+        if (loaded != null && gears != null) {
+            val others = loadedGuids() - id.lowercase()
             val loose = gears.children("gear").firstOrNull {
-                it !== loaded && it.text("sourceid")?.trim().equals(loaded.text("sourceid")?.trim(), true) && it.text("location")?.trim() != "loaded"
+                // The same ammunition for the same kind of gun: Viper has Regular Ammo in several stacks, one for each weapon category (the gear's `extra`).
+                it !== loaded && it.text("sourceid")?.trim().equals(loaded.text("sourceid")?.trim(), true) && it.text("rating")?.trim() == loaded.text("rating")?.trim() &&
+                    it.text("extra")?.trim().orEmpty() == loaded.text("extra")?.trim().orEmpty() &&
+                    it.text("guid")?.trim()?.lowercase() !in others && it.text("guid")?.trim()?.lowercase() != id.lowercase()
             }
             val rounds = loaded.text("qty")?.trim()?.toDoubleOrNull() ?: n.toDouble()
             // Another clip may share the loaded item; only its own rounds leave it.
-            val sharedElsewhere = clips.any { it !== clip && it.text("id")?.trim().equals(id, true) && (it.text("count")?.trim()?.toIntOrNull() ?: 0) > 0 }
+            val sharedElsewhere = clips.any { it !== clip && it.text("id")?.trim().equals(id, true) && count(it) > 0 }
             if (sharedElsewhere) loaded.child("qty")!!.textContent = fmtQty(rounds - n)
             if (loose != null && !sharedElsewhere) {
                 loose.child("qty")!!.textContent = fmtQty((loose.text("qty")?.trim()?.toDoubleOrNull() ?: 0.0) + rounds)
                 gears.removeChild(loaded)
             } else if (loose != null) {
                 loose.child("qty")!!.textContent = fmtQty((loose.text("qty")?.trim()?.toDoubleOrNull() ?: 0.0) + n)
-            } else if (!sharedElsewhere) loaded.child("location")?.textContent = ""
+            }
         }
         clip.child("count")!!.textContent = "0"
         clip.child("location")!!.textContent = ""
-        clip.child("id")!!.textContent = "00000000-0000-0000-0000-000000000000"
+        clip.child("id")!!.textContent = emptyGuid
+    }
+
+    /** Make clip [slot] (1-based) the one the weapon fires from; its ammunition then decides the damage and AP. False when the weapon has no such slot. */
+    fun setActiveClip(weaponGuid: String, slot: Int): Boolean {
+        val weapon = findWeapon(weaponGuid) ?: return false
+        if (slot !in 1..slotOwners(weapon).size) return false
+        (weapon.child("activeammoslot") ?: el("activeammoslot").also { weapon.appendChild(it) }).textContent = slot.toString()
         return true
+    }
+
+    /**
+     * Spend [rounds] from clip [slot] (1-based; 0 means the active clip), as firing does: the clip and the loaded ammunition both lose them, and an
+     * emptied clip is cleared. False when the clip holds fewer rounds than that.
+     */
+    fun fireRounds(weaponGuid: String, rounds: Int, slot: Int = 0): Boolean {
+        val weapon = findWeapon(weaponGuid) ?: return false
+        if (rounds <= 0) return false
+        val index = if (slot > 0) slot else weapon.text("activeammoslot")?.trim()?.toIntOrNull() ?: 1
+        val clip = weapon.child("clips")?.children("clip")?.getOrNull(index - 1) ?: return false
+        val inClip = count(clip)
+        if (rounds > inClip) return false
+        val loaded = clipGear(clip)
+        val left = inClip - rounds
+        if (loaded != null) {
+            val qty = (loaded.text("qty")?.trim()?.toDoubleOrNull() ?: inClip.toDouble()) - rounds
+            if (qty > 0 && left > 0) loaded.child("qty")!!.textContent = fmtQty(qty)
+            else root.child("gears")?.removeChild(loaded)
+        }
+        if (left > 0) clip.child("count")!!.textContent = left.toString()
+        else { clip.child("count")!!.textContent = "0"; clip.child("location")!!.textContent = ""; clip.child("id")!!.textContent = emptyGuid }
+        return true
+    }
+
+    /**
+     * A removed accessory takes the clip slots it added with it: what is loaded in them goes back to the loose stacks, later clips move up, and the
+     * active clip follows (or falls back to the first when it was one of them).
+     */
+    private fun dropClipSlotsOf(weapon: Element, accessory: Element) {
+        val owners = slotOwners(weapon)
+        val guid = accessory.text("guid")?.trim().orEmpty()
+        val mine = owners.indices.filter { owners[it] == guid }
+        if (mine.isEmpty()) return
+        val clips = weapon.child("clips")?.children("clip").orEmpty()
+        var active = weapon.text("activeammoslot")?.trim()?.toIntOrNull() ?: 1
+        for (i in mine.reversed()) {
+            val clip = clips.getOrNull(i) ?: continue
+            if (count(clip) > 0 || clipGear(clip) != null) emptyClip(clip, clips)
+            clip.parentNode.removeChild(clip)
+            active = if (active == i + 1) 1 else if (active > i + 1) active - 1 else active
+        }
+        weapon.child("activeammoslot")?.textContent = active.toString()
     }
 
     private fun fmtQty(v: Double) = if (v == Math.rint(v)) v.toLong().toString() else v.toString()
@@ -262,6 +407,16 @@ class ArmorWeaponEditor(private val file: CharacterFile, private val data: GameD
      * Add an accessory to the weapon with this GUID. [mount] is the chosen mount (defaults to the first the data allows),
      * [included] marks a part that comes with the weapon. Returns the accessory's GUID.
      */
+    /** The data entry of the installed weapon [weaponGuid] (what accessory requirements are checked against). */
+    fun weaponEntry(weaponGuid: String): Element? = findWeapon(weaponGuid)?.text("sourceid")?.trim()?.let { data[it]?.element }
+
+    /** Why this accessory cannot be fitted to this weapon, or null when it can. */
+    fun accessoryProblem(weaponGuid: String, entryId: String): String? {
+        val entry = data[entryId]?.element ?: return "unknown accessory"
+        val weapon = weaponEntry(weaponGuid) ?: return null
+        return if (WeaponFilter.accessoryFits(entry, weapon)) null else "does not fit this weapon"
+    }
+
     fun addAccessory(weaponGuid: String, entryId: String, mount: String? = null, rating: Int? = null, included: Boolean = false): String {
         val weapon = findWeapon(weaponGuid) ?: error("No weapon with that GUID")
         val entry = data[entryId]?.element ?: error("No accessory with id $entryId")
@@ -300,10 +455,20 @@ class ArmorWeaponEditor(private val file: CharacterFile, private val data: GameD
         return guid
     }
 
+    /** Switch an accessory on or off; one that is off adds nothing to the weapon but stays fitted (and keeps its clip slots). False when there is no such accessory. */
+    fun setAccessoryEquipped(guid: String, equipped: Boolean): Boolean {
+        val node = allWeapons().flatMap { it.child("accessories")?.children("accessory").orEmpty() }
+            .firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: return false
+        (node.child("equipped") ?: el("equipped").also { node.appendChild(it) }).textContent = if (equipped) "True" else "False"
+        return true
+    }
+
     fun removeAccessory(guid: String): Boolean {
         val node = allWeapons().flatMap { it.child("accessories")?.children("accessory").orEmpty() }
             .firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: return false
         removeImprovementsOfTree(node)
+        // A Spare Clip takes its clip slots with it.
+        (node.parentNode?.parentNode as? Element)?.takeIf { it.tagName == "weapon" }?.let { dropClipSlotsOf(it, node) }
         node.parentNode.removeChild(node)
         return true
     }
@@ -431,6 +596,13 @@ object ArmorWeaponCatalog {
             fun t(tag: String) = el.child(tag)?.textContent?.trim().orEmpty()
             ItemOption(id, t("name"), "", null, t("avail"), null, t("cost"), t("rating").toIntOrNull() ?: 0, t("mount").split('/').filter { it.isNotEmpty() })
         }.sortedBy { it.name.lowercase() }
+
+    /** The accessories that may be fitted to the weapon whose data entry is [weapon]: those whose required and forbidden weapon details allow it. */
+    fun accessoriesFor(data: chummer.core.DataPack, weapon: Element): List<ItemOption> {
+        val fits = data.byId.entries.filter { it.value.file == "weapons.xml" && it.value.element.tagName == "accessory" }
+            .filter { WeaponFilter.accessoryFits(it.value.element, weapon) }.map { it.key }.toSet()
+        return accessories(data).filter { it.id in fits }
+    }
 
     fun armorMods(data: chummer.core.DataPack): List<ItemOption> =
         data.byId.entries.filter { it.value.file == "armor.xml" && it.value.element.tagName == "mod" }.map { (id, e) ->

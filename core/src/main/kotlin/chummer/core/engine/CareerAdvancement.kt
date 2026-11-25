@@ -551,8 +551,19 @@ class CareerAdvancement(
         return ArmorWeaponEditor(file, data).accessoryCost(entry, r, storedNumber(weapon, "cost"))
     }
 
+    /** Switch a weapon accessory on or off (no cost; one that is off adds nothing to the weapon). */
+    fun setAccessoryEquipped(accessoryGuid: String, equipped: Boolean): Boolean = ArmorWeaponEditor(file, data).setAccessoryEquipped(accessoryGuid, equipped)
+
+    /** The accessories that may be fitted to this weapon (those whose weapon requirements it meets). */
+    fun accessoryOptions(weaponGuid: String): List<ItemOption> {
+        val pack = data as? chummer.core.DataPack ?: return emptyList()
+        val weapon = ArmorWeaponEditor(file, data).weaponEntry(weaponGuid) ?: return ArmorWeaponCatalog.accessories(pack)
+        return ArmorWeaponCatalog.accessoriesFor(pack, weapon)
+    }
+
     fun buyAccessory(weaponGuid: String, entryId: String, mount: String? = null, rating: Int? = null, now: LocalDateTime = LocalDateTime.now()): String? {
         val cost = accessoryCost(weaponGuid, entryId, rating) ?: return null
+        if (ArmorWeaponEditor(file, data).accessoryProblem(weaponGuid, entryId) != null) return null
         if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating)) return null
         val guid = ArmorWeaponEditor(file, data).addAccessory(weaponGuid, entryId, mount, rating)
         charge(cost, "Purchased Weapon Accessory " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddWeaponAccessory", guid, 0.0, now)
@@ -772,8 +783,20 @@ class CareerAdvancement(
         return guid
     }
 
-    /** Load ammunition from a gear stack into a weapon's first empty clip. */
-    fun loadAmmo(weaponGuid: String, ammoGuid: String): Boolean = ArmorWeaponEditor(file, data).loadAmmo(weaponGuid, ammoGuid)
+    /** The loose ammunition a weapon can be loaded from. */
+    fun compatibleAmmo(weaponGuid: String): List<ArmorWeaponEditor.AmmoStack> = ArmorWeaponEditor(file, data).compatibleAmmo(weaponGuid)
+
+    /**
+     * Load ammunition from a gear stack into a weapon's clip [slot] (the first empty clip when 0), [rounds] of it (a full clip when null); a clip that
+     * holds the same ammunition is topped up.
+     */
+    fun loadAmmo(weaponGuid: String, ammoGuid: String, slot: Int = 0, rounds: Int? = null): Boolean = ArmorWeaponEditor(file, data).loadAmmo(weaponGuid, ammoGuid, slot, rounds)
+
+    /** Make clip [slot] the one the weapon fires from. */
+    fun setActiveClip(weaponGuid: String, slot: Int): Boolean = ArmorWeaponEditor(file, data).setActiveClip(weaponGuid, slot)
+
+    /** Spend rounds from a clip (the active one when [slot] is 0), as firing does. */
+    fun fireRounds(weaponGuid: String, rounds: Int, slot: Int = 0): Boolean = ArmorWeaponEditor(file, data).fireRounds(weaponGuid, rounds, slot)
 
     // ---- martial arts
 
@@ -810,8 +833,8 @@ class CareerAdvancement(
         return editor.removeTechnique(guid) || editor.removeArt(guid)
     }
 
-    /** Take the rounds out of the weapon's last loaded clip, back into the loose ammunition. */
-    fun unloadAmmo(weaponGuid: String): Boolean = ArmorWeaponEditor(file, data).unloadAmmo(weaponGuid)
+    /** Take the rounds out of a weapon's clip [slot] (the last loaded one when 0), back into the loose ammunition. */
+    fun unloadAmmo(weaponGuid: String, slot: Int = 0): Boolean = ArmorWeaponEditor(file, data).unloadAmmo(weaponGuid, slot)
 
     /** Capacity each top-level ware item has left for plug-ins (only items that take plug-ins). */
     fun pluginCapacity(): Map<String, Double> {

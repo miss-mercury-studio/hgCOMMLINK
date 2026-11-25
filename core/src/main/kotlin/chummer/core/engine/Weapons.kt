@@ -7,6 +7,22 @@ import chummer.core.text
 import org.w3c.dom.Element
 import kotlin.math.ceil
 
+/**
+ * One clip slot of a weapon: its number (1-based), whose it is ("" for the weapon's own, else the name of the Spare Clip style accessory that added it),
+ * the ammunition in it (gear name and GUID, empty when the clip is empty), the rounds and the clip's capacity, and whether the weapon fires from it now.
+ */
+data class ClipInfo(val slot: Int, val owner: String, val ammo: String, val ammoGuid: String, val rounds: Int, val capacity: Int, val active: Boolean)
+
+/**
+ * One accessory fitted to a weapon: its GUID, name, the mount it sits on, its rating (0 when it has none), whether it comes with the weapon ([included],
+ * so it cannot be sold or removed), whether it is on ([equipped]; one that is off adds nothing), and how many clip slots it adds.
+ */
+data class AccessoryInfo(
+    val guid: String, val name: String, val mount: String, val rating: Int, val included: Boolean, val equipped: Boolean, val clipSlots: Int,
+    /** Whether switching it on or off changes anything: it adds damage, AP, accuracy, recoil compensation, concealment or ammunition capacity. A Spare Clip, a sling or a strap does not, so it has no switch. */
+    val switchable: Boolean = true,
+)
+
 /** A weapon's figures with accessories, loaded ammunition and the character's improvements applied. */
 data class WeaponTotals(
     val name: String,
@@ -32,6 +48,10 @@ data class WeaponTotals(
     /** The ammunition in the active clip, by its gear name ("Ammo: APDS"), and how many rounds are in it; empty when nothing is loaded. */
     val loadedAmmo: String = "",
     val loadedRounds: Int = 0,
+    /** Every clip slot (only for a weapon that is loaded with ammunition): the weapon's own, then those Spare Clip style accessories added. */
+    val clips: List<ClipInfo> = emptyList(),
+    /** Every accessory fitted to the weapon, switched off ones included (the plain [accessories] names list only those that are on). */
+    val fitted: List<AccessoryInfo> = emptyList(),
 )
 
 /**
@@ -126,16 +146,43 @@ class WeaponEngine(
         // ---- concealment ----
         val conceal = (num(w.t("conceal"), rating) ?: 0.0) + accessories.sumOf { num(it.t("conceal"), it.rating()) ?: 0.0 }
 
+        val capacityText = ammoCapacity(w.t("ammo"), accessories)
+        val canLoad = w.t("requireammo").equals("True", true) && w.t("type").equals("Ranged", true) && w.t("weapontype") != "gear" && w.t("ammo").let { it.isNotEmpty() && it != "0" }
         return WeaponTotals(
             name, w.t("type"), category, damage, ap, w.t("mode").takeIf { it != "0" }.orEmpty(), rc,
-            ammoCapacity(w.t("ammo"), accessories),
+            capacityText,
             w.t("reach"), accuracy, signed(conceal), accessories.map { it.t("name") }, w.t("guid"),
             allowAccessory = w.t("allowaccessory").equals("True", true) && w.t("weapontype") != "gear" && w.t("included") != "True",
-            canLoad = w.t("requireammo").equals("True", true) && w.t("type").equals("Ranged", true) && w.t("weapontype") != "gear" && w.t("ammo").let { it.isNotEmpty() && it != "0" },
+            canLoad = canLoad,
             removable = w.t("included") != "True" && w.t("weapontype") != "gear" && !category.equals("Unarmed", true) && !w.t("name").equals("Unarmed Attack", true),
             loadedClips = w.child("clips")?.children("clip").orEmpty().count { (it.t("count").toIntOrNull() ?: 0) > 0 },
             loadedAmmo = loadedAmmo(w)?.t("name").orEmpty(), loadedRounds = activeClip(w)?.t("count")?.toIntOrNull() ?: 0,
+            clips = if (canLoad) clipInfos(w, Regex("^([0-9]+)").find(capacityText.trim())?.groupValues?.get(1)?.toIntOrNull() ?: 0) else emptyList(),
+            fitted = w.child("accessories")?.children("accessory").orEmpty().map {
+                val on = it.t("equipped").equals("True", true)
+                val slots = it.t("ammoslots").toIntOrNull() ?: 0
+                // The figures this engine reads from an accessory: if it has none of them, being off changes nothing. One already off keeps its switch, so it can be turned back on.
+                val effect = listOf("damage", "damagetype", "ap", "accuracy", "rc", "conceal", "ammobonus").any { tag -> it.t(tag).let { v -> v.isNotBlank() && v != "0" && v != "+0" && v != "-0" } }
+                AccessoryInfo(
+                    it.t("guid"), it.t("name"), it.t("mount").takeIf { m -> m.isNotBlank() && m != "None" }.orEmpty(), it.rating(), it.t("included").equals("True", true),
+                    on, slots, switchable = slots == 0 && (effect || !on),
+                )
+            },
         )
+    }
+
+    /** Every clip slot: the weapon's own first, then each slot a Spare Clip style accessory adds. A weapon file lists only the clips that hold something. */
+    private fun clipInfos(w: Element, capacity: Int): List<ClipInfo> {
+        val owners = ArrayList<String>()
+        repeat(maxOf(w.t("ammoslots").toIntOrNull() ?: 1, 1)) { owners += "" }
+        for (a in w.child("accessories")?.children("accessory").orEmpty()) repeat(a.t("ammoslots").toIntOrNull() ?: 0) { owners += a.t("name") }
+        val active = ammoSlots[w.t("guid")] ?: w.t("activeammoslot").toIntOrNull() ?: 1
+        val clips = w.child("clips")?.children("clip").orEmpty()
+        return owners.mapIndexed { i, owner ->
+            val clip = clips.getOrNull(i)
+            val gear = clip?.t("id")?.takeIf { it.isNotEmpty() }?.let { gearByGuid[it] }
+            ClipInfo(i + 1, owner, gear?.t("name").orEmpty(), gear?.t("guid").orEmpty(), clip?.t("count")?.toIntOrNull() ?: 0, capacity, i + 1 == active)
+        }
     }
 
     /** Ammo capacity such as `38(c)`, raised by extended-clip style accessories (a percentage of the base). */
