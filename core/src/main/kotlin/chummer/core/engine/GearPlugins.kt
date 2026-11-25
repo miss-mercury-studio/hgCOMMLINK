@@ -58,7 +58,8 @@ object GearPlugins {
             val max = t("rating").toIntOrNull() ?: 0
             val unsupported = el.child("bonus")?.let { BonusHandlers.apply(it, BonusContext("Gear", "", 1)).unhandled.distinct() }.orEmpty()
             // `armorCapacity` carries the capacity the plug-in uses of its parent here.
-            GearOption(id, t("name"), t("category"), GearEditor.unitCost(el, if (max > 0) maxOf(min, 1) else 0), t("avail"), min, max, unsupported, need.takeIf { left != null })
+            GearOption(id, t("name"), t("category"), GearEditor.unitCost(el, if (max > 0) maxOf(min, 1) else 0), t("avail"), min, max, unsupported, need.takeIf { left != null },
+                needsRestricted = el.child("bonus")?.child("selectrestricted") != null, restrictedChoices = data.licenses)
         }.sortedBy { it.name.lowercase() }
     }
 }

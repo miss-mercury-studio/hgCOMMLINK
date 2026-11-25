@@ -576,14 +576,14 @@ class CareerAdvancement(
     }
 
     /** Buy gear to plug into another gear item: pays for it, adds it inside the parent, and writes a "Purchased Gear" entry. */
-    fun buyGearPlugin(parentGuid: String, entryId: String, rating: Int? = null, qty: Double = 1.0, now: LocalDateTime = LocalDateTime.now()): String? {
+    fun buyGearPlugin(parentGuid: String, entryId: String, rating: Int? = null, qty: Double = 1.0, extra: String = "", now: LocalDateTime = LocalDateTime.now()): String? {
         if (gearPluginOptions(parentGuid).none { it.id.equals(entryId, true) }) return null
         val cost = gearCost(entryId, rating, qty) ?: return null
         if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating)) return null
         val editor = GearEditor(file, data, settings)
         val parent = editor.find(parentGuid) ?: return null
         val container = parent.child("children") ?: file.doc.createElement("children").also { parent.appendChild(it) }
-        val guid = editor.addOrStack(entryId, rating, qty, into = container, parentId = parentGuid)
+        val guid = editor.addOrStack(entryId, rating, qty, extra, into = container, parentId = parentGuid)
         charge(cost, "Purchased Gear " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddGear", guid, qty, now)
         return guid
     }

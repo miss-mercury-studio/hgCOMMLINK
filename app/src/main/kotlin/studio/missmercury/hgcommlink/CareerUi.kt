@@ -123,10 +123,20 @@ fun SpecializationSheet(skill: String, cost: Int, choices: List<String>, karma: 
     }
 }
 
+/** A field for what an item is for (a Fake License: which license), with the names Chummer suggests that match what is typed. */
+@Composable
+private fun WhatFor(label: String, value: String, choices: List<String>, onChange: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        TerminalField(value, onChange, label)
+        val shown = choices.filter { value.isBlank() || (it.contains(value, ignoreCase = true) && !it.equals(value, ignoreCase = true)) }.take(8)
+        if (shown.isNotEmpty()) ChoiceChips("Suggestions", shown.map { it to it }, null, onChange)
+    }
+}
+
 /** Pick gear, a weapon, armor or a vehicle ([kind]: "gear", "weapon", "armor", "vehicle") from the game data, choose rating and quantity where they apply, and pay. */
 @Composable
 fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
-    class Opt(val id: String, val name: String, val category: String, val cost: Double?, val avail: String, val min: Int, val max: Int, val note: String?, val blocked: Boolean, val ammoFor: List<String> = emptyList())
+    class Opt(val id: String, val name: String, val category: String, val cost: Double?, val avail: String, val min: Int, val max: Int, val note: String?, val blocked: Boolean, val ammoFor: List<String> = emptyList(), val askFor: Boolean = false, val choices: List<String> = emptyList())
     val options = remember(kind) {
         when (kind) {
             "weapon" -> vm.weaponOptions().map { o ->
@@ -134,7 +144,7 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
             }
             "vehicle" -> vm.vehicleOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, 0, 0, o.detail, o.problem != null) }
             "armor" -> vm.armorOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, 1, o.maxRating, o.detail, o.problem != null) }
-            else -> vm.gearOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, o.minRating, o.maxRating, if (o.unsupported.isNotEmpty()) "some bonuses not applied yet" else null, false, o.ammoCategories) }
+            else -> vm.gearOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, o.minRating, o.maxRating, if (o.unsupported.isNotEmpty()) "some bonuses not applied yet" else null, false, o.ammoCategories, o.needsRestricted, o.restrictedChoices) }
         }
     }
     val items = remember(kind) {
@@ -155,6 +165,8 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
         var qty by remember(o.id) { mutableStateOf("1") }
         // Ammunition is bought for one kind of weapon, as in Chummer.
         var weaponType by remember(o.id) { mutableStateOf("") }
+        // Some items ask what they are for, as a Fake License asks which license.
+        var whatFor by remember(o.id) { mutableStateOf("") }
         val r = if (hasRating) rating.toIntOrNull()?.coerceIn(maxOf(o.min, 1), o.max) else null
         val q = if (kind == "gear") qty.toDoubleOrNull() else 1.0
         val cost = if (q == null || o.blocked) null else when (kind) {
@@ -167,6 +179,7 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
         TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating (${maxOf(o.min, 1)}-${o.max})", keyboardType = KeyboardType.Number)
+                if (o.askFor) WhatFor("which license, or what it is for", whatFor, o.choices) { whatFor = it }
                 if (o.ammoFor.isNotEmpty()) ChoiceChips("Weapon type", o.ammoFor.map { it to it }, weaponType.ifBlank { null }, { weaponType = it })
                 if (kind == "gear") TerminalField(qty, { qty = it.filter { c -> c.isDigit() || c == '.' } }, "quantity", keyboardType = KeyboardType.Number)
                 Text(
@@ -181,9 +194,9 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
                     TerminalButton("Cancel", close, Modifier.weight(1f))
                     TerminalButton("Buy", {
                         close(); chosen = null
-                        when (kind) { "weapon" -> vm.buyWeapon(o.id); "vehicle" -> vm.buyVehicle(o.id); "armor" -> vm.buyArmor(o.id, r); else -> vm.buyGear(o.id, r, q!!, weaponType) }
+                        when (kind) { "weapon" -> vm.buyWeapon(o.id); "vehicle" -> vm.buyVehicle(o.id); "armor" -> vm.buyArmor(o.id, r); else -> vm.buyGear(o.id, r, q!!, weaponType.ifBlank { whatFor.trim() }) }
                         onDismiss()
-                    }, Modifier.weight(1f), filled = true, enabled = cost != null && q != null && q > 0 && cost <= have && (o.ammoFor.isEmpty() || weaponType.isNotBlank()))
+                    }, Modifier.weight(1f), filled = true, enabled = cost != null && q != null && q > 0 && cost <= have && (o.ammoFor.isEmpty() || weaponType.isNotBlank()) && (!o.askFor || whatFor.isNotBlank()))
                 }
             }
         }
@@ -441,8 +454,10 @@ fun GearPluginDialog(parentGuid: String, parentName: String, vm: AppViewModel, n
         val r = if (hasRating) rating.toIntOrNull()?.coerceIn(maxOf(o.minRating, 1), o.maxRating) else null
         val cost = vm.gearCost(o.id, r, 1.0)
         val have = nuyen.toDoubleOrNull() ?: 0.0
+        var whatFor by remember(o.id) { mutableStateOf("") }
         TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (o.needsRestricted) WhatFor("which license, or what it is for", whatFor, o.restrictedChoices) { whatFor = it }
                 if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating (${maxOf(o.minRating, 1)}-${o.maxRating})", keyboardType = KeyboardType.Number)
                 Text(
                     if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥$nuyen.",
@@ -450,7 +465,7 @@ fun GearPluginDialog(parentGuid: String, parentName: String, vm: AppViewModel, n
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TerminalButton("Cancel", close, Modifier.weight(1f))
-                    TerminalButton("Buy", { close(); chosen = null; vm.buyGearPlugin(parentGuid, o.id, r); onDismiss() }, Modifier.weight(1f), filled = true, enabled = cost != null && cost <= have)
+                    TerminalButton("Buy", { close(); chosen = null; vm.buyGearPlugin(parentGuid, o.id, r, whatFor.trim()); onDismiss() }, Modifier.weight(1f), filled = true, enabled = cost != null && cost <= have && (!o.needsRestricted || whatFor.isNotBlank()))
                 }
             }
         }

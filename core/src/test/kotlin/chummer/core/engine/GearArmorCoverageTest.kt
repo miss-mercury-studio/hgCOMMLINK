@@ -185,4 +185,40 @@ class GearArmorCoverageTest {
         assertTrue("identical stacks offer a merge", s.gear.filter { it.name == "Datachip" }.let { it.size >= 2 && it.all { l -> l.mergeable } })
         assertEquals("the Extra shows on ammunition", "Assault Rifles", s.gear.first { it.name == "Ammo: Regular Ammo" && it.extra == "Assault Rifles" }.extra)
     }
+
+    // ---- gear that asks which license it is for
+
+    @Test
+    fun aFakeLicenseAsksWhichLicenseAndKeepsTheAnswer() {
+        assertTrue("Chummer's license names are kept", data.licenses.containsAll(listOf("Medical License", "Concealed Carry Permit")))
+        val c = viper()
+        val a = CareerAdvancement(c, data, settings)
+        val sin = gearNamed(c, "Fake SIN")
+        val parent = sin.text("guid")!!.trim()
+        val license = a.gearPluginOptions(parent).first { it.name == "Fake License" }
+        assertTrue(license.needsRestricted)
+        assertTrue(license.restrictedChoices.contains("Medical License"))
+        assertFalse("a credstick asks nothing", a.gearPluginOptions(parent).first { it.name.startsWith("Certified Credstick, Standard") }.needsRestricted)
+        val before = sin.child("children")!!.children("gear").size
+        val guid = a.buyGearPlugin(parent, license.id, 3, 1.0, "Pilot License")!!
+        val bought = sin.child("children")!!.children("gear").first { it.text("guid")?.trim() == guid }
+        assertEquals(before + 1, sin.child("children")!!.children("gear").size)
+        assertEquals("Pilot License", bought.text("extra")?.trim())
+        // Like Viper's own licenses, it also records a Restricted improvement named for the license.
+        val imp = c.root.child("improvements")!!.children("improvement").first { it.text("sourcename")?.trim() == guid }
+        assertEquals("Restricted", imp.text("improvementttype")?.trim())
+        assertEquals("Pilot License", imp.text("improvedname")?.trim())
+        assertTrue(a.log.undo(a.log.entries().last().guid))
+        assertEquals(before, sin.child("children")!!.children("gear").size)
+    }
+
+    @Test
+    fun theIncludesLineCountsRepeatedParts() {
+        val c = viper()
+        val s = Sheet.build(c, data, settings).sections
+        val sin = s.gear.first { it.name == "Fake SIN" }
+        assertEquals(listOf("Fake License x8"), sin.children)
+        assertEquals(8, sin.parts.size)
+        assertEquals("one part keeps its name and what it is for", listOf("Pharmaceutical"), s.gear.first { it.name == "Woad" }.children)
+    }
 }

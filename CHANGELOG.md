@@ -16,6 +16,8 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 - **Sell at any percent.** Selling now has a percent box that starts at 50 and goes from 0 to 9999.99 with plus and minus buttons, like desktop Chummer. Before, you could only pick 100, 75, 50 or 25.
 
 ### Fixed
+- **Fake Licenses ask which license.** Buying one into a Fake SIN asks which license it is for, with Chummer's list to pick from, and keeps the answer. Before, every bought license had no name.
+- **Shorter item cards.** A card with many of the same part inside, like a Fake SIN with eight licenses, now says "Fake License x8". The item's sheet lists them all.
 - **A refused gear purchase says why.** It no longer says "Not enough nuyen" when the real problem is availability or a price that cannot be worked out.
 - **Buttons keep their size.** "Cancel" and "Buy" on the buy dialogs could stay tiny after the dialog slid in.
 - **Armor mod list only shows mods that fit.** Built-in mods like Custom Fit and mods made for one particular armor no longer show for every armor.

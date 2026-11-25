@@ -14,6 +14,8 @@ class DataPack private constructor(
     val byId: Map<String, DataEntry>,
     val fileCount: Int,
     private val grades: Map<String, Double>,
+    /** The names Chummer offers for a license (licenses.xml), for gear that asks which one it is for. */
+    val licenses: List<String> = emptyList(),
 ) : GameData {
     override fun gradeEssence(bioware: Boolean, grade: String): Double? = grades[(if (bioware) "bio:" else "cyb:") + grade]
 
@@ -39,6 +41,7 @@ class DataPack private constructor(
             val used = HashSet<String>()
             val index = HashMap<String, DataEntry>(20_000)
             val grades = HashMap<String, Double>()
+            val licenses = ArrayList<String>()
             val files = dataDir.listFiles { f -> f.extension == "xml" }.orEmpty().sortedBy { it.name }
             log("found ${files.size} data files" + if (customDirs.isEmpty()) "" else ", ${customDirs.size} custom data folder(s): " + customDirs.joinToString(", ") { it.name })
             for (f in files) {
@@ -63,13 +66,14 @@ class DataPack private constructor(
                     if (!id.isNullOrEmpty() && id != ZERO_ID && kids.any { it.tagName == "name" }) {
                         index.putIfAbsent(id.lowercase(), DataEntry(f.name, e))
                     }
+                    if (f.name == "licenses.xml" && e.tagName == "license" && kids.isEmpty()) e.textContent.trim().takeIf { it.isNotEmpty() }?.let { licenses += it }
                     stack.addAll(kids)
                 }
                 log("${f.name}: ${index.size - before} entries")
             }
             // Keep the cache bounded: different characters may use different custom data, so drop only the oldest entries.
             cacheDir?.listFiles().orEmpty().sortedByDescending { it.lastModified() }.drop(MAX_CACHED_FILES).forEach { it.delete() }
-            return DataPack(index, files.size, grades)
+            return DataPack(index, files.size, grades, licenses.distinct().sortedBy { it.lowercase() })
         }
 
         private fun amendedDocument(base: File, customDirs: List<CustomDataDir>, cacheDir: File?, used: MutableSet<String>, log: (String) -> Unit): org.w3c.dom.Document {

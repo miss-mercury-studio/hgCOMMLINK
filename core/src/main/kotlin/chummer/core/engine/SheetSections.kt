@@ -44,6 +44,12 @@ data class SheetSections(
 
     companion object {
         private fun Element.t(tag: String) = text(tag).orEmpty().trim()
+
+        /** What is inside an item, for its card: one part by its name and what it is for, several of one kind as "Fake License x8" (the sheet lists them in full). */
+        private fun includes(parts: List<Element>): List<String> =
+            parts.groupBy { it.t("name") }.map { (name, same) ->
+                if (same.size > 1) "$name x${same.size}" else name + same[0].t("extra").takeIf { it.isNotEmpty() }?.let { " ($it)" }.orEmpty()
+            }
         private fun Element.n(tag: String) = t(tag).toIntOrNull() ?: 0
 
         fun read(c: CharacterFile, weapons: List<WeaponTotals>, essence: EssenceEngine, data: GameData? = null): SheetSections {
@@ -83,7 +89,7 @@ data class SheetSections(
             val gear = allGear.map { g ->
                 GearLine(
                     g.t("name"), g.t("category"), g.t("qty").removeSuffix(".0"), g.n("rating"),
-                    g.child("children")?.children("gear").orEmpty().map { it.t("name") + it.t("extra").takeIf { x -> x.isNotEmpty() }?.let { x -> " ($x)" }.orEmpty() },
+                    includes(g.child("children")?.children("gear").orEmpty()),
                     g.t("guid"), g.t("location") == "loaded", GearStacks.twins(allGear, g).isNotEmpty(),
                     parts = g.child("children")?.children("gear").orEmpty().map { p -> GearPartLine(p.t("guid"), p.t("name"), p.t("qty").removeSuffix(".0"), p.n("rating"), p.t("extra"), !p.t("equipped").equals("False", true)) },
                     pluggable = (g.t("sourceid").takeIf { it.isNotEmpty() }?.let { data?.get(it)?.element } ?: g).let { GearPlugins.accepts(it) },

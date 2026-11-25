@@ -19,6 +19,8 @@ data class GearOption(
     val armorCapacity: Double? = null,
     /** The weapon categories the buyer must choose from (ammunition is bought for one kind of weapon); empty when the item needs no choice. */
     val ammoCategories: List<String> = emptyList(),
+    /** True for gear that asks what it is for when bought (a Fake License: which license); [restrictedChoices] are the names Chummer suggests. */
+    val needsRestricted: Boolean = false, val restrictedChoices: List<String> = emptyList(),
 )
 
 object GearCatalog {
@@ -41,7 +43,8 @@ object GearCatalog {
             val unsupported = el.child("bonus")?.let { BonusHandlers.apply(it, BonusContext("Gear", "", 1)).unhandled.distinct() }.orEmpty()
             GearOption(id, t("name"), t("category"), GearEditor.unitCost(el, if (max > 0) maxOf(min, 1) else 0), t("avail"), min, max, unsupported,
                 t("armorcapacity").takeIf { it.startsWith("[") }?.let { CyberwareEditor.formula(it.removePrefix("[").removeSuffix("]"), maxOf(min, 1)) },
-                ammoCategories = t("ammoforweapontype").takeIf { it.isNotEmpty() && el.child("ammoforweapontype")?.getAttribute("noextra") != "True" }?.let { ammoCategories(data, it) }.orEmpty())
+                ammoCategories = t("ammoforweapontype").takeIf { it.isNotEmpty() && el.child("ammoforweapontype")?.getAttribute("noextra") != "True" }?.let { ammoCategories(data, it) }.orEmpty(),
+                needsRestricted = el.child("bonus")?.child("selectrestricted") != null, restrictedChoices = data.licenses)
         }.sortedBy { it.name.lowercase() }
 }
 
