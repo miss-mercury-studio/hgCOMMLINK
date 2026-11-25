@@ -75,6 +75,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handleIncoming(intent)
+        // Coming back to a screen that was open (the app was dropped in the background): no boot logo, the player goes straight back to it.
+        val resuming = LastScreen(this).fileId() != null
         setContent {
             HgTheme {
                 androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
@@ -82,7 +84,7 @@ class MainActivity : ComponentActivity() {
                     App(vm)
                     ScanlineOverlay()
                     // Shown once per launch; kept across rotation.
-                    var booted by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+                    var booted by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(resuming) }
                     if (!booted) BootScreen { booted = true }
                 }
             }
@@ -94,7 +96,7 @@ class MainActivity : ComponentActivity() {
     /** Coming back to the app (from a file manager or a sync app): pick up files added to the folder meanwhile. The list stays on screen while it reloads, so the scroll position holds. */
     override fun onStart() {
         super.onStart()
-        if (started) vm.refresh()
+        if (started) { vm.refresh(); vm.checkOpenFile() }
         started = true
     }
 
@@ -149,6 +151,7 @@ private fun App(vm: AppViewModel) {
     }
 
     BackHandler(enabled = open != null) { vm.close() }
+    if (open != null && vm.fileMissing) MissingFileSheet(open.character.summary().let { s -> if (s.name.isNotBlank() && s.alias.isNotBlank()) "${s.name} \"${s.alias}\"" else s.name.ifBlank { s.alias.ifBlank { open.file.name } } }, vm.storageLabel, onSaveAgain = vm::saveMissingAgain, onClose = vm::close, onDismiss = vm::dismissMissing)
     var whatsNew by remember { mutableStateOf(false) }
     if (whatsNew) WhatsNewSheet { whatsNew = false }
     var about by remember { mutableStateOf(false) }
@@ -162,7 +165,12 @@ private fun App(vm: AppViewModel) {
         containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = Quicksilver,
         snackbarHost = { SnackbarHost(snackbar, Modifier.padding(bottom = 64.dp)) },
         topBar = {
-            if (open == null) {
+            if (open == null && vm.restoring) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+                    title = { AppTitle("RESUMING") },
+                )
+            } else if (open == null) {
                 var menu by remember { mutableStateOf(false) }
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
@@ -227,7 +235,7 @@ private fun App(vm: AppViewModel) {
         },
         bottomBar = {
             // The two things done most on this screen, under the thumb.
-            if (open == null) {
+            if (open == null && !vm.restoring) {
                 Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TerminalButton("New", { showNew = true }, Modifier.weight(1f), filled = true)
                     TerminalButton("Critter", { showCritter = true }, Modifier.weight(1f))
@@ -239,7 +247,9 @@ private fun App(vm: AppViewModel) {
         Column(Modifier.padding(padding).fillMaxSize()) {
             if (showNew) NewCharacterDialog(vm) { showNew = false }
             if (showCritter) NewCritterDialog(vm) { showCritter = false }
-            if (open != null) SheetScreen(open, vm) else CharacterList(vm)
+            if (open != null) SheetScreen(open, vm)
+            else if (vm.restoring) TerminalLoader(LoadLines.character, Modifier.padding(24.dp), real = LoadLog.data.lines)
+            else CharacterList(vm)
         }
     }
 }

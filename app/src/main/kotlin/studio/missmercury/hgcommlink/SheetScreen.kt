@@ -77,7 +77,10 @@ import chummer.core.engine.SkillResult
 fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
     val sheet = open.sheet
     // The tab is remembered by name: tabs can appear (Magic) and the numbers would then point at the wrong one.
-    var tabName by rememberSaveable { mutableStateOf("Overview") }
+    // It is also kept on disk, so a launch after the app was dropped in the background comes back to the same tab.
+    val appContext = androidx.compose.ui.platform.LocalContext.current
+    val last = remember { LastScreen(appContext) }
+    var tabName by rememberSaveable(open.file.id) { mutableStateOf(last.tab(open.file.id)) }
     Column(Modifier.fillMaxSize()) {
         when {
             sheet == null && open.sheetError == null -> Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -113,7 +116,7 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
                     Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(14.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Obsidian, Color.Transparent))))
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(14.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Obsidian))))
                 }
-                BottomNav(tabs, current) { tabName = it }
+                BottomNav(tabs, current) { tabName = it; last.setTab(open.file.id, it) }
             }
         }
     }
