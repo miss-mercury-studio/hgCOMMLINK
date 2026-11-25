@@ -12,6 +12,9 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 - **Merge gear stacks.** Identical gear listed on separate lines, such as ammo, gets a Merge button that combines the quantities.
 - **Armor sets.** Make named sets on Gear, tap one to add or remove armor, and wear or take off the whole set at once.
 
+### Changed
+- **Sell at any percent.** Selling now has a percent box that starts at 50 and goes from 0 to 9999.99 with plus and minus buttons, like desktop Chummer. Before, you could only pick 100, 75, 50 or 25.
+
 ### Fixed
 - **A refused gear purchase says why.** It no longer says "Not enough nuyen" when the real problem is availability or a price that cannot be worked out.
 - **Buttons keep their size.** "Cancel" and "Buy" on the buy dialogs could stay tiny after the dialog slid in.

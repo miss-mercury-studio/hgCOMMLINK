@@ -46,6 +46,33 @@ class SellItemTest {
     }
 
     @Test
+    fun anyPercentChummerAllowsCanBeUsed() {
+        val c = CharacterIo.readFile(File(ref, "Viper_career.chum5"))
+        val adv = CareerAdvancement(c, data, settings)
+        val log = ExpenseLog(c, data, settings)
+        val flashlight = named("gear.xml", "gear", "Flashlight")
+        // Values Chummer's box takes but the old four buttons did not: a fraction of a percent, and more than the price.
+        for ((percent, share) in listOf(12.5 to 0.125, 150.0 to 1.5, 0.01 to 0.0001)) {
+            val guid = adv.buyGear(flashlight, qty = 4.0)!!
+            val paid = adv.log.entries().last().amount.let { -it }
+            val got = adv.sellPurchase(guid, percent)!!
+            assertEquals("$percent percent of $paid", Math.round(paid * percent) / 100.0, got, 0.0)
+            assertEquals(paid * share, got, 0.01)
+        }
+        // Selling for nothing leaves no log entry; the limits are Chummer's.
+        val free = adv.buyGear(flashlight)!!
+        val entries = log.entries().size
+        assertEquals(0.0, adv.sellPurchase(free, 0.0)!!, 0.0)
+        assertEquals(entries, log.entries().size)
+        val another = adv.buyGear(flashlight)!!
+        assertNull(adv.sellPurchase(another, -0.01))
+        assertNull(adv.sellPurchase(another, 10000.0))
+        assertNull(adv.sellPurchase(another, Double.NaN))
+        assertEquals(9999.99, CareerAdvancement.MAX_SELL_PERCENT, 0.0)
+        assertTrue("the highest allowed percent works", adv.sellPurchase(another, 9999.99)!! > 0.0)
+    }
+
+    @Test
     fun discardingTakesAnItemOutWithNoNuyenOrLogEntry() {
         val c = CharacterIo.readFile(File(ref, "Viper_career.chum5"))
         val adv = CareerAdvancement(c, data, settings)

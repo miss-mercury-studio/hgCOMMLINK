@@ -64,6 +64,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.text.input.KeyboardType
 import chummer.core.engine.QualityOption
 import studio.missmercury.hgcommlink.ui.*
 import androidx.compose.material3.TabRowDefaults
@@ -130,18 +131,28 @@ private fun SellLink(onClick: () -> Unit) {
 
 /** The share of an item's price to take when selling it. */
 @Composable
-internal fun SellSheet(name: String, onSell: (Int) -> Unit, onRemove: () -> Unit, onDismiss: () -> Unit) {
+internal fun SellSheet(name: String, onSell: (Double) -> Unit, onRemove: () -> Unit, onDismiss: () -> Unit) {
+    // Chummer's Sell Item box starts at 50 percent and takes anything from 0 to 9999.99, so this does too.
+    var text by remember { mutableStateOf("50") }
+    val percent = text.toDoubleOrNull()?.takeIf { it in 0.0..chummer.core.engine.CareerAdvancement.MAX_SELL_PERCENT }
+    fun step(by: Double) {
+        val now = (text.toDoubleOrNull() ?: 0.0) + by
+        val clamped = now.coerceIn(0.0, chummer.core.engine.CareerAdvancement.MAX_SELL_PERCENT)
+        text = if (clamped == Math.rint(clamped)) clamped.toLong().toString() else "%.2f".format(java.util.Locale.ROOT, clamped).trimEnd('0').trimEnd('.')
+    }
     TerminalSheet("Sell $name", onDismiss) { close ->
         Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Take a share of what it is worth, with whatever is fitted to it, or remove it for nothing (free or included items). Neither can be undone from the log.", style = MaterialTheme.typography.bodySmall, color = MutedSilver)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(100, 75, 50, 25).forEach { pct ->
-                    Box(
-                        Modifier.weight(1f).heightIn(min = 48.dp).background(SlateHigh).border(1.dp, PhosphorGreen.copy(alpha = 0.6f)).clickable { close(); onSell(pct) },
-                        contentAlignment = Alignment.Center,
-                    ) { Text("$pct%", style = MaterialTheme.typography.titleMedium, color = PhosphorGreen) }
-                }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("// PERCENT", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = PhosphorGreen)
+                StepButton("−", 48) { step(-5.0) }
+                TerminalField(text, { v -> text = v.filter { c -> c.isDigit() || c == '.' }.take(7) }, "percent", modifier = Modifier.width(110.dp), keyboardType = KeyboardType.Number)
+                StepButton("+", 48) { step(5.0) }
             }
+            TerminalButton(
+                if (percent == null) "Sell" else "Sell at ${text.trimEnd('.')}%", { close(); onSell(percent!!) }, Modifier.fillMaxWidth(),
+                accent = DrainAmber, filled = true, enabled = percent != null,
+            )
             TerminalButton("Remove, no nuyen", { close(); onRemove() }, Modifier.fillMaxWidth(), accent = CriticalRed)
             TerminalButton("Cancel", close, Modifier.fillMaxWidth())
         }

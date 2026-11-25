@@ -39,6 +39,11 @@ class CareerAdvancement(
     private val data: GameData,
     private val settings: CharacterSettings,
 ) {
+    companion object {
+        /** The most Chummer's Sell Item box accepts, in percent. */
+        const val MAX_SELL_PERCENT = 9999.99
+    }
+
     private val root get() = file.root
     private val rules = settings.toRuleSettings()
     val log = ExpenseLog(file, data, settings)
@@ -478,12 +483,15 @@ class CareerAdvancement(
      * the item leaves the character and the nuyen is added to the log as "Selling Item". Returns the nuyen received, or null when there
      * is no such item or the character is in creation. A sale is not undoable from the log.
      */
-    fun sellPurchase(guid: String, percent: Int, now: LocalDateTime = LocalDateTime.now()): Double? {
-        if (inCreation || percent !in 0..100) return null
+    fun sellPurchase(guid: String, percent: Int, now: LocalDateTime = LocalDateTime.now()): Double? = sellPurchase(guid, percent.toDouble(), now)
+
+    /** As above for any percent Chummer's Sell Item box takes: 0 to 9999.99, to two decimal places. */
+    fun sellPurchase(guid: String, percent: Double, now: LocalDateTime = LocalDateTime.now()): Double? {
+        if (inCreation || percent.isNaN() || percent < 0.0 || percent > MAX_SELL_PERCENT + 1e-9) return null
         val name = nameOfItem(guid) ?: return null
         val before = NuyenLedger.of(file, settings, data).spent
         if (!removeAny(guid, includeArts = false)) return null
-        val value = (before - NuyenLedger.of(file, settings, data).spent).coerceAtLeast(0.0) * percent / 100.0
+        val value = Math.round((before - NuyenLedger.of(file, settings, data).spent).coerceAtLeast(0.0) * percent) / 100.0
         // A sale worth nothing (an included part, a free item) leaves no log entry.
         if (value > 0.0) log.add("Nuyen", value, "Selling Item $name", "SellItem", objectId = guid, now = now)
         return value

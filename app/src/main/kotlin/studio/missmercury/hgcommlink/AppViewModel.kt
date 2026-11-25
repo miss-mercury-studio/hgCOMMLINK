@@ -429,7 +429,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun removePurchase(guid: String) = editCareer("Removed", "Cannot remove that here") { adv, _ -> adv.removePurchase(guid) }
 
     /** Sell a bought item in career for a share of its price. */
-    fun sellPurchase(guid: String, percent: Int) = editCareer("Sold", "Cannot sell that") { adv, _ -> adv.sellPurchase(guid, percent) != null }
+    fun sellPurchase(guid: String, percent: Double) = editCareer("Sold", "Cannot sell that") { adv, _ -> adv.sellPurchase(guid, percent) != null }
 
     /** Remove an item in career with no nuyen changing hands. */
     fun discardPurchase(guid: String) = editCareer("Removed", "Cannot remove that") { adv, _ -> adv.discardPurchase(guid) }
