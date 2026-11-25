@@ -6,6 +6,9 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ## [Unreleased]
 
+### Fixed
+- **Creating a new character works again.** In the 0.1.4 download, New character failed with "the new character skeleton is missing". The built-in template was left out of the app, so no new characters could be made.
+
 ## [0.1.4] - 2026-11-24
 
 ### Added
