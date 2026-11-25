@@ -427,9 +427,26 @@ class CareerAdvancement(
 
     private fun removeVehicle(guid: String): Boolean = (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).remove(guid) } == true
 
+    private fun removeLifestyle(guid: String): Boolean = (data as? chummer.core.DataPack)?.let { LifestyleEditor(file, it).remove(guid) } == true
+
+    // ---- lifestyles
+
+    /** Buy [months] months of a lifestyle (paid from the nuyen left); returns its GUID, or null when it cannot be paid for. */
+    fun buyLifestyle(entryId: String, months: Int, now: LocalDateTime = LocalDateTime.now()): String? {
+        val pack = data as? chummer.core.DataPack ?: return null
+        val editor = LifestyleEditor(file, pack)
+        val left = nuyenLeft()
+        val guid = runCatching { editor.add(entryId, months) }.getOrNull() ?: return null
+        val cost = editor.total(guid)
+        // The ledger prices a lifestyle with the character's adjustments, so the price is known only once it is on the sheet.
+        if (cost > left + 0.004) { editor.remove(guid); return null }
+        charge(cost, "Purchased Lifestyle " + pack[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddLifestyle", guid, 0.0, now)
+        return guid
+    }
+
     private fun removeAny(guid: String, includeArts: Boolean = true): Boolean {
         val aw = ArmorWeaponEditor(file, data)
-        return removeVehicle(guid) || GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
+        return removeVehicle(guid) || removeLifestyle(guid) || GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
             aw.removeAccessory(guid) || aw.removeArmorMod(guid) || CyberwareEditor(file, data).remove(guid) || (includeArts && removeMartialArtItem(guid))
     }
 

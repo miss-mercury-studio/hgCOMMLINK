@@ -764,6 +764,8 @@ private fun Life(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     val canBuy = s.career != null || s.creationBuy != null
     val creating = s.creationBuy != null
     var addingArt by remember { mutableStateOf(false) }
+    var addingLifestyle by remember { mutableStateOf(false) }
+    var lifestyleFor by remember { mutableStateOf<chummer.core.engine.LifestyleOption?>(null) }
     var addingCritter by remember { mutableStateOf(false) }
     var addingProgram by remember { mutableStateOf(false) }
     var ratingFor by remember { mutableStateOf<chummer.core.engine.CritterPowerOption?>(null) }
@@ -779,7 +781,11 @@ private fun Life(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         }
         if (g.lifestyles.isNotEmpty()) item { SubHeader("Lifestyle") }
         items(g.lifestyles) { l ->
-            Column { Row2(l.name, "${l.type}  ¥${l.monthly}/mo"); Small(l.notes) }
+            Column {
+                Row2(l.name.ifBlank { l.type }, "¥${l.monthly}/mo", bold = true)
+                Small(listOf(l.type.takeIf { l.name.isNotBlank() }, l.months.takeIf { it.isNotBlank() }?.let { "$it months paid" }, l.notes).filter { !it.isNullOrBlank() }.joinToString("  ·  "))
+                if (canBuy && l.guid.isNotEmpty()) RemoveLink { if (creating) vm.removePurchase(l.guid) else vm.discardPurchase(l.guid) }
+            }
         }
         s.aiPrograms?.let { progs ->
             item { SubHeader("Programs") }
@@ -826,7 +832,30 @@ private fun Life(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
             }
         }
     }
-    if (canBuy) PinnedAction("+ Martial art") { addingArt = true }
+    if (canBuy) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TerminalButton("+ Lifestyle", { addingLifestyle = true }, Modifier.weight(1f))
+        TerminalButton("+ Martial art", { addingArt = true }, Modifier.weight(1f))
+    }
+    }
+    if (addingLifestyle) {
+        val options = remember { vm.lifestyleOptions() }
+        PickerSheet(
+            "Add a lifestyle",
+            options.map { PickItem(it.id, it.name, listOf("¥${"%,.0f".format(java.util.Locale.ROOT, it.monthly)}/mo", it.source.takeIf { s -> s.isNotBlank() }?.let { s -> s + " " + it.page }).filterNotNull().joinToString("  ·  ")) },
+            { id -> lifestyleFor = options.firstOrNull { it.id == id } },
+            note = if (creating) "Paid from your nuyen." else "Paid from your nuyen; the log can undo it.",
+        ) { addingLifestyle = false }
+    }
+    lifestyleFor?.let { o ->
+        var months by remember(o.id) { mutableStateOf(1) }
+        TerminalSheet(o.name, onDismiss = { lifestyleFor = null }) { close ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("$months month${if (months == 1) "" else "s"}", Modifier.weight(1f))
+                StepButton("-", 44) { if (months > 1) months-- }
+                StepButton("+", 44) { if (months < 120) months++ }
+            }
+            TerminalButton("Add", { vm.buyLifestyle(o.id, months); close(); addingLifestyle = false }, Modifier.fillMaxWidth().padding(vertical = 12.dp), filled = true)
+        }
     }
     if (addingProgram) {
         val options = remember { vm.aiProgramOptions() }

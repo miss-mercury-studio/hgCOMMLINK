@@ -220,6 +220,7 @@ class GameDataStore(private val context: Context) {
     }
     fun priorityTalents(letter: String): List<chummer.core.engine.TalentOption> = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).talents(letter) }.orEmpty() }
     fun talentSkillChoices(talent: chummer.core.engine.TalentOption): List<String> = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).skillChoices(talent) }.orEmpty() }
+    fun lifestyleOptions(): List<chummer.core.engine.LifestyleOption> = catalog("lifestyle", chummer.core.engine.LifestyleCatalog::options)
     fun martialArtOptions(): List<chummer.core.engine.MartialArtOption> = catalog("martial", chummer.core.engine.MartialArtCatalog::arts)
     fun techniqueOptions(artName: String): List<chummer.core.engine.TechniqueOption> = synchronized(this) {
         val p = pack ?: return@synchronized emptyList()

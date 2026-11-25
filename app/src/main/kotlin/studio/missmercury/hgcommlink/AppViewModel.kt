@@ -277,6 +277,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Remove an item in career with no nuyen changing hands. */
     fun discardPurchase(guid: String) = editCareer("Removed", "Cannot remove that") { adv, _ -> adv.discardPurchase(guid) }
 
+    fun lifestyleOptions() = gameData.lifestyleOptions()
+    fun buyLifestyle(id: String, months: Int) = editCareer("Lifestyle added", "Cannot add that lifestyle (not enough nuyen)") { adv, _ -> adv.buyLifestyle(id, months) != null }
+
     fun martialArtOptions() = gameData.martialArtOptions()
     fun techniqueOptions(artName: String) = gameData.techniqueOptions(artName)
     fun martialArtCost(id: String) = martialArtCoster()(id)
