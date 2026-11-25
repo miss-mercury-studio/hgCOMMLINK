@@ -2,7 +2,27 @@
 
 All notable changes to hgCOMMLINK. The newest release is first. The app shows this file under **What's new**, so keep entries to one short line, written for players, not developers.
 
-Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, then one `-` line per change. Put work in progress under `## [Unreleased]`; it is not shown in the app until it is given a version.
+Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, then one `-` line per change. Put work in progress under `## [Unreleased]
+
+### Added
+- **Use another Chummer version.** Menu > Game data: Get Chummer, then Choose zip or folder. You can go back to the built-in version any time.
+- **Game data shows what you are using.** Version, nightly or stable, and Verified or Unverified. Unverified data adds a warning on character sheets.
+- **Warning when desktop Chummer won't open a character.** Shown on the sheet, and sharing asks first.
+- **Armor can be worn and taken off.** Tap an armor on Gear to wear it, switch or sell its mods and gear, or sell it.
+- **Armor sets.** Group armor into named sets, and wear or take off a whole set at once.
+- **Gear with plug-ins has its own sheet.** Tap a Fake SIN or a drug to see what is in it, switch parts on or off, sell or remove them, or plug in more. A Fake License asks which license it is.
+- **Merge gear stacks.** Identical gear on separate lines gets a Merge button.
+
+### Changed
+- **Sell at any percent.** The sell box starts at 50 and goes from 0 to 9999.99, like desktop Chummer.
+
+### Fixed
+- **Armor mod list only shows mods that fit.** No more Custom Fit or mods made for other armor.
+- **Buying ammo adds to your existing stack.** It asks which weapon type, and undo takes back only that purchase.
+- **Gear shows what it is for.** Ammo reads like "Regular Ammo (Heavy Pistols)", so stacks are not mistaken for duplicates.
+- **A refused gear purchase says why,** such as availability, not just "Not enough nuyen".
+- **Buy and Cancel text stays full size.**
+- **An A.I. can no longer be given cyberware or bioware.** Desktop Chummer hung loading one. The Ware tab is hidden for an A.I.
 
 ## [Unreleased]
 
