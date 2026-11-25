@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.fillMaxSize
@@ -148,14 +149,20 @@ private fun RemoveLink(onClick: () -> Unit) {
 /** Section tabs along the bottom edge, where the thumb rests; the chosen one in inverse video. */
 @Composable
 private fun BottomNav(tabs: List<Pair<String, String>>, current: String, onPick: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth().background(MercurySlate).border(1.dp, TerminalGrid)) {
-        tabs.forEach { (key, label) ->
-            val on = key == current
-            Box(
-                Modifier.weight(1f).heightIn(min = 52.dp).background(if (on) PhosphorGreen else Color.Transparent).clickable { onPick(key) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, color = if (on) Obsidian else MutedSilver)
+    // Each tab gets an equal share of the width, but never less than its label needs: with many tabs, a narrow phone or a large
+    // font the bar scrolls sideways instead of cutting labels off.
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().background(MercurySlate).border(1.dp, TerminalGrid)) {
+        val share = maxWidth / tabs.size
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            tabs.forEach { (key, label) ->
+                val on = key == current
+                Box(
+                    Modifier.widthIn(min = share).heightIn(min = 52.dp).background(if (on) PhosphorGreen else Color.Transparent).clickable { onPick(key) }
+                        .padding(horizontal = 3.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, color = if (on) Obsidian else MutedSilver)
+                }
             }
         }
     }
@@ -293,15 +300,15 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
 
         Section("Dice pools", collapsible = true, startExpanded = false) {
             s.pools.forEach { (label, value) ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(label)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(label, Modifier.weight(1f))
                     Text(value.toString(), fontWeight = FontWeight.Bold)
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Lift / carry")
-                Text("${s.liftWeight} kg / ${s.carryWeight} kg", fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Lift / carry", Modifier.weight(1f))
+                Text("${s.liftWeight} kg / ${s.carryWeight} kg", fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
             }
         }
     }
@@ -625,9 +632,10 @@ private fun AddQualityDialog(vm: AppViewModel, onDismiss: () -> Unit) {
 
 @Composable
 private fun Row2(left: String, right: String, bold: Boolean = false) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+    // The name takes the spare width and wraps; the value keeps its own width and always has a gap before it.
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(left, Modifier.weight(1f), fontWeight = if (bold) FontWeight.Bold else null)
-        if (right.isNotBlank()) Text(right, style = MaterialTheme.typography.bodyMedium)
+        if (right.isNotBlank()) Text(right, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.End)
     }
 }
 

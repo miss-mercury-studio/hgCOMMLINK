@@ -82,9 +82,12 @@ fun TerminalCard(
         shape = CardShape, color = MercurySlate.copy(alpha = 0.85f), border = BorderStroke(1.dp, accent.copy(alpha = 0.45f)),
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
+            // The readout on the right shares the title's line while there is room, and drops to its own line when there is not,
+            // so a long readout or a large font never squeezes the title into a broken "[ TITLE" / "]".
+            FlowRow(
                 Modifier.fillMaxWidth().then(if (onToggle != null) Modifier.clickable(onClick = onToggle) else Modifier),
-                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(2.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     buildAnnotatedString {
@@ -94,10 +97,11 @@ fun TerminalCard(
                         append(" ]")
                     },
                     style = MaterialTheme.typography.titleSmall.copy(shadow = Shadow(accent.copy(alpha = 0.55f), blurRadius = 14f)),
-                    modifier = Modifier.weight(1f),
                 )
-                if (trailing != null) Text(trailing, style = MaterialTheme.typography.labelSmall, color = accent)
-                if (collapsed != null) Text(if (collapsed) "  +" else "  –", style = MaterialTheme.typography.labelLarge, color = accent)
+                if (trailing != null || collapsed != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (trailing != null) Text(trailing, style = MaterialTheme.typography.labelSmall, color = accent)
+                    if (collapsed != null) Text(if (collapsed) "  +" else "  –", style = MaterialTheme.typography.labelLarge, color = accent)
+                }
             }
             if (collapsed != true) content()
         }
@@ -120,22 +124,27 @@ fun StatCell(label: String, value: String, modifier: Modifier = Modifier, accent
     }
 }
 
-/** A thin strip of key:value telemetry, like the pinned bar in the mockups. */
+/**
+ * A thin strip of key:value telemetry, like the pinned bar in the mockups. The items share one line while they fit and wrap onto
+ * the next line when they do not (a narrow phone, a large font, a long amount), so no value is ever cut off.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TelemetryStrip(items: List<Pair<String, String>>, modifier: Modifier = Modifier, accent: Color = PhosphorGreen) {
-    Row(
+    FlowRow(
         modifier.fillMaxWidth().clip(SquareShape).background(MercurySlate).border(1.dp, TerminalGrid, SquareShape).padding(horizontal = 10.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        items.forEachIndexed { i, (label, value) ->
+        // No "|" separators: when the items wrap, a separator would be left dangling at the end of a line. The muted labels
+        // already tell the items apart.
+        items.forEach { (label, value) ->
             Text(
                 buildAnnotatedString {
                     if (label.isNotEmpty()) withStyle(SpanStyle(color = MutedSilver)) { append("${label.uppercase()}: ") }
                     withStyle(SpanStyle(color = accent)) { append(value) }
                 },
-                style = MaterialTheme.typography.labelSmall, maxLines = 1,
+                style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 2.dp),
             )
-            if (i < items.lastIndex) Text("|", style = MaterialTheme.typography.labelSmall, color = TerminalGrid)
         }
     }
 }
@@ -153,10 +162,17 @@ fun TerminalButton(
             .background(if (filled) accent else MercurySlate)
             .border(1.dp, if (filled) accent else TerminalGrid, CardShape)
             .clickable(enabled = enabled, onClick = onClick)
-            .heightIn(min = 44.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+            .heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text("[ ${label.uppercase().replace(' ', '_')} ]", style = MaterialTheme.typography.labelLarge, maxLines = 1, color = if (filled) Obsidian else Quicksilver)
+        // The label shrinks until it fits on one line, so a narrow phone, a large font or a long label never cuts it off.
+        val base = MaterialTheme.typography.labelLarge
+        var fit by androidx.compose.runtime.remember(label) { androidx.compose.runtime.mutableFloatStateOf(1f) }
+        Text(
+            "[ ${label.uppercase().replace(' ', '_')} ]", style = base, fontSize = base.fontSize * fit, maxLines = 1, softWrap = false,
+            color = if (filled) Obsidian else Quicksilver,
+            onTextLayout = { if (it.hasVisualOverflow && fit > 0.55f) fit *= 0.92f },
+        )
     }
 }
 

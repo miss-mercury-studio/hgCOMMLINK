@@ -7,6 +7,7 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 ## [Unreleased]
 
 ### Fixed
+- **Numbers and buttons no longer get cut off on smaller screens or with a larger font.** The nuyen box now always shows how much is left, bottom buttons such as New, Critter and Import shrink to fit instead of losing letters, panel titles no longer break apart, armor and gear names no longer run into their values, and the tab bar scrolls sideways when the tabs do not fit.
 - **Creating a new character works again.** In the 0.1.4 download, New character failed with "the new character skeleton is missing". The built-in template was left out of the app, so no new characters could be made.
 
 ## [0.1.4] - 2026-11-24
