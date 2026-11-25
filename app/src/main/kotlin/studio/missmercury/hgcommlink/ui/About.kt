@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import chummer.core.data.GameDataVersion
 import studio.missmercury.hgcommlink.CrashReporter
 
 /** Where players can find the project. Keep these current: shipped builds carry them. */
@@ -26,7 +27,7 @@ object AboutLinks {
 
 /** What the app is, which build this is, where to find the project, and the credits and licence notes. */
 @Composable
-fun AboutSheet(onDismiss: () -> Unit) {
+fun AboutSheet(dataInUse: GameDataVersion?, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val version = CrashReporter.appVersion(context)
     // "5.226" and the pinned commit, written into the APK at build time; an unreadable file just leaves the line out.
@@ -37,7 +38,13 @@ fun AboutSheet(onDismiss: () -> Unit) {
             Text("hgCOMMLINK", style = MaterialTheme.typography.titleLarge, color = PhosphorGreen, modifier = Modifier.padding(top = 8.dp))
             Text("MISS MERCURY STUDIO // CHARACTER TERMINAL", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
             Text("Version $version", style = MaterialTheme.typography.labelMedium)
-            chummer?.let { Text("Chummer 5a data ${it[0]}  (commit ${it[1]})", style = MaterialTheme.typography.labelMedium, color = MutedSilver) }
+            if (dataInUse?.isCustom == true) {
+                Text("Chummer data in use: ${dataInUse.label}", style = MaterialTheme.typography.labelMedium, color = DrainAmber)
+                Text("Added from a ${dataInUse.source}${dataInUse.importedAt?.let { " on $it" }.orEmpty()}, ID ${dataInUse.short}. Menu, Game data, switches back.", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+                chummer?.let { Text("Included with the app: Chummer 5a data ${it[0]}", style = MaterialTheme.typography.labelSmall, color = MutedSilver) }
+            } else {
+                chummer?.let { Text("Chummer 5a data ${it[0]}  (commit ${it[1]})", style = MaterialTheme.typography.labelMedium, color = MutedSilver) }
+            }
             Text(
                 "A Shadowrun 5th Edition character app for Android. It makes and manages characters on your phone and aims to match the numbers Chummer 5a shows on the desktop.",
                 style = MaterialTheme.typography.bodySmall,

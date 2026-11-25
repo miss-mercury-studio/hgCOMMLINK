@@ -68,7 +68,10 @@ data class GameDataVersion(
     val short: String get() = fingerprint.take(8)
 
     /** For a player: "Chummer 5.226.0" when it is a data set we know, otherwise what we can say about it. */
-    val label: String get() = if (status == DataStatus.SUPPORTED) name else if (build != null) "Chummer build $build (not checked)" else "Unknown Chummer data (not checked)"
+    val label: String get() = if (status == DataStatus.SUPPORTED) name else if (build != null) "Custom data: Chummer build $build (not checked)" else "Custom data: unknown Chummer version (not checked)"
+
+    /** Whether the player imported this, rather than it being the data that came with the app. */
+    val isCustom: Boolean get() = source != "bundled"
 
     /** One line for reports and screens: label and the start of the fingerprint. */
     val line: String get() = "$label [$short]"

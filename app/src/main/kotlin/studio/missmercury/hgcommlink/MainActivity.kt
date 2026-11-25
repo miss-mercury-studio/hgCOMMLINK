@@ -181,7 +181,7 @@ private fun App(vm: AppViewModel) {
     var whatsNew by remember { mutableStateOf(false) }
     if (whatsNew) WhatsNewSheet { whatsNew = false }
     var about by remember { mutableStateOf(false) }
-    if (about) AboutSheet { about = false }
+    if (about) AboutSheet(vm.gameDataVersion) { about = false }
     // After a crash, the next launch offers to report it (the report was saved by CrashReporter).
     val appContext = LocalContext.current
     var crash by remember { mutableStateOf(CrashReporter.pending(appContext)) }
@@ -213,7 +213,7 @@ private fun App(vm: AppViewModel) {
                             if (vm.isSharedFolder) {
                                 TerminalMenuItem("Use app storage", onClick = { menu = false; vm.useAppFolder() })
                             }
-                            TerminalMenuItem("Game data", onClick = { menu = false; showData = true })
+                            TerminalMenuItem(if (vm.gameDataVersion?.isCustom == true) "Game data (custom)" else "Game data", onClick = { menu = false; showData = true })
                             TerminalMenuItem("Refresh", onClick = { menu = false; vm.refresh() })
                             TerminalMenuItem("What's new", onClick = { menu = false; whatsNew = true })
                             TerminalMenuItem("Report a problem", onClick = { menu = false; CrashReporter.open(appContext, CrashReporter.bugUrl(appContext, null)) })

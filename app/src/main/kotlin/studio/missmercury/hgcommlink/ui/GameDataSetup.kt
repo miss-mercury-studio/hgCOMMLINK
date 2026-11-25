@@ -33,6 +33,7 @@ fun GameDataSheet(
                 return@Column
             }
             if (version != null) {
+                if (version.isCustom) Text("[ CUSTOM DATA ] not the version that came with the app", style = MaterialTheme.typography.labelMedium, color = DrainAmber)
                 Text(version.label, style = MaterialTheme.typography.titleMedium, color = if (version.status == DataStatus.SUPPORTED) PhosphorGreen else DrainAmber)
                 Text(
                     if (version.status == DataStatus.SUPPORTED) "The app is checked with this data: its numbers are tested against Chummer's."

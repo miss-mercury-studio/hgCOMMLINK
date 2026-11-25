@@ -61,8 +61,8 @@ class GameDataTest {
         assertEquals("Chummer 5.1.0", known.label)
         val other = GameDataVersion.identify("b".repeat(64), "226", list, "zip", null)
         assertEquals(DataStatus.UNCHECKED, other.status)
-        assertEquals("Chummer build 226 (not checked)", other.label)
-        assertEquals("Unknown Chummer data (not checked)", GameDataVersion.identify("c".repeat(64), null, list, "zip", null).label)
+        assertEquals("Custom data: Chummer build 226 (not checked)", other.label)
+        assertEquals("Custom data: unknown Chummer version (not checked)", GameDataVersion.identify("c".repeat(64), null, list, "zip", null).label)
         assertEquals("bbbbbbbb", other.short)
     }
 
