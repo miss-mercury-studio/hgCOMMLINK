@@ -2,7 +2,9 @@
 
 All notable changes to hgCOMMLINK. The newest release is first. The app shows this file under **What's new**, so keep entries to one short line, written for players, not developers.
 
-Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, then one `-` line per change. Put work in progress under `## [Unreleased]
+Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, then one `-` line per change. Put work in progress under `## [Unreleased]`; it is not shown in the app until it is given a version.
+
+## [Unreleased]
 
 ### Added
 - **Use another Chummer version.** Menu > Game data: Get Chummer, then Choose zip or folder. You can go back to the built-in version any time.
