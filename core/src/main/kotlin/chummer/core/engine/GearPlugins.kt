@@ -44,6 +44,8 @@ object GearPlugins {
         return data.byId.entries.filter { it.value.file == "gear.xml" && it.value.element.tagName == "gear" }.mapNotNull { (id, e) ->
             val el = e.element
             if (el.child("hide") != null || el.child("gears")?.children()?.isNotEmpty() == true) return@mapNotNull null
+            // "Custom Item" is a blank for a made-up name and price, which the app cannot work out.
+            if (el.t("category") == "Custom") return@mapNotNull null
             if (categories.isNotEmpty() && el.t("category") !in categories) return@mapNotNull null
             val need = capacityUsed(el, 1)
             if (left != null && (!el.t("capacity").contains('[') || need > left + 1e-9)) return@mapNotNull null

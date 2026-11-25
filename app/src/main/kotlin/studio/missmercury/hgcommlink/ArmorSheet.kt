@@ -43,20 +43,20 @@ internal fun ArmorSheet(
             GroupHeader("Mods", mods.size, Quicksilver)
             if (mods.isEmpty()) CardNote("No mods fitted.")
             mods.forEach { PartCard(it, vm) }
-            CardActions { CardAction("+ Mod", { close(); onAddMod() }, accent = PhosphorGreen) }
+            CardActions { CardAction("+ Mod", { onAddMod() }, accent = PhosphorGreen) }
 
             if (gear.isNotEmpty() || onAddGear != null) {
                 GroupHeader("Installed gear", gear.size, Quicksilver)
                 if (gear.isEmpty()) CardNote("Nothing installed.")
                 gear.forEach { PartCard(it, vm) }
-                onAddGear?.let { add -> CardActions { CardAction("+ Gear", { close(); add() }, accent = PhosphorGreen) } }
+                onAddGear?.let { add -> CardActions { CardAction("+ Gear", { add() }, accent = PhosphorGreen) } }
             }
 
             if (onSell != null || onRemove != null) {
                 GroupHeader("Get rid of it", 1, DrainAmber)
                 CardActions {
-                    onSell?.let { CardAction("Sell", { close(); it() }, accent = DrainAmber) }
-                    onRemove?.let { CardAction("Remove", { close(); it() }, accent = CriticalRed) }
+                    onSell?.let { CardAction("Sell", { it() }, accent = DrainAmber) }
+                    onRemove?.let { CardAction("Remove", { it() }, accent = CriticalRed) }
                 }
             }
         }
@@ -92,7 +92,7 @@ internal fun ArmorSetSheet(
             CardActions {
                 if (set.items.any { !it.equipped }) CardAction("Wear all", { vm.setArmorSetEquipped(set.guid, true) }, accent = PhosphorGreen)
                 if (worn > 0) CardAction("Take off all", { vm.setArmorSetEquipped(set.guid, false) }, accent = DrainAmber)
-                CardAction("Rename", { close(); onRename() }, accent = Quicksilver)
+                CardAction("Rename", { onRename() }, accent = Quicksilver)
             }
             GroupHeader("In this set", set.items.size, PhosphorGreen)
             if (set.items.isEmpty()) CardNote("Nothing in this set yet.")
@@ -114,7 +114,7 @@ internal fun ArmorSetSheet(
                 CardNote("An armor is in one set at a time, so adding it here moves it out of its other set.")
             }
             GroupHeader("Get rid of it", 1, DrainAmber)
-            CardActions { CardAction("Delete set", { close(); vm.removeArmorSet(set.guid) }, accent = CriticalRed) }
+            CardActions { CardAction("Delete set", { vm.removeArmorSet(set.guid) }, accent = CriticalRed) }
             CardNote("Deleting a set keeps its armor.")
         }
         TerminalButton("Done", close, Modifier.fillMaxWidth().padding(top = 8.dp))

@@ -33,6 +33,7 @@ class GearPluginTest {
         assertTrue(options.isNotEmpty())
         val allowed = GearPlugins.categories(data[gearNamed(c, "Fake SIN").text("sourceid")!!.trim()]!!.element).toSet()
         assertTrue("only the categories the SIN lists", options.all { it.category in allowed })
+        assertTrue("no blank Custom Item", options.none { it.category == "Custom" })
     }
 
     @Test

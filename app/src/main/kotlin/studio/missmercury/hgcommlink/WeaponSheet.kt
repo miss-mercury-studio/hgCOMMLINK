@@ -73,15 +73,15 @@ internal fun WeaponSheet(
                 )
             }
             if (w.allowAccessory) CardActions {
-                CardAction("+ Accessory", { close(); onAccessory() }, accent = PhosphorGreen)
+                CardAction("+ Accessory", { onAccessory() }, accent = PhosphorGreen)
             }
             if (w.allowAccessory && w.clips.isNotEmpty()) CardNote("A Spare Clip adds a clip slot, so you can carry more loaded clips and switch between them.")
 
             if (onSell != null || onRemove != null) {
                 GroupHeader("Get rid of it", 1, DrainAmber)
                 CardActions {
-                    onSell?.let { CardAction("Sell", { close(); it() }, accent = DrainAmber) }
-                    onRemove?.let { CardAction("Remove", { close(); it() }, accent = CriticalRed) }
+                    onSell?.let { CardAction("Sell", { it() }, accent = DrainAmber) }
+                    onRemove?.let { CardAction("Remove", { it() }, accent = CriticalRed) }
                 }
             }
         }

@@ -38,20 +38,20 @@ internal fun GearSheet(
                     val sold = sell(p.guid, p.name)
                     val gone = remove(p.guid)
                     if (p.guid.isNotEmpty() && (sold != null || gone != null)) CardActions {
-                        sold?.let { CardAction("Sell", { close(); it() }, accent = DrainAmber) }
-                        gone?.let { CardAction("Remove", { close(); it() }, accent = CriticalRed) }
+                        sold?.let { CardAction("Sell", { it() }, accent = DrainAmber) }
+                        gone?.let { CardAction("Remove", { it() }, accent = CriticalRed) }
                     }
                 }
             }
-            onPlugIn?.let { add -> CardActions { CardAction("+ Plug-in", { close(); add() }, accent = PhosphorGreen) } }
+            onPlugIn?.let { add -> CardActions { CardAction("+ Plug-in", { add() }, accent = PhosphorGreen) } }
 
             val sellIt = sell(g.guid, g.name)
             val removeIt = remove(g.guid)
             if (sellIt != null || removeIt != null) {
                 GroupHeader("Get rid of it", 1, DrainAmber)
                 CardActions {
-                    sellIt?.let { CardAction("Sell", { close(); it() }, accent = DrainAmber) }
-                    removeIt?.let { CardAction("Remove", { close(); it() }, accent = CriticalRed) }
+                    sellIt?.let { CardAction("Sell", { it() }, accent = DrainAmber) }
+                    removeIt?.let { CardAction("Remove", { it() }, accent = CriticalRed) }
                 }
             }
         }
