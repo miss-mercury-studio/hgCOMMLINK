@@ -50,7 +50,7 @@ fun GameDataSheet(
             TerminalButton("Get Chummer", onGet, Modifier.fillMaxWidth())
             TerminalButton("Choose zip", onZip, Modifier.fillMaxWidth(), filled = true)
             TerminalButton("Choose folder", onFolder, Modifier.fillMaxWidth())
-            if (version != null && version.source != "bundled") TerminalButton(bundledName?.removePrefix("Chummer ")?.let { "Revert to $it" } ?: "Revert to the included version", onUseBundled, Modifier.fillMaxWidth(), outlineTint = CriticalRed)
+            if (version != null && version.source != "bundled") TerminalButton(bundledName?.removePrefix("Chummer ")?.let { "Revert to bundled $it" } ?: "Revert to bundled", onUseBundled, Modifier.fillMaxWidth(), outlineTint = CriticalRed)
         }
     }
 }
