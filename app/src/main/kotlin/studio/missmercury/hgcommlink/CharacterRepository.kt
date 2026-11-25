@@ -15,6 +15,9 @@ import java.io.File
 /** A stored file plus the summary read from it (or the reason it could not be read). */
 data class CharacterEntry(val file: StoredFile, val summary: CharacterFile.Summary?, val error: String?)
 
+/** Saving was refused because the character's file is no longer there: it was deleted or moved from outside the app. */
+class FileMissingException : Exception("The file is no longer there")
+
 /** Owns the current storage location and the import, export and delete operations. */
 class CharacterRepository(private val context: Context) {
     private val prefs = context.getSharedPreferences("storage", Context.MODE_PRIVATE)
@@ -50,9 +53,17 @@ class CharacterRepository(private val context: Context) {
     }
 
     @Synchronized
-    fun list(): List<CharacterEntry> = storage.list().sortedBy { it.name.lowercase() }.map { f ->
-        val key = f.modified to f.size
-        summaryCache[f.id]?.takeIf { it.first == key }?.second ?: read(f).also { summaryCache[f.id] = key to it }
+    fun list(): List<CharacterEntry> {
+        val log = LoadLog.storage
+        log.reset()
+        log.add("scanning ${storage.label}")
+        val files = storage.list().sortedBy { it.name.lowercase() }
+        log.add("found ${files.size} character file(s)")
+        return files.map { f ->
+            val key = f.modified to f.size
+            summaryCache[f.id]?.takeIf { it.first == key }?.second?.also { log.add("${f.name}: unchanged") }
+                ?: run { log.add("reading ${f.name}"); read(f).also { summaryCache[f.id] = key to it } }
+        }.also { log.add("roster ready") }
     }
 
     private fun read(f: StoredFile): CharacterEntry = try {
@@ -111,6 +122,8 @@ class CharacterRepository(private val context: Context) {
      */
     @Synchronized
     fun save(entry: StoredFile, character: CharacterFile) {
+        // Without this a save would quietly write the file again (app storage) or fail in a confusing way (a shared folder).
+        if (!storage.exists(entry.id)) throw FileMissingException()
         if (backedUp.add(entry.id)) {
             val dir = File(context.filesDir, "backups").apply { mkdirs() }
             val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.ROOT).format(java.util.Date())
@@ -141,6 +154,8 @@ class CharacterRepository(private val context: Context) {
         summaryCache.clear()
         return storage.list().first { it.id == id }
     }
+
+    fun exists(id: String): Boolean = storage.exists(id)
 
     @Synchronized
     fun delete(id: String): Boolean = storage.delete(id).also { summaryCache.remove(id) }

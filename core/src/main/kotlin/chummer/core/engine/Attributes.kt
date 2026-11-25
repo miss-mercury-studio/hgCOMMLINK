@@ -63,7 +63,9 @@ class AttributeEngine(
         val value = minOf(maxOf(a.base + freeBase + rawMinimum + valueModifiers, totalMinimum) + a.karma, totalMaximum)
 
         val attributeModifiers = standardRound(improvements.augmentedValueOf("Attribute", abbrev))
-        val totalAugMax = maxOf(0, a.metatypeAugMax + augMaxModifiers)
+        // Chummer's TotalAugmentedMaximum also counts the maximum modifiers (Exceptional Attribute raises both), unless the maximum is clamped.
+        val totalAugMax = if (improvements.matching("AttributeMaxClamp", abbrev).isNotEmpty()) totalMaximum
+        else maxOf(0, a.metatypeAugMax + maximumModifiers + augMaxModifiers)
         val meat = value + attributeModifiers
         var total = meat
         if (!settings.dontUseCyberlimbCalculation && abbrev in LIMB_ATTRIBUTES) {

@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -52,27 +53,7 @@ android {
         }
     }
 
-    buildFeatures {
-        compose = true
-        buildConfig = true
-    }
-
-    // Two editions of one app (same package, same signing key, so they can replace each other):
-    //  - github: the APK on GitHub Releases. Ships Chummer's game data inside.
-    //  - play:   the Google Play bundle. Ships no game data; the player points the app at their own Chummer folder on first run.
-    flavorDimensions += "edition"
-    productFlavors {
-        create("github") {
-            dimension = "edition"
-            buildConfigField("boolean", "BUNDLED_GAME_DATA", "true")
-            buildConfigField("String", "EDITION", "\"github\"")
-        }
-        create("play") {
-            dimension = "edition"
-            buildConfigField("boolean", "BUNDLED_GAME_DATA", "false")
-            buildConfigField("String", "EDITION", "\"play\"")
-        }
-    }
+    buildFeatures { compose = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -80,15 +61,6 @@ android {
     }
     packaging {
         resources.excludes += setOf("META-INF/LICENSE*", "META-INF/DEPENDENCIES")
-    }
-}
-
-// The Play edition's debug build is its own app (id ".debug.play"), so it can be tried on a phone that has the GitHub edition's debug build
-// (its first-run game data screen only shows when the app has no data, and the GitHub debug build already unpacked it).
-androidComponents {
-    onVariants(selector().withBuildType("debug").withFlavor("edition" to "play")) { variant ->
-        variant.applicationId.set("studio.missmercury.hgcommlink.debug.play")
-        variant.manifestPlaceholders.put("appLabel", "hgCOMMLINK (play debug)")
     }
 }
 
@@ -109,8 +81,7 @@ dependencies {
     debugImplementation(libs.compose.tooling)
 }
 
-// Chummer's game data ships unmodified inside the github edition's APK (the play edition has none); the app unpacks it on first run.
-// Only the github edition needs the chummer5a checkout (-Pchummer.src).
+// Chummer's game data ships unmodified inside the APK; the app unpacks it on first run.
 val chummerSrc = providers.gradleProperty("chummer.src")
 val copyChummerData = tasks.register<Copy>("copyChummerData") {
     from(File(chummerSrc.get(), "Chummer/data")) {
@@ -127,17 +98,43 @@ val copyChummerLang = tasks.register<Copy>("copyChummerLang") {
     from(File(chummerSrc.get(), "Chummer/lang")) { include("en-us.xml") }
     into(layout.buildDirectory.dir("generated/chummerAssets/chummer-lang"))
 }
-// The change log ships in both editions for the What's new sheet.
+// The change log ships in the APK for the What's new sheet.
 val copyChangelog = tasks.register<Copy>("copyChangelog") {
-    // The list of Chummer data sets the app is checked against ships too, so it can say whether the player's data is one of them.
+    // The list of Chummer data sets the app is checked against ships too, so it can say whether imported data is one of them.
     from(rootProject.file("CHANGELOG.md"), rootProject.file("chummer-supported.txt"))
-    into(layout.buildDirectory.dir("generated/changelogAssets"))
+    into(layout.buildDirectory.dir("generated/chummerAssets"))
 }
-android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/changelogAssets"))
-android.sourceSets.getByName("github").assets.srcDir(layout.buildDirectory.dir("generated/chummerAssets"))
-// Asset merging and lint read the same generated folders, so they must wait for them. Task names carry the flavor
-// ("mergeGithubDebugAssets", "lintAnalyzePlayRelease"): only the github ones need Chummer's files.
-tasks.matching { (it.name.startsWith("merge") && it.name.endsWith("Assets")) || it.name.contains("lint", ignoreCase = true) }.configureEach {
-    dependsOn(copyChangelog)
-    if (name.contains("Github")) dependsOn(copyChummerData, copyChummerCustomData, copyChummerLang)
+// Which Chummer the bundled data comes from (its version and the pinned commit), for the About sheet.
+val writeChummerVersion = tasks.register("writeChummerVersion") {
+    val csproj = File(chummerSrc.get(), "Chummer/Chummer.csproj")
+    val pin = rootProject.file("chummer-pin.txt")
+    val out = layout.buildDirectory.file("generated/chummerAssets/chummer-version.txt")
+    inputs.files(csproj, pin)
+    outputs.file(out)
+    doLast {
+        val version = Regex("<VersionPrefix>([^<]+)</VersionPrefix>").find(csproj.readText())?.groupValues?.get(1)?.removeSuffix(".0")?.removeSuffix(".0") ?: "unknown"
+        out.get().asFile.apply { parentFile.mkdirs(); writeText(listOf(version, pin.readText().trim().take(7)).joinToString(System.lineSeparator(), postfix = System.lineSeparator())) }
+    }
 }
+// Only part of Chummer's data folder is bundled, so the app cannot fingerprint what it unpacks. This is the fingerprint of the whole folder
+// (the same one tools/data_sets.py makes, and the one chummer-supported.txt lists), so the bundled data is recognised as the pinned data.
+val writeDataFingerprint = tasks.register("writeDataFingerprint") {
+    val dataDir = File(chummerSrc.get(), "Chummer/data")
+    val out = layout.buildDirectory.file("generated/chummerAssets/chummer-data-fingerprint.txt")
+    inputs.dir(dataDir)
+    outputs.file(out)
+    doLast {
+        fun hex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
+        val all = MessageDigest.getInstance("SHA-256")
+        for (f in dataDir.listFiles { x -> x.isFile && x.name.endsWith(".xml") }!!.sortedBy { it.name }) {
+            val clean = f.readBytes().filter { it != 13.toByte() }.toByteArray()
+            all.update((f.name + "\n").toByteArray(Charsets.UTF_8))
+            all.update((hex(MessageDigest.getInstance("SHA-256").digest(clean)) + "\n").toByteArray(Charsets.US_ASCII))
+        }
+        out.get().asFile.apply { parentFile.mkdirs(); writeText(hex(all.digest()) + "\n") }
+    }
+}
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/chummerAssets"))
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(copyChummerData, copyChummerCustomData, copyChummerLang, copyChangelog, writeChummerVersion, writeDataFingerprint) }
+// Lint reads the same generated assets, so it must wait for them too.
+tasks.matching { it.name.contains("lint", ignoreCase = true) }.configureEach { dependsOn(copyChummerData, copyChummerCustomData, copyChummerLang, copyChangelog, writeChummerVersion, writeDataFingerprint) }

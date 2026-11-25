@@ -8,6 +8,21 @@ import chummer.core.data.CharacterSettings
 import chummer.core.text
 import java.time.LocalDateTime
 
+/** Moving an installed ware item from grade [from] to the next grade [to] costs [cost] nuyen (the difference in price); [affordable] says whether the character has it. */
+data class WareUpgrade(val from: String, val to: String, val cost: Double, val affordable: Boolean)
+
+/** What can be changed on an installed ware item while the character is in creation: its rating range (0 to 0 when it has no rating), and whether its grade can be chosen. */
+data class WareEditInfo(val grade: String, val rating: Int, val minRating: Int, val maxRating: Int, val gradeEditable: Boolean)
+
+/**
+ * The effect of giving an installed ware item a grade and rating: its price (with the plug-ins in it) and essence before and after, and
+ * [problem] when the change is not allowed (null when it is). [newEssence] is the item's own essence; the final check uses the whole character.
+ */
+data class WareEditPreview(val cost: Double, val newCost: Double, val essence: Double, val newEssence: Double, val problem: String?)
+
+/** Starts the `extra` of the log entry an upgrade writes, followed by "oldGrade:newGrade"; the log's undo puts the old grade back. */
+const val WARE_GRADE_PREFIX = "WareGrade:"
+
 /**
  * Spending karma on a finished (career) character, as Chummer's career screen does: each purchase costs karma from the
  * character's balance, is written to the expense log with its undo record, and raises the rating by one step.
@@ -427,9 +442,26 @@ class CareerAdvancement(
 
     private fun removeVehicle(guid: String): Boolean = (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).remove(guid) } == true
 
+    private fun removeLifestyle(guid: String): Boolean = (data as? chummer.core.DataPack)?.let { LifestyleEditor(file, it).remove(guid) } == true
+
+    // ---- lifestyles
+
+    /** Buy [months] months of a lifestyle (paid from the nuyen left); returns its GUID, or null when it cannot be paid for. */
+    fun buyLifestyle(entryId: String, months: Int, now: LocalDateTime = LocalDateTime.now()): String? {
+        val pack = data as? chummer.core.DataPack ?: return null
+        val editor = LifestyleEditor(file, pack)
+        val left = nuyenLeft()
+        val guid = runCatching { editor.add(entryId, months) }.getOrNull() ?: return null
+        val cost = editor.total(guid)
+        // The ledger prices a lifestyle with the character's adjustments, so the price is known only once it is on the sheet.
+        if (cost > left + 0.004) { editor.remove(guid); return null }
+        charge(cost, "Purchased Lifestyle " + pack[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddLifestyle", guid, 0.0, now)
+        return guid
+    }
+
     private fun removeAny(guid: String, includeArts: Boolean = true): Boolean {
         val aw = ArmorWeaponEditor(file, data)
-        return removeVehicle(guid) || GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
+        return removeVehicle(guid) || removeLifestyle(guid) || GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
             aw.removeAccessory(guid) || aw.removeArmorMod(guid) || CyberwareEditor(file, data).remove(guid) || (includeArts && removeMartialArtItem(guid))
     }
 
@@ -519,8 +551,19 @@ class CareerAdvancement(
         return ArmorWeaponEditor(file, data).accessoryCost(entry, r, storedNumber(weapon, "cost"))
     }
 
+    /** Switch a weapon accessory on or off (no cost; one that is off adds nothing to the weapon). */
+    fun setAccessoryEquipped(accessoryGuid: String, equipped: Boolean): Boolean = ArmorWeaponEditor(file, data).setAccessoryEquipped(accessoryGuid, equipped)
+
+    /** The accessories that may be fitted to this weapon (those whose weapon requirements it meets). */
+    fun accessoryOptions(weaponGuid: String): List<ItemOption> {
+        val pack = data as? chummer.core.DataPack ?: return emptyList()
+        val weapon = ArmorWeaponEditor(file, data).weaponEntry(weaponGuid) ?: return ArmorWeaponCatalog.accessories(pack)
+        return ArmorWeaponCatalog.accessoriesFor(pack, weapon)
+    }
+
     fun buyAccessory(weaponGuid: String, entryId: String, mount: String? = null, rating: Int? = null, now: LocalDateTime = LocalDateTime.now()): String? {
         val cost = accessoryCost(weaponGuid, entryId, rating) ?: return null
+        if (ArmorWeaponEditor(file, data).accessoryProblem(weaponGuid, entryId) != null) return null
         if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating)) return null
         val guid = ArmorWeaponEditor(file, data).addAccessory(weaponGuid, entryId, mount, rating)
         charge(cost, "Purchased Weapon Accessory " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddWeaponAccessory", guid, 0.0, now)
@@ -585,6 +628,150 @@ class CareerAdvancement(
         return guid
     }
 
+    /**
+     * What moving an installed ware item up one grade would do: the next grade, the nuyen it costs (only the difference between the two grades'
+     * prices, for the item and the plug-ins in it) and whether the character can pay it now. Null for an item that cannot be upgraded.
+     */
+    fun wareUpgradeOffer(guid: String): WareUpgrade? {
+        if (inCreation) return null
+        val pack = data as? chummer.core.DataPack ?: return null
+        val item = root.child("cyberwares")?.children("cyberware")?.firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: return null
+        // An item that forces its grade (it only comes in one) has nowhere to go.
+        if (item.text("forcegrade")?.trim().orEmpty().isNotEmpty()) return null
+        val bio = item.text("improvementsource")?.trim() == "Bioware"
+        val from = item.text("grade")?.trim().orEmpty()
+        val editor = CyberwareEditor(file, data)
+        val offered = WareCatalog.gradeNames(pack, bio)
+        if (from !in offered) return null
+        fun essence(grade: String) = data.gradeEssence(bio, grade) ?: 1.0
+        fun price(grade: String) = editor.gradeCostMultiplier(bio, grade)
+        // Only grades from the character's enabled books. The settings' list of banned grades is a creation rule in Chummer (a career character can use any grade), so it is not applied here.
+        val books = settings.books
+        val inBooks = CyberwareEditor.grades(pack, bio).filter { g -> books.isEmpty() || g.child("source")?.textContent?.trim() in books }.mapNotNull { it.child("name")?.textContent?.trim() }.toSet()
+        // The next grade is the nearest step up: one that gives more essence back and costs more. That skips a grade like Omegaware (cheaper than Standard, same essence) and
+        // puts Greyware between Alphaware and Betaware, as its figures do.
+        val to = offered.filter { it in inBooks && essence(it) < essence(from) - 1e-9 && price(it) > price(from) + 1e-9 }
+            .minWithOrNull(compareByDescending<String> { essence(it) }.thenBy { price(it) }) ?: return null
+        val difference = price(to) - price(from)
+        fun basePrice(e: org.w3c.dom.Element): Double? {
+            var total = CyberwareEditor.formula(e.text("cost").orEmpty(), e.text("rating")?.trim()?.toIntOrNull() ?: 0) ?: return null
+            for (child in e.child("children")?.children("cyberware").orEmpty()) total += basePrice(child) ?: return null
+            return total
+        }
+        // Rounded to the cent: 4999.999999999999 nuyen is a floating-point slip, not a price.
+        val cost = Math.round(((basePrice(item) ?: return null) * difference).coerceAtLeast(0.0) * 100.0) / 100.0
+        return WareUpgrade(from, to, cost, cost <= nuyenLeft() + 0.004)
+    }
+
+    // ---- creation: change the grade and rating of an item already bought
+
+    private fun wareBase(e: org.w3c.dom.Element, ratingOverride: Int? = null): Double? {
+        var total = CyberwareEditor.formula(e.text("cost").orEmpty(), ratingOverride ?: e.text("rating")?.trim()?.toIntOrNull() ?: 0) ?: return null
+        for (child in e.child("children")?.children("cyberware").orEmpty()) total += wareBase(child) ?: return null
+        return total
+    }
+
+    private fun isPlugin(item: org.w3c.dom.Element) = (item.parentNode?.parentNode as? org.w3c.dom.Element)?.tagName == "cyberware"
+
+    /** What may be edited on the installed item [guid] in creation; null in career, for an unknown item, or for one with neither a grade to choose nor a rating. */
+    fun wareEditInfo(guid: String): WareEditInfo? {
+        if (!inCreation) return null
+        val editor = CyberwareEditor(file, data)
+        val item = editor.findWare(guid) ?: return null
+        val entry = data[item.text("sourceid")?.trim().orEmpty()]?.element ?: return null
+        val plugin = isPlugin(item)
+        val (min, max) = editor.range(entry, if (plugin) item.parentNode.parentNode as org.w3c.dom.Element else null)
+        // A plug-in always has its parent's grade, and an item that forces its grade (or has none) cannot be moved.
+        val gradeEditable = !plugin && item.text("forcegrade")?.trim().orEmpty().isEmpty() && item.text("grade")?.trim() != "None"
+        if (!gradeEditable && max <= 0) return null
+        return WareEditInfo(item.text("grade")?.trim().orEmpty(), item.text("rating")?.trim()?.toIntOrNull() ?: 0, if (max > 0) maxOf(min, 1) else 0, max, gradeEditable)
+    }
+
+    /** Preview giving [guid] the grade [grade] and rating [rating] in creation (no change is made). Null when the item cannot be edited. */
+    fun wareEditPreview(guid: String, grade: String, rating: Int?): WareEditPreview? {
+        val info = wareEditInfo(guid) ?: return null
+        val editor = CyberwareEditor(file, data)
+        val item = editor.findWare(guid) ?: return null
+        val entryId = item.text("sourceid")?.trim().orEmpty()
+        val entry = data[entryId]?.element ?: return null
+        val pack = data as? chummer.core.DataPack ?: return null
+        val bio = entry.tagName == "bioware"
+        val rated = info.maxRating > 0
+        val newRating = if (rated) (rating ?: info.rating).coerceIn(info.minRating, info.maxRating) else null
+        val newGrade = if (info.gradeEditable) grade else info.grade
+        // The price is the item's and its plug-ins' base prices times the grade's multiplier; a plug-in is priced at its parent's grade, which does not change here.
+        val old = (wareBase(item) ?: return null) * editor.gradeCostMultiplier(bio, info.grade)
+        val new = (wareBase(item, newRating) ?: return null) * editor.gradeCostMultiplier(bio, newGrade)
+        // A plug-in costs essence only when it adds to its parent's.
+        val countsEssence = !isPlugin(item) || entry.child("addtoparentess") != null
+        val oldEss = if (countsEssence) editor.essence(entryId, info.grade, if (rated) info.rating else null) ?: 0.0 else 0.0
+        val newEss = if (countsEssence) editor.essence(entryId, newGrade, newRating) ?: 0.0 else 0.0
+        val problem = when {
+            info.gradeEditable && newGrade != info.grade && newGrade !in WareCatalog.gradeNames(pack, bio, settings.bannedWareGrades) -> "that grade is not allowed"
+            new - old > nuyenLeft() + 0.004 -> "not enough nuyen"
+            essenceNow() - (newEss - oldEss) < -0.0001 -> "not enough essence"
+            (newGrade != info.grade || newRating != info.rating) && availabilityBlocked(entryId, newRating, if (info.gradeEditable) gradeAvailability(entry, newGrade) else 0) -> "availability is over the limit"
+            else -> null
+        }
+        return WareEditPreview(Math.round(old * 100) / 100.0, Math.round(new * 100) / 100.0, oldEss, newEss, problem)
+    }
+
+    /**
+     * Give an installed item (and the plug-ins in it) a new grade and rating while the character is in creation. The change is undone and false is
+     * returned when it is not allowed or leaves the character short of nuyen or essence.
+     */
+    fun editWare(guid: String, grade: String, rating: Int?): Boolean {
+        val info = wareEditInfo(guid) ?: return false
+        val preview = wareEditPreview(guid, grade, rating) ?: return false
+        // The preview's essence is the item's own figure; the check after the change uses the whole character, so only that one can refuse for essence.
+        if (preview.problem != null && preview.problem != "not enough essence") return false
+        val editor = CyberwareEditor(file, data)
+        val newRating = if (info.maxRating > 0) (rating ?: info.rating).coerceIn(info.minRating, info.maxRating) else null
+        val newGrade = if (info.gradeEditable) grade else info.grade
+        if (newGrade == info.grade && (newRating == null || newRating == info.rating)) return true
+        fun apply(g: String, r: Int?): Boolean = (!info.gradeEditable || editor.setGrade(guid, g)) && (r == null || r == editor.findWare(guid)?.text("rating")?.trim()?.toIntOrNull() || editor.setRating(guid, r))
+        if (!apply(newGrade, newRating)) { apply(info.grade, info.rating.takeIf { info.maxRating > 0 }); return false }
+        // The real check, with everything the character carries.
+        if (NuyenLedger.of(file, settings, data).remaining < -0.004 || essenceNow() < -0.0001) {
+            apply(info.grade, info.rating.takeIf { info.maxRating > 0 })
+            return false
+        }
+        NuyenLedger.sync(file, settings, data)
+        return true
+    }
+
+    /** What can be edited on every installed ware item, plug-ins included (by GUID); empty in career. */
+    fun wareEdits(): Map<String, WareEditInfo> {
+        if (inCreation.not()) return emptyMap()
+        val out = HashMap<String, WareEditInfo>()
+        fun walk(list: org.w3c.dom.Element?) {
+            for (w in list?.children("cyberware").orEmpty()) {
+                w.text("guid")?.trim()?.let { g -> wareEditInfo(g)?.let { out[g] = it } }
+                walk(w.child("children"))
+            }
+        }
+        walk(root.child("cyberwares"))
+        return out
+    }
+
+    /** The upgrade on offer for every top-level ware item (by GUID); items that cannot be upgraded are left out. */
+    fun wareUpgrades(): Map<String, WareUpgrade> =
+        root.child("cyberwares")?.children("cyberware").orEmpty().mapNotNull { w -> w.text("guid")?.trim()?.let { g -> wareUpgradeOffer(g)?.let { g to it } } }.toMap()
+
+    /**
+     * Upgrade an installed ware item (and its plug-ins) to the next grade, paying only the difference in price. Returns the log entry's GUID,
+     * or null when the item cannot be upgraded or the character cannot pay. The entry can be undone from the log, which puts the old grade back.
+     */
+    fun upgradeWare(guid: String, now: LocalDateTime = LocalDateTime.now()): String? {
+        val offer = wareUpgradeOffer(guid) ?: return null
+        if (!offer.affordable) return null
+        val item = CyberwareEditor(file, data).findWare(guid) ?: return null
+        val kind = if (item.text("improvementsource")?.trim() == "Bioware") "Bioware" else "Cyberware"
+        if (!CyberwareEditor(file, data).setGrade(guid, offer.to)) return null
+        // Chummer has no log kind for an upgrade; a manual spend is the safe one (undoing it on the desktop only gives the nuyen back). Our own undo reads the grades from [extra].
+        return log.add("Nuyen", -offer.cost, "Upgraded $kind ${item.text("name")?.trim().orEmpty()} to ${offer.to}", "ManualSubtract", objectId = guid, extra = WARE_GRADE_PREFIX + offer.from + ":" + offer.to, now = now)
+    }
+
     /** Buy gear for an armor's capacity: pays for it, installs it in the armor, and writes a "Purchased Gear" entry. */
     fun buyArmorGear(armorGuid: String, entryId: String, rating: Int? = null, qty: Double = 1.0, now: LocalDateTime = LocalDateTime.now()): String? {
         val editor = ArmorWeaponEditor(file, data)
@@ -596,8 +783,20 @@ class CareerAdvancement(
         return guid
     }
 
-    /** Load ammunition from a gear stack into a weapon's first empty clip. */
-    fun loadAmmo(weaponGuid: String, ammoGuid: String): Boolean = ArmorWeaponEditor(file, data).loadAmmo(weaponGuid, ammoGuid)
+    /** The loose ammunition a weapon can be loaded from. */
+    fun compatibleAmmo(weaponGuid: String): List<ArmorWeaponEditor.AmmoStack> = ArmorWeaponEditor(file, data).compatibleAmmo(weaponGuid)
+
+    /**
+     * Load ammunition from a gear stack into a weapon's clip [slot] (the first empty clip when 0), [rounds] of it (a full clip when null); a clip that
+     * holds the same ammunition is topped up.
+     */
+    fun loadAmmo(weaponGuid: String, ammoGuid: String, slot: Int = 0, rounds: Int? = null): Boolean = ArmorWeaponEditor(file, data).loadAmmo(weaponGuid, ammoGuid, slot, rounds)
+
+    /** Make clip [slot] the one the weapon fires from. */
+    fun setActiveClip(weaponGuid: String, slot: Int): Boolean = ArmorWeaponEditor(file, data).setActiveClip(weaponGuid, slot)
+
+    /** Spend rounds from a clip (the active one when [slot] is 0), as firing does. */
+    fun fireRounds(weaponGuid: String, rounds: Int, slot: Int = 0): Boolean = ArmorWeaponEditor(file, data).fireRounds(weaponGuid, rounds, slot)
 
     // ---- martial arts
 
@@ -634,8 +833,8 @@ class CareerAdvancement(
         return editor.removeTechnique(guid) || editor.removeArt(guid)
     }
 
-    /** Take the rounds out of the weapon's last loaded clip, back into the loose ammunition. */
-    fun unloadAmmo(weaponGuid: String): Boolean = ArmorWeaponEditor(file, data).unloadAmmo(weaponGuid)
+    /** Take the rounds out of a weapon's clip [slot] (the last loaded one when 0), back into the loose ammunition. */
+    fun unloadAmmo(weaponGuid: String, slot: Int = 0): Boolean = ArmorWeaponEditor(file, data).unloadAmmo(weaponGuid, slot)
 
     /** Capacity each top-level ware item has left for plug-ins (only items that take plug-ins). */
     fun pluginCapacity(): Map<String, Double> {

@@ -55,7 +55,7 @@ object CrashReporter {
 
     fun appVersion(context: Context): String = runCatching {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
-        "${info.versionName} (${info.longVersionCode}, ${BuildConfig.EDITION})"
+        "${info.versionName} (${info.longVersionCode})"
     }.getOrDefault("unknown")
 
     /** The game data in use, from what was saved when it was last identified (a crash report must not load the data). */

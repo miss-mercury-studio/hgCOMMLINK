@@ -76,6 +76,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handleIncoming(intent)
+        // Coming back to a screen that was open (the app was dropped in the background): no boot logo, the player goes straight back to it.
+        val resuming = LastScreen(this).fileId() != null
         setContent {
             HgTheme {
                 androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
@@ -83,11 +85,20 @@ class MainActivity : ComponentActivity() {
                     App(vm)
                     ScanlineOverlay()
                     // Shown once per launch; kept across rotation.
-                    var booted by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+                    var booted by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(resuming) }
                     if (!booted) BootScreen { booted = true }
                 }
             }
         }
+    }
+
+    private var started = false
+
+    /** Coming back to the app (from a file manager or a sync app): pick up files added to the folder meanwhile. The list stays on screen while it reloads, so the scroll position holds. */
+    override fun onStart() {
+        super.onStart()
+        if (started) { vm.refresh(); vm.checkOpenFile() }
+        started = true
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -148,7 +159,7 @@ private fun App(vm: AppViewModel) {
         if (uri != null) vm.chooseFolder(uri)
     }
 
-    // Chummer's game data (Play edition): the release zip, or a folder. "Get Chummer" opens the release page in the browser; the app itself uses no network.
+    // Chummer's game data: the app bundles one version; the player can use another from the release zip, or a folder. "Get Chummer" opens the release page in the browser; the app itself uses no network.
     val dataFolderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) vm.addGameData(uri, zip = false)
     }
@@ -160,14 +171,17 @@ private fun App(vm: AppViewModel) {
     var showData by remember { mutableStateOf(false) }
     if (showData) {
         GameDataSheet(
-            vm.gameDataVersion, vm.recommendedData(), canChange = !BuildConfig.BUNDLED_GAME_DATA, importing = vm.importingGameData, progress = vm.gameDataProgress,
-            onGet = { getChummer() }, onZip = { pickZip() }, onFolder = { dataFolderPicker.launch(null) }, onDismiss = { showData = false },
+            vm.gameDataVersion, vm.recommendedData(), importing = vm.importingGameData, progress = vm.gameDataProgress,
+            onGet = { getChummer() }, onZip = { pickZip() }, onFolder = { dataFolderPicker.launch(null) }, onUseBundled = vm::useBundledData, onDismiss = { showData = false },
         )
     }
 
     BackHandler(enabled = open != null) { vm.close() }
+    if (open != null && vm.fileMissing) MissingFileSheet(open.character.summary().let { s -> if (s.name.isNotBlank() && s.alias.isNotBlank()) "${s.name} \"${s.alias}\"" else s.name.ifBlank { s.alias.ifBlank { open.file.name } } }, vm.storageLabel, onSaveAgain = vm::saveMissingAgain, onClose = vm::close, onDismiss = vm::dismissMissing)
     var whatsNew by remember { mutableStateOf(false) }
     if (whatsNew) WhatsNewSheet { whatsNew = false }
+    var about by remember { mutableStateOf(false) }
+    if (about) AboutSheet { about = false }
     // After a crash, the next launch offers to report it (the report was saved by CrashReporter).
     val appContext = LocalContext.current
     var crash by remember { mutableStateOf(CrashReporter.pending(appContext)) }
@@ -177,7 +191,12 @@ private fun App(vm: AppViewModel) {
         containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = Quicksilver,
         snackbarHost = { SnackbarHost(snackbar, Modifier.padding(bottom = 64.dp)) },
         topBar = {
-            if (open == null) {
+            if (open == null && vm.restoring) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+                    title = { AppTitle("RESUMING") },
+                )
+            } else if (open == null) {
                 var menu by remember { mutableStateOf(false) }
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
@@ -194,11 +213,12 @@ private fun App(vm: AppViewModel) {
                             if (vm.isSharedFolder) {
                                 TerminalMenuItem("Use app storage", onClick = { menu = false; vm.useAppFolder() })
                             }
-                            if (vm.gameDataReady) TerminalMenuItem("Game data", onClick = { menu = false; showData = true })
+                            TerminalMenuItem("Game data", onClick = { menu = false; showData = true })
                             TerminalMenuItem("Refresh", onClick = { menu = false; vm.refresh() })
                             TerminalMenuItem("What's new", onClick = { menu = false; whatsNew = true })
                             TerminalMenuItem("Report a problem", onClick = { menu = false; CrashReporter.open(appContext, CrashReporter.bugUrl(appContext, null)) })
                             TerminalMenuItem("Send feedback", onClick = { menu = false; CrashReporter.open(appContext, CrashReporter.feedbackUrl(appContext)) })
+                            TerminalMenuItem("About", onClick = { menu = false; about = true })
                         }
                     },
                 )
@@ -242,7 +262,7 @@ private fun App(vm: AppViewModel) {
         },
         bottomBar = {
             // The two things done most on this screen, under the thumb.
-            if (open == null && vm.gameDataReady) {
+            if (open == null && !vm.restoring) {
                 Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TerminalButton("New", { showNew = true }, Modifier.weight(1f), filled = true)
                     TerminalButton("Critter", { showCritter = true }, Modifier.weight(1f))
@@ -254,14 +274,9 @@ private fun App(vm: AppViewModel) {
         Column(Modifier.padding(padding).fillMaxSize()) {
             if (showNew) NewCharacterDialog(vm) { showNew = false }
             if (showCritter) NewCritterDialog(vm) { showCritter = false }
-            when {
-                open != null -> SheetScreen(open, vm)
-                !vm.gameDataReady -> GameDataSetup(
-                    vm.importingGameData, vm.gameDataProgress, vm.recommendedData(),
-                    onGet = { getChummer() }, onZip = { pickZip() }, onFolder = { dataFolderPicker.launch(null) },
-                )
-                else -> CharacterList(vm)
-            }
+            if (open != null) SheetScreen(open, vm)
+            else if (vm.restoring) TerminalLoader(LoadLines.character, Modifier.padding(24.dp), real = LoadLog.data.lines)
+            else CharacterList(vm)
         }
     }
 }
@@ -269,7 +284,7 @@ private fun App(vm: AppViewModel) {
 @Composable
 private fun CharacterList(vm: AppViewModel) {
     when {
-        vm.loading && vm.entries.isEmpty() -> TerminalLine("SCANNING_STORAGE", Modifier.padding(24.dp))
+        vm.loading && vm.entries.isEmpty() -> TerminalLoader(LoadLines.storage, Modifier.padding(24.dp), real = LoadLog.storage.lines)
         vm.entries.isEmpty() -> Text(
             "No characters in ${vm.storageLabel} yet.\n\nTap + to import a .chum5 file, or open one from another app (Files, email, chat).",
             Modifier.padding(24.dp),
@@ -298,22 +313,30 @@ private fun CharacterList(vm: AppViewModel) {
     }
 }
 
-/** The top bar as a shell prompt: hg@commlink:~/viper$ with a blinking cursor. */
+/** The top bar as a shell prompt: hg@commlink:~/viper$ with a blinking cursor. When that is too long for the bar, it shortens to "> viper" so the name keeps its room. */
 @Composable
 private fun AppTitle(text: String) {
     val blink by androidx.compose.animation.core.rememberInfiniteTransition(label = "prompt").animateFloat(
         0f, 1f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(550), androidx.compose.animation.core.RepeatMode.Reverse), label = "prompt",
     )
+    var short by remember(text) { mutableStateOf(false) }
     Text(
         androidx.compose.ui.text.buildAnnotatedString {
-            withStyle(androidx.compose.ui.text.SpanStyle(color = PhosphorGreen)) { append("hg@commlink") }
-            withStyle(androidx.compose.ui.text.SpanStyle(color = MutedSilver)) { append(":") }
-            withStyle(androidx.compose.ui.text.SpanStyle(color = AstralMagenta)) { append("~/" + text.lowercase().replace(' ', '_')) }
-            withStyle(androidx.compose.ui.text.SpanStyle(color = MutedSilver)) { append("$ ") }
+            if (short) {
+                withStyle(androidx.compose.ui.text.SpanStyle(color = PhosphorGreen)) { append("> ") }
+            } else {
+                withStyle(androidx.compose.ui.text.SpanStyle(color = PhosphorGreen)) { append("hg@commlink") }
+                withStyle(androidx.compose.ui.text.SpanStyle(color = MutedSilver)) { append(":") }
+                withStyle(androidx.compose.ui.text.SpanStyle(color = AstralMagenta)) { append("~/") }
+            }
+            withStyle(androidx.compose.ui.text.SpanStyle(color = AstralMagenta)) { append(text.lowercase().replace(' ', '_')) }
+            // The long prompt ends in "$"; the short one is just "> name" and the cursor.
+            withStyle(androidx.compose.ui.text.SpanStyle(color = MutedSilver)) { append(if (short) " " else "$ ") }
             withStyle(androidx.compose.ui.text.SpanStyle(color = PhosphorGreen.copy(alpha = if (blink > 0.5f) 1f else 0f))) { append("█") }
         },
         style = MaterialTheme.typography.titleMedium.copy(shadow = androidx.compose.ui.graphics.Shadow(PhosphorGreen.copy(alpha = 0.45f), blurRadius = 16f)),
         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        onTextLayout = { if (it.hasVisualOverflow && !short) short = true },
     )
 }
 
@@ -340,7 +363,7 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
 
     TerminalSheet("New character", onDismiss, tall = true) { close ->
         when {
-            options == null -> TerminalLine("LOADING_GAME_DATA", Modifier.padding(vertical = 20.dp))
+            options == null -> TerminalLoader(LoadLines.gameData, Modifier.padding(vertical = 20.dp), real = LoadLog.data.lines)
             options.profiles.isEmpty() -> Text(
                 "No settings profile with the Karma build method was found. Put your profile's .xml file in your characters folder.",
                 Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.error,
@@ -443,7 +466,7 @@ private fun NewCritterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
     var picking by remember { mutableStateOf(false) }
     TerminalSheet("New critter", onDismiss) { close ->
         when {
-            options == null -> TerminalLine("LOADING_GAME_DATA", Modifier.padding(vertical = 20.dp))
+            options == null -> TerminalLoader(LoadLines.gameData, Modifier.padding(vertical = 20.dp), real = LoadLog.data.lines)
             else -> Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TerminalField(name, { name = it }, "name")
                 TerminalButton(chosen?.name ?: "Choose a critter…", { picking = true }, Modifier.fillMaxWidth())

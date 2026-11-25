@@ -4,6 +4,8 @@ import chummer.core.*
 import chummer.core.data.CharacterSettings
 import chummer.core.data.CustomDataLocator
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -179,5 +181,157 @@ class CyberwareEditorTest {
         assertEquals("6", made.text("rating"))
         assertEquals("MinimumAGI+1", made.text("minrating"))
         assertEquals("MaximumAGI", made.text("maxrating"))
+    }
+
+    // ---- grade upgrades in career: only the difference in price is paid
+
+    private fun wareId(name: String, category: String? = null) =
+        data.byId.entries.first { it.value.file == "cyberware.xml" && it.value.name == name && (category == null || it.value.element.child("category")?.textContent?.trim() == category) }.key
+
+    private fun gradeOf(c: CharacterFile, guid: String) = CyberwareEditor(c, data).findWare(guid)!!.text("grade")?.trim()
+
+    @Test
+    fun upgradingWareChargesOnlyTheDifferenceBetweenTheGrades() {
+        val c = viper()
+        val adv = CareerAdvancement(c, data, settings)
+        adv.log.manualNuyen(500000.0, "Test reward")
+        val ed = CyberwareEditor(c, data)
+        val dj = wareId("Datajack")
+        val guid = adv.buyWare(dj, "Standard")!!
+        val offer = adv.wareUpgradeOffer(guid)!!
+        assertEquals("Standard", offer.from)
+        assertEquals("Alphaware", offer.to)
+        assertEquals(ed.cost(dj, "Alphaware", null)!! - ed.cost(dj, "Standard", null)!!, offer.cost, 0.01)
+        assertTrue(offer.affordable)
+        val essenceBefore = adv.essenceNow()
+        val before = adv.log.nuyen
+        assertTrue(adv.upgradeWare(guid) != null)
+        assertEquals("Alphaware", gradeOf(c, guid))
+        assertEquals(before - offer.cost, adv.log.nuyen, 0.01)
+        assertTrue("an upgrade gives essence back", adv.essenceNow() > essenceBefore)
+        assertTrue(adv.log.balanced())
+        // The next step is priced from the new grade, not from the item's first purchase.
+        val next = adv.wareUpgradeOffer(guid)!!
+        assertTrue("a step above Alphaware, got ${next.to}", next.to in setOf("Greyware", "Betaware"))
+        assertEquals("Alphaware", next.from)
+        assertEquals(ed.cost(dj, next.to, null)!! - ed.cost(dj, "Alphaware", null)!!, next.cost, 0.01)
+        assertEquals(next, adv.wareUpgrades()[guid])
+    }
+
+    @Test
+    fun upgradingStopsAtTheBestGrade() {
+        val c = viper()
+        val adv = CareerAdvancement(c, data, settings)
+        adv.log.manualNuyen(5000000.0, "Test reward")
+        val guid = adv.buyWare(wareId("Datajack"), "Standard")!!
+        val ed = CyberwareEditor(c, data)
+        var steps = 0
+        var essence = 1.0
+        var price = 1.0
+        while (true) {
+            val offer = adv.wareUpgradeOffer(guid) ?: break
+            assertTrue(adv.upgradeWare(guid) != null)
+            // Every step gives more essence back and costs more than the one before.
+            val e = data.gradeEssence(false, offer.to)!!
+            assertTrue("${offer.to} must beat the last grade", e < essence && ed.gradeCostMultiplier(false, offer.to) > price)
+            essence = e; price = ed.gradeCostMultiplier(false, offer.to)
+            steps++
+            assertTrue("runs away", steps < 12)
+        }
+        assertTrue("at least Alpha, Beta and Delta, got $steps", steps >= 3)
+        assertNull(adv.upgradeWare(guid))
+        assertFalse(adv.wareUpgrades().containsKey(guid))
+    }
+
+    @Test
+    fun anUpgradeIsRefusedWhenTheCharacterCannotPay() {
+        val c = viper()
+        val adv = CareerAdvancement(c, data, settings)
+        adv.log.manualNuyen(500000.0, "Test reward")
+        val guid = adv.buyWare(wareId("Datajack"), "Standard")!!
+        // Leave 100 nuyen: less than the upgrade costs.
+        adv.log.manualNuyen(-(adv.log.nuyen - 100.0), "Spent elsewhere")
+        val offer = adv.wareUpgradeOffer(guid)!!
+        assertTrue(offer.cost > 100.0)
+        assertFalse(offer.affordable)
+        val entries = adv.log.entries().size
+        assertNull(adv.upgradeWare(guid))
+        assertEquals("Standard", gradeOf(c, guid))
+        assertEquals(100.0, adv.log.nuyen, 0.01)
+        assertEquals(entries, adv.log.entries().size)
+    }
+
+    @Test
+    fun upgradingAnItemUpgradesItsPlugInsAndPaysForThemToo() {
+        val c = viper()
+        val adv = CareerAdvancement(c, data, settings)
+        adv.log.manualNuyen(1000000.0, "Test reward")
+        val ed = CyberwareEditor(c, data)
+        val eyes = wareId("Cybereyes Basic System")
+        val parent = adv.buyWare(eyes, "Alphaware", 2)!!
+        val child = adv.buyWare(wareId("Smartlink", "Eyeware"), "Standard", null, parentGuid = parent)!!
+        val offer = adv.wareUpgradeOffer(parent)!!
+        assertEquals("Alphaware", offer.from)
+        // The price is the item's and the plug-in's base prices times the change in the grade multiplier.
+        val base = ed.cost(eyes, "Standard", 2)!! + ed.cost(wareId("Smartlink", "Eyeware"), "Standard", null)!!
+        assertEquals(base * (ed.gradeCostMultiplier(false, offer.to) - ed.gradeCostMultiplier(false, "Alphaware")), offer.cost, 0.01)
+        // A plug-in is not offered an upgrade of its own.
+        assertTrue(parent in adv.wareUpgrades().keys)
+        assertFalse(child in adv.wareUpgrades().keys)
+        assertNull(adv.wareUpgradeOffer(child))
+        assertTrue(adv.upgradeWare(parent) != null)
+        assertEquals(offer.to, gradeOf(c, parent))
+        assertEquals(offer.to, gradeOf(c, child))
+        assertTrue(adv.log.balanced())
+    }
+
+    @Test
+    fun undoingAnUpgradeGivesTheNuyenAndTheOldGradeBack() {
+        val c = viper()
+        val adv = CareerAdvancement(c, data, settings)
+        adv.log.manualNuyen(500000.0, "Test reward")
+        val guid = adv.buyWare(wareId("Datajack"), "Standard")!!
+        val before = adv.log.nuyen
+        val first = adv.upgradeWare(guid)!!
+        val second = adv.upgradeWare(guid)!!
+        val top = gradeOf(c, guid)
+        assertTrue(adv.log.entries().last().reason.startsWith("Upgraded Cyberware Datajack to $top"))
+        assertTrue(adv.log.canUndo(adv.log.entries().last()))
+        // The older upgrade cannot be undone while a newer one sits on top of it.
+        assertFalse(adv.log.undo(first))
+        assertEquals(top, gradeOf(c, guid))
+        assertTrue(adv.log.undo(second))
+        assertEquals("Alphaware", gradeOf(c, guid))
+        assertTrue(adv.log.undo(first))
+        assertEquals("Standard", gradeOf(c, guid))
+        assertEquals(before, adv.log.nuyen, 0.01)
+        assertTrue(adv.log.balanced())
+    }
+
+    @Test
+    fun anUpgradeCannotBeUndoneOnceTheItemIsGone() {
+        val c = viper()
+        val adv = CareerAdvancement(c, data, settings)
+        adv.log.manualNuyen(500000.0, "Test reward")
+        val guid = adv.buyWare(wareId("Datajack"), "Standard")!!
+        val entry = adv.upgradeWare(guid)!!
+        val nuyen = adv.log.nuyen
+        assertTrue(adv.discardPurchase(guid))
+        assertFalse(adv.log.undo(entry))
+        assertEquals(nuyen, adv.log.nuyen, 0.01)
+    }
+
+    @Test
+    fun noUpgradeIsOfferedInCreationOrToAnItemThatForcesItsGrade() {
+        val creation = viper()
+        creation.root.child("created")!!.textContent = "False"
+        assertNull(CareerAdvancement(creation, data, settings).wareUpgradeOffer(creation.root.child("cyberwares")!!.children("cyberware").first().text("guid")!!.trim()))
+        val c = viper()
+        val adv = CareerAdvancement(c, data, settings)
+        adv.log.manualNuyen(500000.0, "Test reward")
+        val guid = adv.buyWare(wareId("Datajack"), "Standard")!!
+        CyberwareEditor(c, data).findWare(guid)!!.child("forcegrade")!!.textContent = "Standard"
+        assertNull(adv.wareUpgradeOffer(guid))
+        assertNull(adv.upgradeWare(guid))
     }
 }

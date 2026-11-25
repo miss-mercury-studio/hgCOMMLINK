@@ -16,59 +16,14 @@ import chummer.core.data.DataStatus
 import chummer.core.data.GameDataVersion
 import chummer.core.data.SupportedDataSet
 
-/** What the "Get Chummer" step says: the release this app is checked with, or generic words if the list could not be read. */
-private fun releaseName(recommended: SupportedDataSet?) = recommended?.name ?: "the latest Chummer 5a release"
-
 /**
- * First run of the Google Play edition, which ships without Chummer's game data: the player gets Chummer's release zip (one button
- * opens the page), then points the app at it. Nothing is downloaded by the app; the player brings the file.
- */
-@Composable
-fun GameDataSetup(
-    importing: Boolean, progress: String?, recommended: SupportedDataSet?,
-    onGet: () -> Unit, onZip: () -> Unit, onFolder: () -> Unit,
-) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("GAME DATA", style = MaterialTheme.typography.titleLarge)
-        if (importing) {
-            TerminalLine("ADDING_GAME_DATA")
-            Text(progress ?: "This takes a few seconds.", style = MaterialTheme.typography.bodyMedium)
-            return@Column
-        }
-        Text(
-            "hgCOMMLINK is an unofficial fan tool and does not include Shadowrun's rules data. It uses the data files of Chummer 5a, " +
-                "which you add once, from the free download.",
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        TerminalCard(title = "1. GET CHUMMER") {
-            Text(
-                "Download ${releaseName(recommended)}: on its page, under Assets, tap the file ending in .zip (about 45 MB). " +
-                    "This is the version the app is checked with.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            TerminalButton("Get Chummer", onGet, Modifier.fillMaxWidth().padding(top = 12.dp))
-        }
-        TerminalCard(title = "2. ADD IT") {
-            Text("Choose the zip you downloaded. You do not need to unzip it.", style = MaterialTheme.typography.bodyMedium)
-            TerminalButton("Choose zip", onZip, Modifier.fillMaxWidth().padding(top = 12.dp), filled = true)
-            Text("Already have Chummer unpacked on this phone?", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 12.dp))
-            TerminalButton("Choose folder", onFolder, Modifier.fillMaxWidth().padding(top = 8.dp))
-        }
-        Text(
-            "The files are copied into the app and stay on your phone. Nothing is sent anywhere, and your characters are not touched.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-    }
-}
-
-/**
- * The menu's "Game data": which Chummer data is in use, whether the app is checked with it, and (in the Play edition, where the player
- * brings the data) how to change it.
+ * The menu's "Game data": which Chummer data is in use, whether the app is checked with it, and how to use another Chummer version
+ * (the release zip or folder) instead of the one that came with the app.
  */
 @Composable
 fun GameDataSheet(
-    version: GameDataVersion?, recommended: SupportedDataSet?, canChange: Boolean, importing: Boolean, progress: String?,
-    onGet: () -> Unit, onZip: () -> Unit, onFolder: () -> Unit, onDismiss: () -> Unit,
+    version: GameDataVersion?, recommended: SupportedDataSet?, importing: Boolean, progress: String?,
+    onGet: () -> Unit, onZip: () -> Unit, onFolder: () -> Unit, onUseBundled: () -> Unit, onDismiss: () -> Unit,
 ) {
     TerminalSheet("Game data", onDismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -77,9 +32,7 @@ fun GameDataSheet(
                 Text(progress ?: "This takes a few seconds.", style = MaterialTheme.typography.bodyMedium)
                 return@Column
             }
-            if (version == null) {
-                Text("No game data yet.", style = MaterialTheme.typography.bodyLarge)
-            } else {
+            if (version != null) {
                 Text(version.label, style = MaterialTheme.typography.titleMedium, color = if (version.status == DataStatus.SUPPORTED) PhosphorGreen else DrainAmber)
                 Text(
                     if (version.status == DataStatus.SUPPORTED) "The app is checked with this data: its numbers are tested against Chummer's."
@@ -89,14 +42,18 @@ fun GameDataSheet(
                 val where = when (version.source) { "bundled" -> "Included in the app"; "zip" -> "Added from a zip"; "folder" -> "Added from a folder"; else -> version.source }
                 TelemetryStrip(listOfNotNull("SOURCE" to where, version.importedAt?.let { "ADDED" to it }, version.build?.let { "BUILD" to it }, "ID" to version.short))
             }
-            if (canChange) {
-                if (version?.status != DataStatus.SUPPORTED && recommended != null) {
-                    Text("To match the app, use ${recommended.name}.", style = MaterialTheme.typography.bodyMedium)
-                }
-                TerminalButton("Get Chummer", onGet, Modifier.fillMaxWidth())
-                TerminalButton("Choose zip", onZip, Modifier.fillMaxWidth(), filled = true)
-                TerminalButton("Choose folder", onFolder, Modifier.fillMaxWidth())
+            Text(
+                "To use a Chummer version you know, download its release zip from Chummer's page and choose it here. The files are copied into the app " +
+                    "and stay on your phone; characters are not touched.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (version?.status != DataStatus.SUPPORTED && recommended != null) {
+                Text("The app is checked with ${recommended.name}.", style = MaterialTheme.typography.bodyMedium)
             }
+            TerminalButton("Get Chummer", onGet, Modifier.fillMaxWidth())
+            TerminalButton("Choose zip", onZip, Modifier.fillMaxWidth(), filled = true)
+            TerminalButton("Choose folder", onFolder, Modifier.fillMaxWidth())
+            if (version != null && version.source != "bundled") TerminalButton("Use the version that came with the app", onUseBundled, Modifier.fillMaxWidth())
         }
     }
 }

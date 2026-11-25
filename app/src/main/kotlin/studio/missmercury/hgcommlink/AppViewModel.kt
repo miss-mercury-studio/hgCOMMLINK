@@ -32,6 +32,14 @@ data class OpenCharacter(
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = CharacterRepository(app)
     private val gameData = GameDataStore(app)
+    private val last = LastScreen(app)
+    private var restoreTried = false
+
+    /** True when the open character's file has been deleted from outside the app: the screen asks whether to save it again or close it. */
+    var fileMissing by mutableStateOf(false); private set
+
+    /** True from launch until the character the player had open has been put back (or it turns out there is none to put back): the screen shows "resuming", not the list. */
+    var restoring by mutableStateOf(last.fileId() != null); private set
 
     var entries by mutableStateOf<List<CharacterEntry>>(emptyList()); private set
     var loading by mutableStateOf(true); private set
@@ -39,10 +47,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var isSharedFolder by mutableStateOf(false); private set
     var open by mutableStateOf<OpenCharacter?>(null); private set
 
-    /** False in the Play edition until the player adds Chummer's game data; the app shows a setup screen instead of the character list. */
-    var gameDataReady by mutableStateOf(gameData.hasData()); private set
+    /** True while game data from another Chummer version is being copied in or removed. */
     var importingGameData by mutableStateOf(false); private set
-    /** What the game data is and whether this app is checked against it; null until it is read, or while the Play edition has none. */
+    /** What the game data is and whether this app is checked against it; null until it is read. */
     var gameDataVersion by mutableStateOf<GameDataVersion?>(null); private set
     /** What the import is doing now ("Reading the zip", "Copied 50 files"). */
     var gameDataProgress by mutableStateOf<String?>(null); private set
@@ -64,9 +71,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }
 
-    fun refresh() {
+    /** Reload the list. [quiet] keeps the list on screen while it reloads (used when coming back from a character). */
+    fun refresh(quiet: Boolean = false) {
         viewModelScope.launch {
-            loading = true
+            if (!quiet) loading = true
             try {
                 entries = io { repo.list() }
             } catch (e: Exception) {
@@ -76,6 +84,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             storageLabel = repo.storage.label
             isSharedFolder = repo.storage !is studio.missmercury.hgcommlink.storage.AppFolderStorage
             loading = false
+            restoreLastScreen()
+        }
+    }
+
+    /**
+     * Once per launch, once the list is read: open the character the player was on when the app was last closed or dropped. Nothing is done when
+     * something else has opened a character already (a file sent to the app), and a character that no longer exists is forgotten.
+     */
+    private fun restoreLastScreen() {
+        if (restoreTried) return
+        restoreTried = true
+        val id = last.fileId()
+        val file = entries.firstOrNull { it.file.id == id }?.file
+        if (open == null && file != null) openFile(file)
+        else {
+            restoring = false
+            // Forget it only when the list was read and the character is not in it (a folder that could not be read this time says nothing).
+            if (id != null && file == null && entries.isNotEmpty()) last.clear()
         }
     }
 
@@ -119,7 +145,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         null
     } ?: uri.lastPathSegment?.substringAfterLast('/')
 
-    /** Play edition: copy the game data from the Chummer release zip, or the folder, the player picked. Also used to update it later. */
+    /** Use another Chummer version: copy the game data from the Chummer release zip, or the folder, the player picked. Also used to update it later. */
     fun addGameData(uri: Uri, zip: Boolean) {
         if (importingGameData) return
         viewModelScope.launch {
@@ -128,7 +154,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val v = io { gameData.import(uri, zip) { gameDataProgress = it } }
                 gameDataVersion = v
-                gameDataReady = true
                 message = if (v.status == DataStatus.SUPPORTED) "Added ${v.label}."
                 else "Added ${v.label}. This app has not been checked against it, so numbers may differ from Chummer's."
             } catch (e: Exception) {
@@ -140,12 +165,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Drop imported game data and go back to the version bundled in the app. */
+    fun useBundledData() {
+        if (importingGameData) return
+        viewModelScope.launch {
+            importingGameData = true
+            try {
+                gameDataVersion = io { gameData.useBundled() }
+                message = "Using the game data that came with the app."
+            } finally {
+                importingGameData = false
+            }
+        }
+    }
+
     fun openFile(file: StoredFile) {
-        if (!gameDataReady) { message = "Add Chummer's game data first."; return }
         viewModelScope.launch {
             try {
                 val character = io { repo.load(file.id) }
+                last.opened(file.id)
                 open = OpenCharacter(file, character)
+                restoring = false
                 // The sheet takes a moment the first time (the game data has to be unpacked and read).
                 open = try {
                     val started = System.nanoTime()
@@ -159,6 +199,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     OpenCharacter(file, character, sheetError = e.message ?: e.javaClass.simpleName)
                 }
             } catch (e: Exception) {
+                restoring = false
+                last.clear()
                 message = "Could not open ${file.name}: ${e.message}"
             }
         }
@@ -198,9 +240,42 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (open?.sheet?.isCareer == true) editCareer("Removed quality", "Not enough karma to remove that quality") { adv, _ -> adv.removeQuality(guid) }
         else edit("Removed quality") { editor -> editor.removeItem(guid) }
 
+    /** Called when the app comes back to the front: if the open character's file was deleted meanwhile, say so now. */
+    fun checkOpenFile() {
+        val current = open ?: return
+        viewModelScope.launch { if (!io { repo.exists(current.file.id) }) fileMissing = true }
+    }
+
+    fun dismissMissing() { fileMissing = false }
+
+    /** The file is gone: write the character as it is now to a new file, and carry on with that one. */
+    fun saveMissingAgain() {
+        val current = open ?: return
+        viewModelScope.launch {
+            try {
+                val file = io { repo.saveNew(current.character, current.file.name) }
+                last.opened(file.id)
+                open = current.copy(file = file)
+                fileMissing = false
+                message = "Saved ${current.character.summary().let { s -> s.alias.ifBlank { s.name } }.ifBlank { "the character" }} again (${file.name})"
+                refresh(quiet = true)
+            } catch (e: Throwable) {
+                message = "Could not save it again: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }
+    }
+
+    /** A change is not started on a character whose file is gone, so the copy in memory and the file cannot drift apart. */
+    private suspend fun stillThere(file: StoredFile): Boolean {
+        if (io { repo.exists(file.id) }) return true
+        fileMissing = true
+        return false
+    }
+
     private fun edit(done: String?, blocked: String = "Nothing changed", change: (chummer.core.engine.CharacterEditor) -> Boolean) {
         val current = open ?: return
         viewModelScope.launch {
+            if (!stillThere(current.file)) return@launch
             try {
                 val (sheet, warning) = io {
                     val editor = gameData.editor(current.character)
@@ -212,6 +287,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 } ?: run { message = blocked; return@launch }
                 open = OpenCharacter(current.file, current.character, sheet, warning)
                 if (done != null) message = done
+            } catch (e: FileMissingException) {
+                fileMissing = true
             } catch (e: Throwable) {
                 message = "Could not change the character: ${e.message ?: e.javaClass.simpleName}"
             }
@@ -222,6 +299,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun editCareer(done: String?, blocked: String, change: (chummer.core.engine.CareerAdvancement, chummer.core.CharacterFile) -> Boolean) {
         val current = open ?: return
         viewModelScope.launch {
+            if (!stillThere(current.file)) return@launch
             try {
                 val result = io {
                     val log = chummer.core.engine.ExpenseLog(current.character)
@@ -239,6 +317,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 open = OpenCharacter(current.file, current.character, sheetAndWarning.first, sheetAndWarning.second)
                 undoOffer = offer
                 if (done != null) message = done
+            } catch (e: FileMissingException) {
+                fileMissing = true
             } catch (e: Throwable) {
                 message = "Could not change the character: ${e.message ?: e.javaClass.simpleName}"
             }
@@ -280,6 +360,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun buyWeapon(id: String) = editCareer("Weapon bought", "Cannot buy that weapon (nuyen, or it comes with accessories that are not supported yet)") { adv, _ -> adv.buyWeapon(id) != null }
 
     fun accessoryOptions() = gameData.accessoryOptions()
+    fun setAccessoryEquipped(accessoryGuid: String, equipped: Boolean) = editCareer(null, "Cannot change that accessory") { adv, _ -> adv.setAccessoryEquipped(accessoryGuid, equipped) }
+    /** The accessories that fit this weapon. */
+    fun accessoryOptions(weaponGuid: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).accessoryOptions(weaponGuid) } ?: gameData.accessoryOptions()
     fun armorModOptions() = gameData.armorModOptions()
     fun accessoryCost(weaponGuid: String, id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).accessoryCost(weaponGuid, id, rating) }
     fun armorModCost(id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).armorModCost(id, rating) }
@@ -293,11 +376,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun wareGrades(bioware: Boolean): List<String> = open?.let { gameData.wareGrades(bioware, it.character) }.orEmpty()
     fun wareCost(id: String, grade: String, rating: Int?, parentGuid: String? = null) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareCost(id, grade, rating, parentGuid) }
     fun wareEssence(id: String, grade: String, rating: Int?, parentGuid: String? = null) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareEssence(id, grade, rating, parentGuid) }
+    /** What changing the grade and rating of the installed ware item [guid] would cost, in creation (null when nothing can be edited). */
+    fun wareEditPreview(guid: String, grade: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareEditPreview(guid, grade, rating) }
+    /** Give an installed ware item a new grade and rating, in creation. */
+    fun editWare(guid: String, grade: String, rating: Int?) = editCareer("Updated", "Cannot change that (nuyen, essence or availability)") { adv, _ -> adv.editWare(guid, grade, rating) }
+    /** Move an installed cyberware or bioware item to the next grade, paying only the difference in price. */
+    fun upgradeWare(guid: String) = editCareer("Upgraded", "Cannot upgrade that (nuyen or grade)") { adv, _ -> adv.upgradeWare(guid) != null }
     fun buyWare(id: String, grade: String, rating: Int?, parentGuid: String? = null) = editCareer("Installed", "Cannot install that (nuyen, essence or capacity)") { adv, _ -> adv.buyWare(id, grade, rating, parentGuid) != null }
     fun pluginOptions(parentGuid: String) = open?.let { gameData.career(it.character).pluginOptions(parentGuid) }.orEmpty()
-    fun loadAmmo(weaponGuid: String, ammoGuid: String) = editCareer("Ammo loaded", "Cannot load that (no empty clip, or wrong ammunition)") { adv, _ -> adv.loadAmmo(weaponGuid, ammoGuid) }
-
-    fun unloadAmmo(weaponGuid: String) = editCareer("Ammo unloaded", "Nothing to unload") { adv, _ -> adv.unloadAmmo(weaponGuid) }
+    /** The loose ammunition a weapon can be loaded from. */
+    fun compatibleAmmo(weaponGuid: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).compatibleAmmo(weaponGuid) }.orEmpty()
+    fun loadAmmo(weaponGuid: String, ammoGuid: String, slot: Int = 0, rounds: Int? = null) =
+        editCareer("Ammo loaded", "Cannot load that (the clip is full or holds other ammunition, or the ammunition does not fit)") { adv, _ -> adv.loadAmmo(weaponGuid, ammoGuid, slot, rounds) }
+    fun unloadAmmo(weaponGuid: String, slot: Int = 0) = editCareer("Ammo unloaded", "Nothing to unload") { adv, _ -> adv.unloadAmmo(weaponGuid, slot) }
+    fun setActiveClip(weaponGuid: String, slot: Int) = editCareer(null, "That clip is not available") { adv, _ -> adv.setActiveClip(weaponGuid, slot) }
+    fun fireRounds(weaponGuid: String, rounds: Int, slot: Int = 0) = editCareer(null, "Not enough rounds in that clip") { adv, _ -> adv.fireRounds(weaponGuid, rounds, slot) }
 
     /** The newest log entry that can be undone, for the menu shortcut. */
     fun lastUndoable(): chummer.core.engine.ExpenseEntry? =
@@ -314,6 +407,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Remove an item in career with no nuyen changing hands. */
     fun discardPurchase(guid: String) = editCareer("Removed", "Cannot remove that") { adv, _ -> adv.discardPurchase(guid) }
+
+    fun lifestyleOptions() = gameData.lifestyleOptions()
+    fun buyLifestyle(id: String, months: Int) = editCareer("Lifestyle added", "Cannot add that lifestyle (not enough nuyen)") { adv, _ -> adv.buyLifestyle(id, months) != null }
 
     fun martialArtOptions() = gameData.martialArtOptions()
     fun techniqueOptions(artName: String) = gameData.techniqueOptions(artName)
@@ -350,6 +446,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun finishCreation(startingNuyen: Int) {
         val current = open ?: return
         viewModelScope.launch {
+            if (!stillThere(current.file)) return@launch
             try {
                 val (problems, sheet) = io {
                     val problems = gameData.finish(current.character, startingNuyen)
@@ -359,6 +456,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (sheet == null) { message = "Cannot finish: ${problems.joinToString("; ")}"; return@launch }
                 open = OpenCharacter(current.file, current.character, sheet.first, sheet.second)
                 message = "Character created. Career mode is on."
+            } catch (e: FileMissingException) {
+                fileMissing = true
             } catch (e: Throwable) {
                 message = "Could not finish the character: ${e.message ?: e.javaClass.simpleName}"
             }
@@ -473,6 +572,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun close() {
         open = null
+        fileMissing = false
+        last.clear()
+        // The character may have changed (finished creation, a purchase, a new name): its summary on the list must follow. Only the changed file is re-read.
+        refresh(quiet = true)
     }
 
     fun delete(file: StoredFile) {
@@ -480,6 +583,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val ok = io { repo.delete(file.id) }
             message = if (ok) "Deleted ${file.name}" else "Could not delete ${file.name}"
             open = null
+            last.clear()
             refresh()
         }
     }

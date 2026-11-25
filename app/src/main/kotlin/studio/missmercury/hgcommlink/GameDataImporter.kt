@@ -10,14 +10,14 @@ import chummer.core.data.GameDataZip
 import java.io.File
 
 /**
- * The Play edition ships no game data. The player gives the app their own copy of Chummer 5a, as the release zip or as the unpacked
- * folder, and this copies the files the rules engine reads into app storage, where [GameDataStore] looks for them. Nothing leaves
+ * The app bundles the latest stable Chummer data, and a player who prefers another version can import it instead. They give the app
+ * their own copy of Chummer 5a, as the release zip or as the unpacked folder, and this copies the files the rules engine reads into app storage, where [GameDataStore] looks for them. Nothing leaves
  * the phone and nothing is downloaded. (The zip and folder readers are the same two things, one on a file and one on a folder tree.)
  *
  * The copy is made beside the live data and swapped in at the end, so a choice that fails half way never leaves the app without data.
  */
 object GameDataImporter {
-    /** What the app reads, as folders under the app's files directory (the same names the GitHub edition unpacks into). */
+    /** What the app reads, as folders under the app's files directory (the same names the bundled copy unpacks into). */
     const val DATA = "chummer-data"
     const val LANG = "chummer-lang"
     const val CUSTOM = "chummer-customdata"
@@ -32,7 +32,13 @@ object GameDataImporter {
 
     class Found(val data: DocumentFile, val lang: DocumentFile?, val custom: DocumentFile?, val changelog: DocumentFile?)
 
-    fun installed(context: Context): Boolean = File(File(context.filesDir, DATA), MARKER).isFile
+    /** Imported data lives apart from the bundled copy, so the bundled one is never overwritten and "use the bundled data" is just deleting this. */
+    fun root(context: Context) = File(context.filesDir, "imported-game-data")
+
+    fun installed(context: Context): Boolean = File(File(root(context), DATA), MARKER).isFile
+
+    /** Go back to the data that came with the app. */
+    fun remove(context: Context) { root(context).deleteRecursively() }
 
     private fun staging(context: Context) = File(context.filesDir, "game-data-staging").also { it.deleteRecursively(); it.mkdirs() }
 
@@ -95,8 +101,9 @@ object GameDataImporter {
         File(staging, LANG).mkdirs()
         val fingerprint = GameDataFingerprint.ofDirectory(File(staging, DATA))
         for (name in listOf(DATA, LANG, CUSTOM)) {
-            val target = File(context.filesDir, name)
+            val target = File(root(context), name)
             target.deleteRecursively()
+            target.parentFile?.mkdirs()
             if (!File(staging, name).renameTo(target)) throw GameDataImportException("Could not store the game data.")
         }
         return Imported(files, build, fingerprint)

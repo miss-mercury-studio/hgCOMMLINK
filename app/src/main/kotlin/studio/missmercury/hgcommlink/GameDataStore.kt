@@ -25,9 +25,8 @@ import java.io.File
  * Chummer's game data and custom data, then loaded and kept for the life of the process. The loaded pack is rebuilt when the
  * character's custom data choice, or the files in it, change.
  *
- * Where the data comes from depends on the edition: the GitHub edition unpacks it from the APK's assets on first run (and after each
- * app update); the Play edition has none in the APK and uses the copy the player added from their own Chummer folder
- * ([GameDataImporter]), which an app update never touches.
+ * The data is the copy bundled in the app, unpacked from its assets on first run (and after each app update), unless the player has
+ * imported another Chummer version ([GameDataImporter]); that copy is used instead and an app update never touches it.
  */
 class GameDataStore(private val context: Context) {
     private var pack: DataPack? = null
@@ -38,6 +37,7 @@ class GameDataStore(private val context: Context) {
         val dir = File(context.filesDir, target)
         val marker = File(dir, ".unpacked-$stamp")
         if (!marker.exists()) {
+            LoadLog.data.add("unpacking $assetDir from the app bundle (first run or after an update)")
             dir.deleteRecursively()
             copyAssets(assetDir, dir)
             marker.writeText("ok")
@@ -56,24 +56,37 @@ class GameDataStore(private val context: Context) {
         }
     }
 
-    /** Whether Chummer's game data is on the device: always in the GitHub edition, once the player has added it in the Play edition. */
-    fun hasData(): Boolean = BuildConfig.BUNDLED_GAME_DATA || GameDataImporter.installed(context)
+    /** The game data is always on the device: the bundled copy, or the one the player imported. */
+    fun hasData(): Boolean = true
 
-    /** A folder of game data: unpacked from the APK, or (Play edition) the copy the player added. */
+    /** A folder of game data: the copy the player imported if there is one, else unpacked from the app. */
     private fun gameDir(assetDir: String, target: String): File =
-        if (BuildConfig.BUNDLED_GAME_DATA) unpack(assetDir, target) else File(context.filesDir, target)
+        if (GameDataImporter.installed(context)) File(GameDataImporter.root(context), target) else unpack(assetDir, target)
 
-    /**
-     * Add the game data from the Chummer release zip or folder the player picked (Play edition), and drop everything built from the old
-     * data. Returns what the new data is and whether this app is checked against it.
-     */
-    fun import(uri: android.net.Uri, zip: Boolean, progress: (String) -> Unit = {}): GameDataVersion {
-        val r = if (zip) GameDataImporter.importZip(context, uri, progress) else GameDataImporter.importFolder(context, uri, progress)
+    /** Drop the imported data and go back to the bundled version. */
+    fun useBundled(): GameDataVersion? {
+        GameDataImporter.remove(context)
+        resetCaches()
+        GameDataInfo.forget(context)
+        return version()
+    }
+
+    private fun resetCaches() {
         synchronized(this) { pack = null; packKey = null }
         synchronized(catalogs) { catalogs.clear() }
         synchronized(settingsCache) { settingsCache.clear() }
         translationsCache = null
+        versionCache = null
         File(context.filesDir, "amended-cache").deleteRecursively()
+    }
+
+    /**
+     * Add the game data from the Chummer release zip or folder the player picked , and drop everything built from the old
+     * data. Returns what the new data is and whether this app is checked against it.
+     */
+    fun import(uri: android.net.Uri, zip: Boolean, progress: (String) -> Unit = {}): GameDataVersion {
+        val r = if (zip) GameDataImporter.importZip(context, uri, progress) else GameDataImporter.importFolder(context, uri, progress)
+        resetCaches()
         val v = GameDataVersion.identify(
             r.fingerprint, r.build, GameDataInfo.supported(context), if (zip) "zip" else "folder",
             java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date()),
@@ -86,24 +99,27 @@ class GameDataStore(private val context: Context) {
     @Volatile private var versionCache: GameDataVersion? = null
 
     /**
-     * Which game data is in use and whether this app is checked against it; null before the Play edition has any. Hashes the data the
-     * first time (about a tenth of a second), so call it off the main thread. The GitHub edition always hashes what it unpacked, since an
-     * app update can change it; the Play edition remembers what was recorded when the player added the data.
+     * Which game data is in use and whether this app is checked against it. Hashes the data the first time (about a tenth of a second),
+     * so call it off the main thread. The bundled data is always hashed, since an app update can change it; imported data is remembered
+     * from when the player added it.
      */
     fun version(): GameDataVersion? {
         versionCache?.let { return it }
-        if (!hasData()) return null
         return synchronized(this) {
             versionCache ?: run {
-                val saved = if (BuildConfig.BUNDLED_GAME_DATA) null else GameDataInfo.saved(context)
-                val fingerprint = saved?.fingerprint ?: GameDataFingerprint.ofDirectory(dataDir())
+                val saved = if (GameDataImporter.installed(context)) GameDataInfo.saved(context) else null
+                // The bundled data is only some of Chummer's files, so its fingerprint comes from the build (of the whole folder), not from what was unpacked.
+                val fingerprint = saved?.fingerprint ?: bundledFingerprint() ?: GameDataFingerprint.ofDirectory(dataDir())
                 GameDataVersion.identify(
                     fingerprint, saved?.build, GameDataInfo.supported(context),
-                    saved?.source ?: if (BuildConfig.BUNDLED_GAME_DATA) "bundled" else "folder", saved?.importedAt,
+                    saved?.source ?: "bundled", saved?.importedAt,
                 ).also { GameDataInfo.save(context, it); versionCache = it }
             }
         }
     }
+
+    private fun bundledFingerprint(): String? =
+        runCatching { context.assets.open("chummer-data-fingerprint.txt").bufferedReader().use { it.readText().trim() } }.getOrNull()?.takeIf { it.isNotEmpty() }
 
     private fun dataDir() = gameDir("chummer-data", "chummer-data")
 
@@ -143,6 +159,7 @@ class GameDataStore(private val context: Context) {
                 catalog("knowledge", chummer.core.engine.KnowledgeCatalog::list)
             }
             android.util.Log.i("hgcommlink", "catalogs ready for ${p.byId.size} entries")
+            LoadLog.data.add("picker catalogs ready")
         }.apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
     }
 
@@ -246,6 +263,8 @@ class GameDataStore(private val context: Context) {
 
     /** Karma-build profiles and the base metatypes to offer when starting a character. Loads the game data. */
     fun newCharacterOptions(): NewCharacterOptions {
+        LoadLog.data.reset()
+        LoadLog.data.add("reading settings profiles")
         val profiles = CharacterSettings.available(File(dataDir(), "settings.xml"), listOf(userSettingsDir)).filter { it.buildMethod in setOf("Karma", "Priority", "SumtoTen") }
         val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(profiles.firstOrNull()?.customData.orEmpty())
         val metatypes = packFor(resolved.dirs).byId.values
@@ -260,6 +279,7 @@ class GameDataStore(private val context: Context) {
                 )
             }
             .sortedBy { it.name.lowercase() }
+        LoadLog.data.add("${profiles.size} profile(s), ${metatypes.size} metatypes")
         return NewCharacterOptions(profiles, metatypes)
     }
 
@@ -280,6 +300,7 @@ class GameDataStore(private val context: Context) {
     }
     fun priorityTalents(letter: String): List<chummer.core.engine.TalentOption> = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).talents(letter) }.orEmpty() }
     fun talentSkillChoices(talent: chummer.core.engine.TalentOption): List<String> = synchronized(this) { pack?.let { chummer.core.engine.PriorityTable(it).skillChoices(talent) }.orEmpty() }
+    fun lifestyleOptions(): List<chummer.core.engine.LifestyleOption> = catalog("lifestyle", chummer.core.engine.LifestyleCatalog::options)
     fun martialArtOptions(): List<chummer.core.engine.MartialArtOption> = catalog("martial", chummer.core.engine.MartialArtCatalog::arts)
     fun techniqueOptions(artName: String): List<chummer.core.engine.TechniqueOption> = synchronized(this) {
         val p = pack ?: return@synchronized emptyList()
@@ -294,13 +315,21 @@ class GameDataStore(private val context: Context) {
     @Synchronized
     private fun packFor(dirs: List<CustomDataDir>): DataPack {
         val key = keyOf(dirs)
-        return pack?.takeIf { key == packKey } ?: DataPack.load(dataDir(), dirs, File(context.filesDir, "amended-cache")).also { pack = it; packKey = key; synchronized(catalogs) { catalogs.clear() }; warm() }
+        pack?.takeIf { key == packKey }?.let { LoadLog.data.add("game data already loaded: ${it.byId.size} entries"); return it }
+        val started = System.nanoTime()
+        return DataPack.load(dataDir(), dirs, File(context.filesDir, "amended-cache"), LoadLog.data::add).also {
+            pack = it; packKey = key; synchronized(catalogs) { catalogs.clear() }
+            LoadLog.data.add("game data ready: ${it.byId.size} entries from ${it.fileCount} files in ${(System.nanoTime() - started) / 1_000_000} ms")
+            warm()
+        }
     }
 
     /** Build the sheet, plus a warning to show when its numbers may differ from Chummer's (null when none). */
     fun sheet(c: CharacterFile): Pair<Sheet, String?> {
         var t = System.nanoTime()
-        fun lap(what: String) { val n = System.nanoTime(); android.util.Log.i("hgcommlink", "  $what: ${(n - t) / 1_000_000} ms"); t = n }
+        fun lap(what: String) { val n = System.nanoTime(); android.util.Log.i("hgcommlink", "  $what: ${(n - t) / 1_000_000} ms"); LoadLog.data.add("$what: ${(n - t) / 1_000_000} ms"); t = n }
+        LoadLog.data.reset()
+        LoadLog.data.add("opening ${c.root.text("alias")?.takeIf { it.isNotBlank() } ?: c.root.text("name").orEmpty()}")
         val settings = settingsFor(c)
         lap("settings")
         val resolved = CustomDataLocator(listOf(chummerCustomDir(), userCustomDir)).resolve(settings.customData)

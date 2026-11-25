@@ -30,17 +30,23 @@ class DataPack private constructor(
          * amended document of each changed data file is saved there and read back next time. A cached file is
          * named after a fingerprint of the base file and every custom file that affects it, so editing either
          * simply produces a new cache entry; the oldest entries are deleted beyond a fixed number.
+         *
+         * [log] is told what is happening, one short line at a time (each data file, custom data applied to it, how many entries it gave), so a
+         * screen can show real progress while the data loads.
          */
-        fun load(dataDir: File, customDirs: List<CustomDataDir> = emptyList(), cacheDir: File? = null): DataPack {
+        fun load(dataDir: File, customDirs: List<CustomDataDir> = emptyList(), cacheDir: File? = null, log: (String) -> Unit = {}): DataPack {
             cacheDir?.mkdirs()
             val used = HashSet<String>()
             val index = HashMap<String, DataEntry>(20_000)
             val grades = HashMap<String, Double>()
             val files = dataDir.listFiles { f -> f.extension == "xml" }.orEmpty().sortedBy { it.name }
+            log("found ${files.size} data files" + if (customDirs.isEmpty()) "" else ", ${customDirs.size} custom data folder(s): " + customDirs.joinToString(", ") { it.name })
             for (f in files) {
+                val before = index.size
                 val doc = try {
-                    amendedDocument(f, customDirs, cacheDir, used)
+                    amendedDocument(f, customDirs, cacheDir, used, log)
                 } catch (e: Exception) {
+                    log("skipped ${f.name}: unreadable")
                     continue
                 }
                 val stack = ArrayDeque<Element>().apply { add(doc.documentElement) }
@@ -59,21 +65,23 @@ class DataPack private constructor(
                     }
                     stack.addAll(kids)
                 }
+                log("${f.name}: ${index.size - before} entries")
             }
             // Keep the cache bounded: different characters may use different custom data, so drop only the oldest entries.
             cacheDir?.listFiles().orEmpty().sortedByDescending { it.lastModified() }.drop(MAX_CACHED_FILES).forEach { it.delete() }
             return DataPack(index, files.size, grades)
         }
 
-        private fun amendedDocument(base: File, customDirs: List<CustomDataDir>, cacheDir: File?, used: MutableSet<String>): org.w3c.dom.Document {
+        private fun amendedDocument(base: File, customDirs: List<CustomDataDir>, cacheDir: File?, used: MutableSet<String>, log: (String) -> Unit): org.w3c.dom.Document {
             val custom = if (customDirs.isEmpty()) emptyList() else CustomData.filesFor(base.name, customDirs)
             if (custom.isEmpty()) return parseXml(base)
             val cached = cacheDir?.let { File(it, base.name + "." + fingerprint(base, custom) + ".xml") }
             if (cached != null) {
                 used += cached.name
-                if (cached.isFile) runCatching { return parseXml(cached).also { cached.setLastModified(System.currentTimeMillis()) } }
+                if (cached.isFile) runCatching { return parseXml(cached).also { cached.setLastModified(System.currentTimeMillis()); log("${base.name}: amended copy from cache (${custom.size} custom file(s))") } }
             }
             val doc = parseXml(base)
+            log("applying ${custom.size} custom file(s) to ${base.name}: " + custom.joinToString(", ") { it.name })
             CustomData.apply(doc, base.name, customDirs)
             if (cached != null) runCatching { writeXml(doc, cached) }
             return doc

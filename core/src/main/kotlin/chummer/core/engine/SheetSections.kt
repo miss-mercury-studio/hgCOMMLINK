@@ -32,7 +32,7 @@ data class SheetSections(
     data class GearLine(val name: String, val category: String, val quantity: String, val rating: Int, val children: List<String>, val guid: String = "", val loaded: Boolean = false)
     data class VehicleLine(val name: String, val category: String, val stats: String, val guid: String = "", val mods: List<String> = emptyList())
     data class ContactLine(val name: String, val type: String, val connection: Int, val loyalty: Int, val notes: String)
-    data class LifestyleLine(val name: String, val type: String, val monthly: String, val notes: String)
+    data class LifestyleLine(val name: String, val type: String, val monthly: String, val notes: String, val guid: String = "", val months: String = "")
 
     companion object {
         private fun Element.t(tag: String) = text(tag).orEmpty().trim()
@@ -90,7 +90,7 @@ data class SheetSections(
             }.sortedBy { it.name.lowercase() }
 
             val lifestyles = c.root.child("lifestyles")?.children("lifestyle").orEmpty().map {
-                LifestyleLine(it.t("name"), it.t("baselifestyle"), it.t("cost"), it.t("notes"))
+                LifestyleLine(it.t("name"), it.t("baselifestyle"), it.t("cost"), it.t("notes"), it.t("guid"), it.t("months"))
             }
 
             val arts = c.root.child("martialarts")?.children("martialart").orEmpty().map { a ->

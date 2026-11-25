@@ -8,7 +8,7 @@ import java.util.zip.ZipFile
 /**
  * Which Chummer game data is on the device, and whether this app has been checked against it.
  *
- * Players of the Play edition bring their own copy of Chummer's data, and Chummer changes its data between builds, so the app
+ * Players can import their own copy of Chummer's data, and Chummer changes its data between builds, so the app
  * identifies a data set by a fingerprint of its files (the version is in no file) and compares it with chummer-supported.txt,
  * the list of data sets the engine is tested on. The same fingerprint is made by `tools/data_sets.py`.
  */

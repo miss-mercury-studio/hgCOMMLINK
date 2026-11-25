@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
@@ -51,6 +52,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -81,9 +83,12 @@ fun TerminalCard(
         shape = CardShape, color = MercurySlate.copy(alpha = 0.85f), border = BorderStroke(1.dp, accent.copy(alpha = 0.45f)),
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
+            // The readout on the right shares the title's line while there is room, and drops to its own line when there is not,
+            // so a long readout or a large font never squeezes the title into a broken "[ TITLE" / "]".
+            FlowRow(
                 Modifier.fillMaxWidth().then(if (onToggle != null) Modifier.clickable(onClick = onToggle) else Modifier),
-                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(2.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     buildAnnotatedString {
@@ -93,10 +98,11 @@ fun TerminalCard(
                         append(" ]")
                     },
                     style = MaterialTheme.typography.titleSmall.copy(shadow = Shadow(accent.copy(alpha = 0.55f), blurRadius = 14f)),
-                    modifier = Modifier.weight(1f),
                 )
-                if (trailing != null) Text(trailing, style = MaterialTheme.typography.labelSmall, color = accent)
-                if (collapsed != null) Text(if (collapsed) "  +" else "  –", style = MaterialTheme.typography.labelLarge, color = accent)
+                if (trailing != null || collapsed != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (trailing != null) Text(trailing, style = MaterialTheme.typography.labelSmall, color = accent)
+                    if (collapsed != null) Text(if (collapsed) "  +" else "  –", style = MaterialTheme.typography.labelLarge, color = accent)
+                }
             }
             if (collapsed != true) content()
         }
@@ -119,22 +125,27 @@ fun StatCell(label: String, value: String, modifier: Modifier = Modifier, accent
     }
 }
 
-/** A thin strip of key:value telemetry, like the pinned bar in the mockups. */
+/**
+ * A thin strip of key:value telemetry, like the pinned bar in the mockups. The items share one line while they fit and wrap onto
+ * the next line when they do not (a narrow phone, a large font, a long amount), so no value is ever cut off.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TelemetryStrip(items: List<Pair<String, String>>, modifier: Modifier = Modifier, accent: Color = PhosphorGreen) {
-    Row(
+    FlowRow(
         modifier.fillMaxWidth().clip(SquareShape).background(MercurySlate).border(1.dp, TerminalGrid, SquareShape).padding(horizontal = 10.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        items.forEachIndexed { i, (label, value) ->
+        // No "|" separators: when the items wrap, a separator would be left dangling at the end of a line. The muted labels
+        // already tell the items apart.
+        items.forEach { (label, value) ->
             Text(
                 buildAnnotatedString {
                     if (label.isNotEmpty()) withStyle(SpanStyle(color = MutedSilver)) { append("${label.uppercase()}: ") }
                     withStyle(SpanStyle(color = accent)) { append(value) }
                 },
-                style = MaterialTheme.typography.labelSmall, maxLines = 1,
+                style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 2.dp),
             )
-            if (i < items.lastIndex) Text("|", style = MaterialTheme.typography.labelSmall, color = TerminalGrid)
         }
     }
 }
@@ -152,11 +163,99 @@ fun TerminalButton(
             .background(if (filled) accent else MercurySlate)
             .border(1.dp, if (filled) accent else TerminalGrid, CardShape)
             .clickable(enabled = enabled, onClick = onClick)
-            .heightIn(min = 44.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+            .heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text("[ ${label.uppercase().replace(' ', '_')} ]", style = MaterialTheme.typography.labelLarge, maxLines = 1, color = if (filled) Obsidian else Quicksilver)
+        // The label shrinks until it fits on one line, so a narrow phone, a large font or a long label never cuts it off.
+        val base = MaterialTheme.typography.labelLarge
+        var fit by androidx.compose.runtime.remember(label) { androidx.compose.runtime.mutableFloatStateOf(1f) }
+        Text(
+            "[ ${label.uppercase().replace(' ', '_')} ]", style = base, fontSize = base.fontSize * fit, maxLines = 1, softWrap = false,
+            color = if (filled) Obsidian else Quicksilver,
+            onTextLayout = { if (it.hasVisualOverflow && fit > 0.55f) fit *= 0.92f },
+        )
     }
+}
+
+/**
+ * A compact action on a list item (upgrade, sell, remove, plug in): an outlined chip in the action's colour. Every one has the same height and
+ * type size, so a row of them reads as one set whatever the words say; they wrap to the next line on a narrow screen.
+ */
+@Composable
+fun CardAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, accent: Color = PhosphorGreen, enabled: Boolean = true) {
+    Box(
+        modifier.alpha(if (enabled) 1f else 0.4f).border(1.dp, accent.copy(alpha = 0.7f)).clickable(enabled = enabled, onClick = onClick)
+            .heightIn(min = 40.dp).padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label.uppercase(), style = MaterialTheme.typography.labelMedium, color = accent, textAlign = TextAlign.Center)
+    }
+}
+
+/** The heading over a group of list items: its name in the group's colour, how many there are, and a rule. */
+@Composable
+fun GroupHeader(title: String, count: Int, accent: Color) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("// ${title.uppercase()}", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = accent)
+            Text("$count ${if (count == 1) "item" else "items"}", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+        }
+        Hairline(Modifier.padding(top = 4.dp), color = accent.copy(alpha = 0.4f))
+    }
+}
+
+/**
+ * One list item as a card: a bar in the group's colour down the left edge, then whatever [content] holds (a [CardTitle], [CardTags], notes and
+ * [CardActions]). The bar is drawn behind the content, so the card is exactly as tall as what is in it, wrapped actions included.
+ * [compact] tightens the padding, for long lists of simple items.
+ */
+@Composable
+fun ItemCard(accent: Color, modifier: Modifier = Modifier, compact: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+    Box(
+        modifier.fillMaxWidth().background(MercurySlate).border(1.dp, TerminalGrid)
+            .drawBehind { drawRect(accent.copy(alpha = 0.85f), size = androidx.compose.ui.geometry.Size(4.dp.toPx(), size.height)) },
+    ) {
+        val v = if (compact) 8.dp else 12.dp
+        Column(Modifier.fillMaxWidth().padding(start = 16.dp, top = v, end = 12.dp, bottom = v), verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp), content = content)
+    }
+}
+
+/** An item's name, with a figure on the right (essence, damage, quantity) and, under it, a small hint such as "EDIT ›" when tapping the card does something. */
+@Composable
+fun CardTitle(name: String, modifier: Modifier = Modifier, trailing: String? = null, hint: String? = null, bold: Boolean = true) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+        Text(
+            name, Modifier.weight(1f), fontWeight = if (bold) androidx.compose.ui.text.font.FontWeight.Bold else null, color = Quicksilver,
+            style = if (bold) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium,
+        )
+        if (!trailing.isNullOrBlank() || hint != null) Column(horizontalAlignment = Alignment.End) {
+            if (!trailing.isNullOrBlank()) Text(trailing, style = MaterialTheme.typography.labelMedium, color = MutedSilver, textAlign = TextAlign.End)
+            if (hint != null) Text(hint, style = MaterialTheme.typography.labelSmall, color = PhosphorGreen.copy(alpha = 0.8f))
+        }
+    }
+}
+
+/** Small tags for an item's grade, rating, category and figures; they wrap. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun CardTags(tags: List<Pair<String, Color>>) {
+    if (tags.isEmpty()) return
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        tags.forEach { (text, accent) -> Tag(text, accent) }
+    }
+}
+
+/** A muted line of detail under an item's tags. */
+@Composable
+fun CardNote(text: String) {
+    if (text.isNotBlank()) Text(text, style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+}
+
+/** The row of [CardAction]s at the foot of a card; they wrap onto more lines when they do not fit. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun CardActions(content: @Composable androidx.compose.foundation.layout.FlowRowScope.() -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
 }
 
 /** A bracketed − / + control, [-] and [+]. */
@@ -252,6 +351,58 @@ fun TerminalLine(text: String, modifier: Modifier = Modifier, color: Color = Pho
         style = MaterialTheme.typography.labelLarge.copy(shadow = Shadow(color.copy(alpha = 0.5f), blurRadius = 12f)),
         color = color, modifier = modifier,
     )
+}
+
+/** Flavor lines for the app's real waiting spots; each loader tells a short story about what the app is doing. */
+object LoadLines {
+    val storage = listOf("mounting storage volumes", "locating character folder", "scanning for .chum5 files", "reading character headers", "sorting the roster", "checking for black ICE")
+    val gameData = listOf(
+        "verifying Chummer data pack", "parsing metatypes.xml", "parsing skills.xml", "parsing qualities.xml", "parsing spells.xml", "parsing gear.xml",
+        "indexing entries by id", "registering bonus handlers", "building picker catalogs", "polishing the chrome", "waking the decker",
+    )
+    val character = listOf(
+        "jacking in", "resolving settings profile", "checking custom data", "parsing game data", "reading the improvements", "tallying karma and nuyen",
+        "weighing essence against magic", "rolling the dice pools", "counting contacts", "paying the fixer", "handshaking with the matrix",
+    )
+}
+
+/**
+ * A loading indicator written as terminal output: [lines] are logged one after another from the top left, each finished line gets
+ * a green [ OK ], and the line in progress has a spinner. The log grows down through all the height it is offered and only then scrolls
+ * (when the height is unbounded, as inside a scrolling sheet, it keeps the last [fallbackLines]). If the wait outlasts the lines they
+ * start over, so the log keeps moving for as long as the wait does. When [real] has lines (what the app is truly doing, from LoadLog), those
+ * are shown instead of the flavor lines, as they arrive.
+ */
+@Composable
+fun TerminalLoader(lines: List<String>, modifier: Modifier = Modifier, real: List<String> = emptyList(), fallbackLines: Int = 6) {
+    var shown by androidx.compose.runtime.remember(lines) { androidx.compose.runtime.mutableIntStateOf(1) }
+    var tick by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    androidx.compose.runtime.LaunchedEffect(lines) {
+        var n = 0
+        while (true) {
+            kotlinx.coroutines.delay(90)
+            tick++; n++
+            if (n % 3 == 0) shown++
+        }
+    }
+    val spinner = "|/-\\"
+    val rowHeight = 24.dp
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        val capacity = if (constraints.hasBoundedHeight) (maxHeight / rowHeight).toInt().coerceAtLeast(1) else fallbackLines
+        val total = if (real.isNotEmpty()) real.size else shown
+        val first = (total - capacity).coerceAtLeast(0)
+        Column {
+            for (i in first until total) {
+                val done = i < total - 1
+                Row(Modifier.height(rowHeight), verticalAlignment = Alignment.CenterVertically) {
+                    Text("> ", style = MaterialTheme.typography.labelMedium, color = MutedSilver)
+                    Text(if (real.isNotEmpty()) real[i] else lines[i % lines.size], Modifier.weight(1f), maxLines = 1, style = MaterialTheme.typography.labelMedium, color = if (done) Quicksilver else PhosphorGreen)
+                    if (done) Text("[ OK ]", style = MaterialTheme.typography.labelMedium, color = PhosphorGreen)
+                    else Text("[ ${spinner[tick % spinner.length]} ]", style = MaterialTheme.typography.labelMedium, color = PhosphorGreen)
+                }
+            }
+        }
+    }
 }
 
 /** A single-line input as a shell prompt: "> text", with a green block cursor and a clear button. */

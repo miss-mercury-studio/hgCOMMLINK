@@ -72,7 +72,7 @@ jobs:
             exit 0
           fi
           cat > body.md <<EOF
-          Chummer published **$tag**. It is not in \`chummer-supported.txt\`, so the Play edition marks it "Unchecked" and the "Get Chummer" button still sends players to the listed release.
+          Chummer published **$tag**. It is not in \`chummer-supported.txt\`, so the app marks it "Unchecked" and the "Get Chummer" button still sends players to the listed release.
 
           - Data drift test on its data (new bonus shapes, empty catalogs): **${{ steps.drift.outputs.result }}**
           - Data fingerprint: \`${{ steps.drift.outputs.fingerprint }}\`

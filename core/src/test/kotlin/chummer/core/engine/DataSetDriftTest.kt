@@ -9,7 +9,7 @@ import org.w3c.dom.Element
 import java.io.File
 
 /**
- * Guards against Chummer changing its data format under us. Players of the Play edition bring their own Chummer data, so the
+ * Guards against Chummer changing its data format under us. Players can import their own Chummer data, so the
  * engine has to read every data set listed in chummer-supported.txt, not only the pinned one. The golden tests need local
  * reference characters; these need only Chummer's public data, so they can also run anywhere the data is available.
  *

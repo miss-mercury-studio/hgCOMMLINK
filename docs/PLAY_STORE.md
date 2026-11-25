@@ -4,7 +4,7 @@ A working draft for a **closed beta** on Google Play. Nothing here has been subm
 
 ## Decisions made
 
-- **Game data:** the Play edition ships **no Chummer game data**. The player adds it from their own Chummer folder on first run (see [RELEASING.md](RELEASING.md), "Two editions"). The GitHub APK keeps bundling it. This lowers the takedown risk below; it does not remove it, since the title, description and in-app wording still refer to the game.
+- **Game data:** one app for Play and GitHub, **bundling the latest stable Chummer data** at release time (currently 5.226.0), so it works on install. A player who wants the exact version they know can import that release's zip from Menu, Game data (see [RELEASING.md](RELEASING.md), "One app, two ways to ship it"). The takedown risk below applies in full: the bundled data is Chummer's, the title and description refer to the game, and a rights holder can still complain. The owner accepts that risk.
 - **Signing key:** import the existing key into Play App Signing (steps under "Setting up the closed beta"), so Play and GitHub installs share one signature.
 - **Contact email:** contact@missmercury.studio.
 - **Account:** personal, so the closed test needs the minimum number of testers (12 for 14 days at the time of writing; check the current rule).
@@ -22,10 +22,10 @@ A working draft for a **closed beta** on Google Play. Nothing here has been subm
 | | |
 |---|---|
 | Package name | `studio.missmercury.hgcommlink` (permanent once published) |
-| Current version | 0.1.2 (version code 102; Play needs each upload's code to be higher) |
+| Current version | 0.1.5 (version code 105; Play needs each upload's code to be higher) |
 | Android | minSdk 31, targetSdk 36 |
-| Build to upload | `./gradlew :app:bundlePlayRelease` makes `app/build/outputs/bundle/playRelease/app-play-release.aab` (about 9.6 MB, no game data), signed with the release key. Play wants the `.aab`, not the `.apk`. The release workflow also builds it and keeps it as a run artifact. |
-| Permissions | **None.** No network, no storage, no contacts. Characters and the player's Chummer folder are opened through the system file and folder pickers. |
+| Build to upload | `./gradlew :app:bundleRelease` makes `app/build/outputs/bundle/release/app-release.aab` (about 10.8 MB, with the game data), signed with the release key. Play wants the `.aab`, not the `.apk`. The release workflow also builds it and keeps it as a run artifact. |
+| Permissions | **None.** No network, no storage, no contacts. Characters and any Chummer zip or folder the player imports are opened through the system file and folder pickers. |
 | Ads, purchases, accounts | None |
 | Data leaves the phone | Only if the player chooses to share a character or a crash report |
 | Open source | GPL-3 (a port of Chummer 5a). The source is public on GitHub. |
@@ -43,7 +43,7 @@ A working draft for a **closed beta** on Google Play. Nothing here has been subm
 hgCOMMLINK is an unofficial, free fan tool for creating and managing Shadowrun 5th Edition characters on your phone. It reads and writes Chummer 5 character files (.chum5), so characters move between this app and desktop Chummer without losing anything, and it aims to produce the same numbers Chummer does.
 
 GAME DATA
-hgCOMMLINK does not include Shadowrun's rules data. On first run, a Get Chummer button opens the free Chummer 5a download page in your browser; download the release zip it names, then choose that zip in the app (no unzipping). The files are copied into the app and the app itself downloads and sends nothing. Menu, Game data shows which Chummer version is in use.
+The app includes the data files of the latest stable Chummer 5a release, so it works as soon as it is installed. If you prefer the exact Chummer version you know, open Menu, Game data, tap Get Chummer to open the free download page in your browser, and choose the release zip you downloaded (no unzipping). The files are copied into the app; the app itself downloads and sends nothing. Game data shows which version is in use and whether the app has been tested with it, and lets you go back to the included one.
 
 WHAT IT DOES
 • Open, edit and save .chum5 characters, with desktop-only data kept intact
@@ -62,7 +62,7 @@ This is an early version and is not feature-complete. Please report problems and
 
 Requires Android 12 or newer, in portrait on a phone.
 
-hgCOMMLINK is not affiliated with, endorsed by or sponsored by Catalyst Game Labs, Topps, or the makers of Chummer. Shadowrun is a trademark of its respective owner. Uses the data files of the open-source Chummer 5a project, which you supply. Source code: github.com/miss-mercury-studio/hgCOMMLINK
+hgCOMMLINK is not affiliated with, endorsed by or sponsored by Catalyst Game Labs, Topps, or the makers of Chummer. Shadowrun is a trademark of its respective owner. Game data comes from the open-source Chummer 5a project under the GNU GPL v3. Source code: github.com/miss-mercury-studio/hgCOMMLINK
 ```
 
 **Category:** Tools (alternative: Entertainment). **Tags:** pick from Play's list: tabletop / role-playing tools if offered.
@@ -92,21 +92,21 @@ Suggested screenshots, in order: the character list; a sheet's Stats tab; the Sk
 - **App access:** all functionality available without login.
 - **Content rating (IARC questionnaire):** answer for the app's own content. It is a character-sheet tool; its bundled game text describes weapons, drugs, magic and violence in a tabletop RPG. Answer honestly and let the questionnaire set the rating.
 - **Target audience:** not for children; choose 13+ or older and no "designed for children".
-- **Data safety:** collects no data; shares no data. The app reads a folder the player picks with the system folder picker and copies it into its own storage; it has no network access. Crash reports and shared characters are only produced by an explicit player action and sent by the player (browser, share sheet), not by the app. No data is encrypted in transit because none is transmitted by the app. Nothing to delete on a server.
+- **Data safety:** collects no data; shares no data. If the player imports another Chummer version, the app reads the zip or folder they pick with the system picker and copies it into its own storage; it has no network access. Crash reports and shared characters are only produced by an explicit player action and sent by the player (browser, share sheet), not by the app. No data is encrypted in transit because none is transmitted by the app. Nothing to delete on a server.
 - **Permissions declarations, financial, health, news, government:** none apply.
 
 ## Setting up the closed beta
 
 1. Create the developer account and the app (default language English, app, free).
 2. Enroll in Play App Signing and **import the existing key** (decide before the first upload; it cannot be changed). In the console choose to upload a key exported from a Java keystore, download `pepk.jar` and the encryption public key it offers, and in the `hgcommlink-signing` folder run `java -jar pepk.jar --keystore=hgcommlink-release.jks --alias=hgcommlink --output=output.zip --include-cert --rsa-aes-encryption --encryption-key-path=encryption_public_key.pem` (it asks for the passwords). Upload `output.zip`, then check that the SHA-256 the console shows for the app signing certificate matches the fingerprint in [RELEASING.md](RELEASING.md). Back the keystore folder up off this PC first.
-3. Testing, Closed testing, create a track named "Beta". Upload the Play-edition `.aab` (`bundlePlayRelease`).
+3. Testing, Closed testing, create a track named "Beta". Upload the `.aab` (`bundleRelease`).
 4. Add testers: an email list or a Google Group, and share the opt-in link (it is only visible to listed testers).
 5. Fill in the store listing and the forms above. They are required before a beta can roll out.
 6. Roll out to the track. Reviews and Android vitals (crashes and freezes) appear in Play Console; file real ones as issues with the `from-play` label (see [FEEDBACK.md](FEEDBACK.md)).
 
 ## Release process
 
-- The release workflow builds both editions on a version tag. The Play bundle is kept as a workflow artifact; upload it by hand to Play at first. Automating the upload needs a Play service account and is a later step.
-- Keep `app.versionName` and the change log as they are. The version code is derived from the version, so it always rises, and both editions share it.
+- The release workflow builds the APK and the bundle on a version tag. The Play bundle is kept as a workflow artifact; upload it by hand to Play at first. Automating the upload needs a Play service account and is a later step.
+- Keep `app.versionName` and the change log as they are. The version code is derived from the version, so it always rises, and the APK and the bundle share it.
 - The GitHub APK and the Play build share one version number, one package id and, with the key import above, one signature.
-- Testers need Chummer's data on the phone. Say so in the invitation.
+- The in-app About sheet (menu) carries the GPL-3 notice, the Chummer credit and the link to the source, which the bundled data requires.

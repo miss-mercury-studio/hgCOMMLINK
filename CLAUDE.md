@@ -19,7 +19,7 @@ Android app (Kotlin, Compose) plus a pure-Kotlin `core` engine that reproduces C
 
 ## Builds and the phone
 
-- Debug and release are separate apps: debug is `studio.missmercury.hgcommlink.debug` ("hgCOMMLINK (debug)"), release is `studio.missmercury.hgcommlink`. There are two editions (flavors): `github` bundles Chummer's game data, `play` does not (the player adds it from their own Chummer folder). Use `installGithubDebug` day to day; `installPlayDebug` installs a separate app (`.debug.play`, "hgCOMMLINK (play debug)") that starts with no game data, to try the first-run screen. `installDebug` never touches the release app. Use the `.debug` id with `adb shell am`, `run-as` and `logcat`.
+- Debug and release are separate apps: debug is `studio.missmercury.hgcommlink.debug` ("hgCOMMLINK (debug)"), release is `studio.missmercury.hgcommlink`. `installDebug` never touches the release app. Use the `.debug` id with `adb shell am`, `run-as` and `logcat`.
 - Never uninstall an app on the user's phone: that deletes characters kept in app storage.
 - The phone is reached over wireless debugging (the IP and port change; ask for them if `adb devices` is empty). It must be unlocked to drive the UI.
 - `:core:test` needs the `chummer.src` checkout and the reference characters. CI runs only the change log test.

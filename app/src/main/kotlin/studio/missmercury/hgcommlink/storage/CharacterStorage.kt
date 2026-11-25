@@ -27,6 +27,9 @@ interface CharacterStorage {
     fun create(name: String): Pair<String, OutputStream>
     fun overwrite(id: String): OutputStream
     fun delete(id: String): Boolean
+
+    /** Whether the file is still there (it may have been deleted from outside the app, with a file manager or a sync app). */
+    fun exists(id: String): Boolean
 }
 
 private const val EXT = ".chum5"
@@ -65,6 +68,7 @@ class AppFolderStorage(private val dir: File) : CharacterStorage {
 
     override fun overwrite(id: String): OutputStream = File(id).outputStream().buffered()
     override fun delete(id: String) = File(id).delete()
+    override fun exists(id: String) = File(id).isFile
 }
 
 /** A folder the user picked with the system file picker (device, SD card, Drive, ...). */
@@ -99,4 +103,5 @@ class TreeStorage(private val context: Context, private val tree: Uri) : Charact
         context.contentResolver.openOutputStream(Uri.parse(id), "wt")?.buffered() ?: error("Cannot write $id")
 
     override fun delete(id: String) = DocumentsContract.deleteDocument(context.contentResolver, Uri.parse(id))
+    override fun exists(id: String) = runCatching { DocumentFile.fromSingleUri(context, Uri.parse(id))?.exists() == true }.getOrDefault(false)
 }
