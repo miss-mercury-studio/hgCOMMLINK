@@ -2,7 +2,9 @@
 
 All notable changes to hgCOMMLINK. The newest release is first. The app shows this file under **What's new**, so keep entries to one short line, written for players, not developers.
 
-Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, then one `-` line per change. Put work in progress under `## [Unreleased]
+Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, then one `-` line per change. Put work in progress under `## [Unreleased]`; it is not shown in the app until it is given a version.
+
+## [Unreleased]
 
 ### Added
 - **Use another Chummer version.** Menu > Game data: Get Chummer, then Choose zip or folder. You can go back to the built-in version any time.
@@ -22,30 +24,6 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 - **Gear shows what it is for.** Ammo reads like "Regular Ammo (Heavy Pistols)", so stacks are not mistaken for duplicates.
 - **A refused gear purchase says why,** such as availability, not just "Not enough nuyen".
 - **Buy and Cancel text stays full size.**
-- **An A.I. can no longer be given cyberware or bioware.** Desktop Chummer hung loading one. The Ware tab is hidden for an A.I.
-
-## [Unreleased]
-
-### Added
-- **Use another Chummer version.** Menu > Game data: Get Chummer, then Choose zip or folder. You can go back to the built-in version any time.
-- **Game data shows what you are using.** Version, nightly or stable, and Verified or Unverified. Unverified data adds a warning on character sheets.
-- **Warning when desktop Chummer won't open a character.** Shown on the sheet, and sharing asks first.
-- **Gear with plug-ins has its own sheet.** Tap a gear item with parts inside it, like a Fake SIN with licenses or a drug with a grade, to see what is in it, switch a part on or off, sell or remove it, or plug in more.
-- **Merge gear stacks.** Identical gear listed on separate lines, such as ammo, gets a Merge button that combines the quantities.
-- **Armor sets.** Make named sets on Gear, tap one to add or remove armor, and wear or take off the whole set at once.
-
-### Changed
-- **Sell at any percent.** Selling now has a percent box that starts at 50 and goes from 0 to 9999.99 with plus and minus buttons, like desktop Chummer. Before, you could only pick 100, 75, 50 or 25.
-
-### Fixed
-- **Fake Licenses ask which license.** Buying one into a Fake SIN asks which license it is for, with Chummer's list to pick from, and keeps the answer. Before, every bought license had no name.
-- **Shorter item cards.** A card with many of the same part inside, like a Fake SIN with eight licenses, now says "Fake License x8". The item's sheet lists them all.
-- **A refused gear purchase says why.** It no longer says "Not enough nuyen" when the real problem is availability or a price that cannot be worked out.
-- **Buttons keep their size.** "Cancel" and "Buy" on the buy dialogs could stay tiny after the dialog slid in.
-- **Armor mod list only shows mods that fit.** Built-in mods like Custom Fit and mods made for one particular armor no longer show for every armor.
-- **Buying ammo again adds to your existing stack,** including ammo kept inside armor or other gear. Ammo now asks which weapon type it is for, so it joins the right stack. Before, every purchase made a new line. Undoing a purchase takes back only what it added.
-- **Gear shows what it is for.** Ammo, licenses and similar items now show their type, like "Regular Ammo (Heavy Pistols)", so separate stacks are no longer mistaken for duplicates.
-- **Armor can be worn and taken off.** Tap an armor on Gear to wear it or take it off, switch, sell or remove its mods and installed gear, or sell the armor.
 - **An A.I. can no longer be given cyberware or bioware.** Desktop Chummer hung loading one. The Ware tab is hidden for an A.I.
 
 ## [0.1.5] - 2026-11-24
