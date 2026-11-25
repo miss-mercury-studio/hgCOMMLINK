@@ -198,6 +198,7 @@ private fun Header(s: Sheet, warning: String?) {
             )
         }
         s.review?.problems?.forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+        s.desktopProblems.forEach { Text("⚠ $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
         if (warning != null) {
             // One line until tapped, so a long explanation does not push the sheet down.
             Text(

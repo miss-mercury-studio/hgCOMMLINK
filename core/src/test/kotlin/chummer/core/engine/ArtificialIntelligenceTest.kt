@@ -51,4 +51,16 @@ class ArtificialIntelligenceTest {
         assertEquals(1 + 4, after.physicalRecovery)   // rating 1 + Depth 4
         assertEquals(0, after.stunRecovery)
     }
+
+    /** Desktop Chummer stalls on an A.I. that has ware, so the desktop check flags it (and flags nothing else). */
+    @Test
+    fun anAiWithWareIsFlaggedForDesktopChummer() {
+        val meta = data.byId.entries.first { it.value.file == "metatypes.xml" && it.value.element.tagName == "metatype" && it.value.name == "A.I." }
+        val c = NewCharacter.createPriority(data, settings, NewCharacterRequest(name = "T", metatypeId = meta.key), PriorityChoice("C", "A", "B", "D", "E", "A.I.", true, talentSkills = emptyList()))
+        assertTrue(DesktopCheck.problems(c).isEmpty())
+        val ware = c.doc.createElement("cyberware").also { it.appendChild(c.doc.createElement("name").also { n -> n.textContent = "Datajack" }) }
+        c.root.child("cyberwares")!!.appendChild(ware)
+        assertEquals(1, DesktopCheck.problems(c).size)
+        assertEquals(1, Sheet.build(c, data, settings).desktopProblems.size)
+    }
 }

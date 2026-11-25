@@ -228,6 +228,7 @@ private fun App(vm: AppViewModel) {
                 )
             } else {
                 var confirm by remember { mutableStateOf(false) }
+                var shareWarning by remember { mutableStateOf<String?>(null) }
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
                     title = {
@@ -250,12 +251,21 @@ private fun App(vm: AppViewModel) {
                             }
                             TerminalMenuItem("Share", onClick = {
                                 sheetMenu = false
-                                vm.shareIntent(open.file)?.let { ctx.startActivity(Intent.createChooser(it, "Share ${open.file.name}")) }
+                                val problems = open.sheet?.desktopProblems.orEmpty()
+                                if (problems.isEmpty()) vm.shareIntent(open.file)?.let { ctx.startActivity(Intent.createChooser(it, "Share ${open.file.name}")) }
+                                else shareWarning = problems.joinToString(" · ")
                             })
                             TerminalMenuItem("Delete…", danger = true, onClick = { sheetMenu = false; confirm = true })
                         }
                     },
                 )
+                shareWarning?.let { text ->
+                    ConfirmSheet(
+                        "Desktop Chummer may not open this", text, "Share anyway",
+                        onConfirm = { shareWarning = null; vm.shareIntent(open.file)?.let { ctx.startActivity(Intent.createChooser(it, "Share ${open.file.name}")) } },
+                        onDismiss = { shareWarning = null },
+                    )
+                }
                 if (confirm) {
                     ConfirmSheet(
                         "Delete character?", "${open.file.name} will be removed from ${vm.storageLabel}. This cannot be undone.",
