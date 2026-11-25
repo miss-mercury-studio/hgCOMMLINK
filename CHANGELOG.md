@@ -7,7 +7,8 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 ## [Unreleased]
 
 ### Added
-- **Game data in the menu, and a choice of Chummer version.** The app still includes Chummer's latest stable game data, so it works as soon as it is installed. If you would rather use the exact Chummer version you know, open Game data in the menu, tap Get Chummer to open its download page, then Choose zip (no unzipping needed) or Choose folder. The menu shows which version is in use, whether the app has been checked with it, and lets you go back to the version that came with the app. Character sheets warn you when the data in use is one the app has not been checked with.
+- **Use another Chummer version.** The app still comes with Chummer's latest stable game data, so it works as soon as it is installed. If you would rather use the exact version you know, open Game data in the menu, tap Get Chummer to open its download page, then Choose zip (no unzipping needed) or Choose folder. You can go back to the version that came with the app at any time. Your characters are not touched.
+- **Game data in the menu shows what you are using.** It names the Chummer version and says whether the app has been checked against it. If it has not, character sheets show a warning that numbers may differ from Chummer's.
 
 ## [0.1.5] - 2026-11-24
 
