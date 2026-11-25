@@ -706,7 +706,8 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         if (line == null) managingGear = null
         else GearSheet(
             line, { id, name -> sell(id, name) }, { id -> remove(id) },
-            onPlugIn = if (line.pluggable) ({ pluggingInto = guid to line.name }) else null, onDismiss = { managingGear = null },
+            onPlugIn = if (line.pluggable) ({ pluggingInto = guid to line.name }) else null,
+            onToggle = { id, on -> vm.setGearEquipped(id, on) }, onDismiss = { managingGear = null },
         )
     }
     pluggingInto?.let { (guid, name) -> GearPluginDialog(guid, name, vm, s.nuyen) { pluggingInto = null } }
@@ -715,7 +716,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         val set = g.armorSets.firstOrNull { it.guid == guid }
         if (set == null) managingSet = null
         else ArmorSetSheet(
-            set, g.armorSets.filter { it.guid != guid }.flatMap { it.items }, vm,
+            set, g.armorSets.filter { it.guid != guid }.flatMap { other -> other.items.map { it to other.name } }, vm,
             onRename = { namingSet = guid to set.name }, onOpenArmor = { managingArmor = it }, onDismiss = { managingSet = null },
         )
     }
@@ -727,7 +728,8 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
             found.second, found.first.guid, g.armorSets, vm,
             onAddMod = { attaching = "mod" to guid },
             onAddGear = if ((found.second.capacityLeft ?: 0.0) > 0.0) ({ installing = guid to found.second.capacityLeft }) else null,
-            onSell = sell(guid, found.second.name), onRemove = remove(guid), onDismiss = { managingArmor = null },
+            onSell = sell(guid, found.second.name), onRemove = remove(guid),
+            sell = { id, n -> sell(id, n) }, remove = { id -> remove(id) }, onDismiss = { managingArmor = null },
         )
     }
     Column(Modifier.fillMaxSize()) {
@@ -818,7 +820,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
                 }
                 val gone: Pair<String, () -> Unit>? = sell(it.guid, it.name)?.let { x -> "Sell" to x } ?: remove(it.guid)?.let { x -> "Remove" to x }
                 val merge = it.mergeable && canBuy && it.guid.isNotEmpty()
-                if (tags.isNotEmpty() || gone != null || merge) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (tags.isNotEmpty() || gone != null || merge) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
                     Box(Modifier.weight(1f)) { CardTags(tags) }
                     if (merge) CardAction("Merge", { vm.mergeGear(it.guid) }, accent = Quicksilver)
                     if (gone != null) CardAction(gone.first, gone.second, accent = if (gone.first == "Sell") DrainAmber else CriticalRed)

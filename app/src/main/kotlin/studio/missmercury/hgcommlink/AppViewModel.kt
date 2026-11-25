@@ -299,7 +299,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Like [edit], for career changes that work on the file directly rather than through the editor. */
-    private fun editCareer(done: String?, blocked: String, change: (chummer.core.engine.CareerAdvancement, chummer.core.CharacterFile) -> Boolean) {
+    private fun editCareer(done: String?, blocked: String, reason: () -> String? = { null }, change: (chummer.core.engine.CareerAdvancement, chummer.core.CharacterFile) -> Boolean) {
         val current = open ?: return
         viewModelScope.launch {
             if (!stillThere(current.file)) return@launch
@@ -315,7 +315,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         val offer = entries.lastOrNull()?.takeIf { entries.size > before && log.canUndo(it) }?.guid
                         Triple(gameData.sheet(current.character), offer, Unit)
                     }
-                } ?: run { message = blocked; return@launch }
+                } ?: run { message = reason() ?: blocked; return@launch }
                 val (sheetAndWarning, offer) = result.first to result.second
                 open = OpenCharacter(current.file, current.character, sheetAndWarning.first, sheetAndWarning.second)
                 undoOffer = offer
@@ -349,8 +349,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun gearCost(entryId: String, rating: Int?, qty: Double): Double? =
         open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).gearCost(entryId, rating, qty) }
 
-    fun buyGear(entryId: String, rating: Int?, qty: Double) =
-        editCareer("Gear bought", "Not enough nuyen") { adv, _ -> adv.buyGear(entryId, rating, qty) != null }
+    fun buyGear(entryId: String, rating: Int?, qty: Double, extra: String = "") {
+        var why: String? = null
+        editCareer("Gear bought", "Not enough nuyen", { why }) { adv, _ -> why = adv.gearBlockReason(entryId, rating, qty); adv.buyGear(entryId, rating, qty, extra) != null }
+    }
 
     fun armorOptions() = gameData.armorOptions()
     fun weaponOptions() = gameData.weaponOptions()
@@ -365,7 +367,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun accessoryOptions() = gameData.accessoryOptions()
     fun setAccessoryEquipped(accessoryGuid: String, equipped: Boolean) = editCareer(null, "Cannot change that accessory") { adv, _ -> adv.setAccessoryEquipped(accessoryGuid, equipped) }
     fun gearPluginOptions(parentGuid: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).gearPluginOptions(parentGuid) }.orEmpty()
-    fun buyGearPlugin(parentGuid: String, id: String, rating: Int?) = editCareer("Plug-in installed", "Cannot install that (nuyen or capacity)") { adv, _ -> adv.buyGearPlugin(parentGuid, id, rating) != null }
+    fun buyGearPlugin(parentGuid: String, id: String, rating: Int?) {
+        var why: String? = null
+        editCareer("Plug-in installed", "Cannot install that (nuyen or capacity)", { why }) { adv, _ -> why = adv.gearBlockReason(id, rating, 1.0); adv.buyGearPlugin(parentGuid, id, rating) != null }
+    }
+    fun setGearEquipped(guid: String, equipped: Boolean) = editCareer(null, "Cannot change that") { adv, _ -> adv.setGearEquipped(guid, equipped) }
     fun mergeGear(guid: String) = editCareer("Stacks merged", "Nothing to merge") { adv, _ -> adv.mergeGear(guid) }
     fun setArmorEquipped(guid: String, equipped: Boolean) = editCareer(null, "Cannot change that armor") { adv, _ -> adv.setArmorEquipped(guid, equipped) }
     fun setArmorPartEquipped(guid: String, isMod: Boolean, equipped: Boolean) = editCareer(null, "Cannot change that part") { adv, _ ->
@@ -387,7 +393,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun buyArmorMod(armorGuid: String, id: String, rating: Int?) = editCareer("Mod bought", "Not enough nuyen") { adv, _ -> adv.buyArmorMod(armorGuid, id, rating) != null }
 
     fun armorGearOptions(room: Double) = gameData.gearOptions().filter { (it.armorCapacity ?: Double.MAX_VALUE) <= room + 1e-9 }
-    fun buyArmorGear(armorGuid: String, id: String, rating: Int?) = editCareer("Gear installed", "Cannot install that (nuyen or capacity)") { adv, _ -> adv.buyArmorGear(armorGuid, id, rating) != null }
+    fun buyArmorGear(armorGuid: String, id: String, rating: Int?) {
+        var why: String? = null
+        editCareer("Gear installed", "Cannot install that (nuyen or capacity)", { why }) { adv, _ -> why = adv.gearBlockReason(id, rating, 1.0); adv.buyArmorGear(armorGuid, id, rating) != null }
+    }
 
     fun wareOptions() = gameData.wareOptions()
     fun wareGrades(bioware: Boolean): List<String> = open?.let { gameData.wareGrades(bioware, it.character) }.orEmpty()

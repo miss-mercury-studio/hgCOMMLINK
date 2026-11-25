@@ -19,7 +19,8 @@ import studio.missmercury.hgcommlink.ui.*
 @Composable
 internal fun ArmorSheet(
     a: SheetSections.ArmorItemLine, setGuid: String, sets: List<SheetSections.ArmorSet>, vm: AppViewModel,
-    onAddMod: () -> Unit, onAddGear: (() -> Unit)?, onSell: (() -> Unit)?, onRemove: (() -> Unit)?, onDismiss: () -> Unit,
+    onAddMod: () -> Unit, onAddGear: (() -> Unit)?, onSell: (() -> Unit)?, onRemove: (() -> Unit)?,
+    sell: (String, String) -> (() -> Unit)?, remove: (String) -> (() -> Unit)?, onDismiss: () -> Unit,
 ) {
     TerminalSheet(a.name, onDismiss, accent = PhosphorGreen, tall = true) { close ->
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -42,13 +43,13 @@ internal fun ArmorSheet(
             val gear = a.parts.filter { !it.isMod }
             GroupHeader("Mods", mods.size, Quicksilver)
             if (mods.isEmpty()) CardNote("No mods fitted.")
-            mods.forEach { PartCard(it, vm) }
+            mods.forEach { PartCard(it, vm, sell, remove) }
             CardActions { CardAction("+ Mod", { onAddMod() }, accent = PhosphorGreen) }
 
             if (gear.isNotEmpty() || onAddGear != null) {
                 GroupHeader("Installed gear", gear.size, Quicksilver)
                 if (gear.isEmpty()) CardNote("Nothing installed.")
-                gear.forEach { PartCard(it, vm) }
+                gear.forEach { PartCard(it, vm, sell, remove) }
                 onAddGear?.let { add -> CardActions { CardAction("+ Gear", { add() }, accent = PhosphorGreen) } }
             }
 
@@ -66,12 +67,14 @@ internal fun ArmorSheet(
 
 /** One mod or piece of gear in an armor: its name, whether it is switched off, and the switch. */
 @Composable
-private fun PartCard(p: SheetSections.ArmorPartLine, vm: AppViewModel) {
+private fun PartCard(p: SheetSections.ArmorPartLine, vm: AppViewModel, sell: (String, String) -> (() -> Unit)?, remove: (String) -> (() -> Unit)?) {
     ItemCard(if (p.equipped) Quicksilver else MutedSilver, compact = true) {
         CardTitle(p.name, bold = true)
         CardTags(buildList { if (!p.equipped) add("Off" to DrainAmber) })
         if (p.guid.isNotEmpty()) CardActions {
             CardAction(if (p.equipped) "Switch off" else "Switch on", { vm.setArmorPartEquipped(p.guid, p.isMod, !p.equipped) }, accent = Quicksilver)
+            sell(p.guid, p.name)?.let { CardAction("Sell", it, accent = DrainAmber) }
+            remove(p.guid)?.let { CardAction("Remove", it, accent = CriticalRed) }
         }
     }
 }
@@ -82,7 +85,7 @@ private fun PartCard(p: SheetSections.ArmorPartLine, vm: AppViewModel) {
  */
 @Composable
 internal fun ArmorSetSheet(
-    set: SheetSections.ArmorSet, others: List<SheetSections.ArmorItemLine>, vm: AppViewModel,
+    set: SheetSections.ArmorSet, others: List<Pair<SheetSections.ArmorItemLine, String>>, vm: AppViewModel,
     onRename: () -> Unit, onOpenArmor: (String) -> Unit, onDismiss: () -> Unit,
 ) {
     val worn = set.items.count { it.equipped }
@@ -107,10 +110,11 @@ internal fun ArmorSetSheet(
                     }
                 }
             }
-            val addable = others.filter { it.guid.isNotEmpty() }
+            val addable = others.filter { it.first.guid.isNotEmpty() }
             if (addable.isNotEmpty()) {
                 GroupHeader("Add armor", addable.size, Quicksilver)
-                CardActions { for (a in addable) CardAction(a.name, { vm.moveArmorToSet(a.guid, set.guid) }, accent = MutedSilver) }
+                // Two armors can share a name, so each button says which set it is in now.
+                CardActions { for ((a, from) in addable) CardAction("${a.name} (${from.ifBlank { "no set" }})", { vm.moveArmorToSet(a.guid, set.guid) }, accent = MutedSilver) }
                 CardNote("An armor is in one set at a time, so adding it here moves it out of its other set.")
             }
             GroupHeader("Get rid of it", 1, DrainAmber)

@@ -126,7 +126,7 @@ fun SpecializationSheet(skill: String, cost: Int, choices: List<String>, karma: 
 /** Pick gear, a weapon, armor or a vehicle ([kind]: "gear", "weapon", "armor", "vehicle") from the game data, choose rating and quantity where they apply, and pay. */
 @Composable
 fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
-    class Opt(val id: String, val name: String, val category: String, val cost: Double?, val avail: String, val min: Int, val max: Int, val note: String?, val blocked: Boolean)
+    class Opt(val id: String, val name: String, val category: String, val cost: Double?, val avail: String, val min: Int, val max: Int, val note: String?, val blocked: Boolean, val ammoFor: List<String> = emptyList())
     val options = remember(kind) {
         when (kind) {
             "weapon" -> vm.weaponOptions().map { o ->
@@ -134,7 +134,7 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
             }
             "vehicle" -> vm.vehicleOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, 0, 0, o.detail, o.problem != null) }
             "armor" -> vm.armorOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, 1, o.maxRating, o.detail, o.problem != null) }
-            else -> vm.gearOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, o.minRating, o.maxRating, if (o.unsupported.isNotEmpty()) "some bonuses not applied yet" else null, false) }
+            else -> vm.gearOptions().map { o -> Opt(o.id, o.name, o.category, o.cost, o.avail, o.minRating, o.maxRating, if (o.unsupported.isNotEmpty()) "some bonuses not applied yet" else null, false, o.ammoCategories) }
         }
     }
     val items = remember(kind) {
@@ -153,6 +153,8 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
         val hasRating = o.max > 0
         var rating by remember(o.id) { mutableStateOf(if (hasRating) maxOf(o.min, 1).toString() else "") }
         var qty by remember(o.id) { mutableStateOf("1") }
+        // Ammunition is bought for one kind of weapon, as in Chummer.
+        var weaponType by remember(o.id) { mutableStateOf("") }
         val r = if (hasRating) rating.toIntOrNull()?.coerceIn(maxOf(o.min, 1), o.max) else null
         val q = if (kind == "gear") qty.toDoubleOrNull() else 1.0
         val cost = if (q == null || o.blocked) null else when (kind) {
@@ -165,6 +167,7 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
         TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating (${maxOf(o.min, 1)}-${o.max})", keyboardType = KeyboardType.Number)
+                if (o.ammoFor.isNotEmpty()) ChoiceChips("Weapon type", o.ammoFor.map { it to it }, weaponType.ifBlank { null }, { weaponType = it })
                 if (kind == "gear") TerminalField(qty, { qty = it.filter { c -> c.isDigit() || c == '.' } }, "quantity", keyboardType = KeyboardType.Number)
                 Text(
                     when {
@@ -178,9 +181,9 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
                     TerminalButton("Cancel", close, Modifier.weight(1f))
                     TerminalButton("Buy", {
                         close(); chosen = null
-                        when (kind) { "weapon" -> vm.buyWeapon(o.id); "vehicle" -> vm.buyVehicle(o.id); "armor" -> vm.buyArmor(o.id, r); else -> vm.buyGear(o.id, r, q!!) }
+                        when (kind) { "weapon" -> vm.buyWeapon(o.id); "vehicle" -> vm.buyVehicle(o.id); "armor" -> vm.buyArmor(o.id, r); else -> vm.buyGear(o.id, r, q!!, weaponType) }
                         onDismiss()
-                    }, Modifier.weight(1f), filled = true, enabled = cost != null && q != null && q > 0 && cost <= have)
+                    }, Modifier.weight(1f), filled = true, enabled = cost != null && q != null && q > 0 && cost <= have && (o.ammoFor.isEmpty() || weaponType.isNotBlank()))
                 }
             }
         }

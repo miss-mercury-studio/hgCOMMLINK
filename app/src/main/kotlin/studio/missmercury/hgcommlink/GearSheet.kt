@@ -19,7 +19,7 @@ import studio.missmercury.hgcommlink.ui.*
 @Composable
 internal fun GearSheet(
     g: SheetSections.GearLine, sell: (String, String) -> (() -> Unit)?, remove: (String) -> (() -> Unit)?,
-    onPlugIn: (() -> Unit)?, onDismiss: () -> Unit,
+    onPlugIn: (() -> Unit)?, onToggle: (String, Boolean) -> Unit, onDismiss: () -> Unit,
 ) {
     TerminalSheet(if (g.extra.isBlank()) g.name else "${g.name} (${g.extra})", onDismiss, accent = Quicksilver, tall = true) { close ->
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -32,12 +32,16 @@ internal fun GearSheet(
             GroupHeader("Inside it", g.parts.size, Quicksilver)
             if (g.parts.isEmpty()) CardNote("Nothing plugged in.")
             g.parts.forEach { p ->
-                ItemCard(Quicksilver, compact = true) {
+                ItemCard(if (p.equipped) Quicksilver else MutedSilver, compact = true) {
                     CardTitle(if (p.extra.isBlank()) p.name else "${p.name} (${p.extra})", trailing = if (p.quantity != "1") "x${p.quantity}" else null, bold = true)
-                    CardTags(buildList { if (p.rating > 0) add("Rating ${p.rating}" to MutedSilver) })
+                    CardTags(buildList {
+                        if (p.rating > 0) add("Rating ${p.rating}" to MutedSilver)
+                        if (!p.equipped) add("Off" to DrainAmber)
+                    })
                     val sold = sell(p.guid, p.name)
                     val gone = remove(p.guid)
-                    if (p.guid.isNotEmpty() && (sold != null || gone != null)) CardActions {
+                    if (p.guid.isNotEmpty()) CardActions {
+                        CardAction(if (p.equipped) "Switch off" else "Switch on", { onToggle(p.guid, !p.equipped) }, accent = Quicksilver)
                         sold?.let { CardAction("Sell", { it() }, accent = DrainAmber) }
                         gone?.let { CardAction("Remove", { it() }, accent = CriticalRed) }
                     }

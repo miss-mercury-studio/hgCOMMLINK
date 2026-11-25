@@ -17,9 +17,19 @@ data class GearOption(
     val minRating: Int, val maxRating: Int, val unsupported: List<String>,
     /** Capacity this gear uses when installed in armor, e.g. `[2]`; null when it does not fit in armor. */
     val armorCapacity: Double? = null,
+    /** The weapon categories the buyer must choose from (ammunition is bought for one kind of weapon); empty when the item needs no choice. */
+    val ammoCategories: List<String> = emptyList(),
 )
 
 object GearCatalog {
+    /** The weapon categories ammunition of this `ammoforweapontype` can be bought for: those filed under that type, and always Exotic Ranged Weapons. */
+    private fun ammoCategories(data: DataPack, type: String): List<String> {
+        val categories = (data.byId.values.firstOrNull { it.file == "weapons.xml" && it.element.tagName == "weapon" }?.element?.parentNode?.parentNode as? Element)
+            ?.child("categories")?.children("category").orEmpty()
+        val matching = categories.filter { it.getAttribute("type") == type }.map { it.textContent.trim() }
+        return if (matching.isEmpty()) emptyList() else matching + categories.map { it.textContent.trim() }.filter { it == "Exotic Ranged Weapons" }
+    }
+
     fun list(data: DataPack): List<GearOption> =
         data.byId.entries.filter { it.value.file == "gear.xml" && it.value.element.tagName == "gear" }.mapNotNull { (id, e) ->
             val el = e.element
@@ -30,7 +40,8 @@ object GearCatalog {
             val max = t("rating").toIntOrNull() ?: 0
             val unsupported = el.child("bonus")?.let { BonusHandlers.apply(it, BonusContext("Gear", "", 1)).unhandled.distinct() }.orEmpty()
             GearOption(id, t("name"), t("category"), GearEditor.unitCost(el, if (max > 0) maxOf(min, 1) else 0), t("avail"), min, max, unsupported,
-                t("armorcapacity").takeIf { it.startsWith("[") }?.let { CyberwareEditor.formula(it.removePrefix("[").removeSuffix("]"), maxOf(min, 1)) })
+                t("armorcapacity").takeIf { it.startsWith("[") }?.let { CyberwareEditor.formula(it.removePrefix("[").removeSuffix("]"), maxOf(min, 1)) },
+                ammoCategories = t("ammoforweapontype").takeIf { it.isNotEmpty() && el.child("ammoforweapontype")?.getAttribute("noextra") != "True" }?.let { ammoCategories(data, it) }.orEmpty())
         }.sortedBy { it.name.lowercase() }
 }
 
@@ -140,6 +151,40 @@ class GearEditor(private val file: CharacterFile, private val data: GameData, pr
         return walk(topGear())
     }
 
+    /** A gear item with this GUID anywhere in the character, including gear installed in armor and vehicles. */
+    fun anywhere(guid: String): Element? {
+        fun walk(e: Element): Element? {
+            for (c in e.children()) {
+                if (c.tagName == "gear" && c.text("guid")?.trim().equals(guid, true)) return c
+                if (c.tagName != "bonus" && c.tagName != "improvements") walk(c)?.let { return it }
+            }
+            return null
+        }
+        return walk(root)
+    }
+
+    /**
+     * Switch a gear item on or off, as Chummer's equipped box does: the flag is set, and the improvements of the item and of everything plugged into it
+     * are turned on or off (a focus that is not bonded gives nothing when switched on). False when there is no such item.
+     */
+    fun setEquipped(guid: String, equipped: Boolean): Boolean {
+        val node = anywhere(guid) ?: return false
+        (node.child("equipped") ?: el("equipped").also { node.appendChild(it) }).textContent = if (equipped) "True" else "False"
+        fun switch(g: Element) {
+            val category = g.text("category")?.trim().orEmpty()
+            val bonded = g.text("bonded")?.trim().equals("True", true)
+            val allowed = !equipped || (category != "Stacked Focus" && (!category.endsWith("Foci") || bonded))
+            val id = g.text("guid")?.trim()
+            if (allowed && id != null) for (i in root.child("improvements")?.children("improvement").orEmpty()) {
+                if (i.text("improvementsource")?.trim() == "Gear" && i.text("sourcename")?.trim().equals(id, true))
+                    (i.child("enabled") ?: el("enabled").also { i.appendChild(it) }).textContent = if (equipped) "1" else "0"
+            }
+            for (c in g.child("children")?.children("gear").orEmpty()) switch(c)
+        }
+        switch(node)
+        return true
+    }
+
     /** The loose top-level gear item with this GUID. */
     fun stack(guid: String): Element? = topGear().firstOrNull { it.text("guid")?.trim().equals(guid, true) }
 
@@ -147,11 +192,12 @@ class GearEditor(private val file: CharacterFile, private val data: GameData, pr
      * Add gear the way Chummer's picker does: ammunition joins an identical loose stack (same name, rating and weapon type) instead of starting a new one.
      * Returns the GUID of the stack that now holds it.
      */
-    fun addOrStack(entryId: String, rating: Int? = null, qty: Double = 1.0, extra: String = ""): String {
-        val guid = addGear(entryId, rating, qty, extra)
-        val added = stack(guid)!!
+    fun addOrStack(entryId: String, rating: Int? = null, qty: Double = 1.0, extra: String = "", into: Element? = null, parentId: String = ""): String {
+        val guid = addGear(entryId, rating, qty, extra, into, parentId)
+        val siblings = (into ?: root.child("gears"))?.children("gear").orEmpty()
+        val added = siblings.first { it.text("guid")?.trim().equals(guid, true) }
         if (!GearStacks.isAmmo(added)) return guid
-        val into = GearStacks.twins(topGear(), added).firstOrNull() ?: return guid
+        val into = GearStacks.twins(siblings, added).firstOrNull() ?: return guid
         GearStacks.setQuantity(into, GearStacks.quantity(into) + GearStacks.quantity(added))
         removeGear(guid)
         return into.text("guid")!!.trim()

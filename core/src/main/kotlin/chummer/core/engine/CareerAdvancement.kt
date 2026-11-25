@@ -393,6 +393,14 @@ class CareerAdvancement(
         return GearEditor.totalCost(entry, r, qty)
     }
 
+    /** Why gear cannot be bought right now, in words for a player; null when it can. */
+    fun gearBlockReason(entryId: String, rating: Int? = null, qty: Double = 1.0): String? {
+        val cost = gearCost(entryId, rating, qty) ?: return "The price of that item cannot be worked out yet"
+        if (cost > nuyenLeft() + 0.004) return "Not enough nuyen"
+        if (availabilityBlocked(entryId, rating)) return "Its availability is over the limit of ${settings.int("availability", 12)} for a new character"
+        return null
+    }
+
     /** Buy gear with nuyen: adds the item and writes a "Purchased Gear" entry. Returns its GUID, or null when it cannot be paid or priced. */
     fun buyGear(entryId: String, rating: Int? = null, qty: Double = 1.0, extra: String = "", now: LocalDateTime = LocalDateTime.now()): String? {
         val cost = gearCost(entryId, rating, qty) ?: return null
@@ -567,10 +575,13 @@ class CareerAdvancement(
         val editor = GearEditor(file, data, settings)
         val parent = editor.find(parentGuid) ?: return null
         val container = parent.child("children") ?: file.doc.createElement("children").also { parent.appendChild(it) }
-        val guid = editor.addGear(entryId, rating, qty, into = container, parentId = parentGuid)
+        val guid = editor.addOrStack(entryId, rating, qty, into = container, parentId = parentGuid)
         charge(cost, "Purchased Gear " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddGear", guid, qty, now)
         return guid
     }
+
+    /** Switch a gear item (a plug-in, say) on or off. */
+    fun setGearEquipped(guid: String, equipped: Boolean): Boolean = GearEditor(file, data, settings).setEquipped(guid, equipped)
 
     /** Fold identical loose gear stacks into this one (Chummer's Merge Quantity). */
     fun mergeGear(guid: String): Boolean = GearEditor(file, data, settings).mergeStacks(guid)

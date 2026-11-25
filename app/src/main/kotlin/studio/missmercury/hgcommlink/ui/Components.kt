@@ -185,12 +185,14 @@ fun TerminalButton(
         contentAlignment = Alignment.Center,
     ) {
         // The label shrinks until it fits on one line, so a narrow phone, a large font or a long label never cuts it off.
+        // The label shrinks only when it is too wide. (Overflow in height does not count: in a tall sheet the button row can be squeezed, and
+        // that used to shrink the label to its smallest size for good.)
         val base = MaterialTheme.typography.labelLarge
         var fit by androidx.compose.runtime.remember(label) { androidx.compose.runtime.mutableFloatStateOf(1f) }
         Text(
             "[ ${label.uppercase().replace(' ', '_')} ]", style = base, fontSize = base.fontSize * fit, maxLines = 1, softWrap = false,
             color = if (filled) Obsidian else outlineTint ?: Quicksilver,
-            onTextLayout = { if (it.hasVisualOverflow && fit > 0.55f) fit *= 0.92f },
+            onTextLayout = { if (it.didOverflowWidth && fit > 0.55f) fit *= 0.92f },
         )
     }
 }

@@ -515,7 +515,7 @@ class ArmorWeaponEditor(private val file: CharacterFile, private val data: GameD
         armorGearProblem(armorGuid, gearEntryId)?.let { error("Cannot install this gear: $it") }
         val armor = topItem("armors", "armor", armorGuid)!!
         val container = armor.child("gears") ?: el("gears").also { armor.appendChild(it) }
-        return GearEditor(file, data).addGear(gearEntryId, rating, qty, into = container, parentId = armorGuid)
+        return GearEditor(file, data).addOrStack(gearEntryId, rating, qty, into = container, parentId = armorGuid)
     }
 
     /** Add a mod to the armor with this GUID. [included] marks a mod that comes with the armor. Returns the mod's GUID. */
