@@ -255,6 +255,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun wareGrades(bioware: Boolean): List<String> = open?.let { gameData.wareGrades(bioware, it.character) }.orEmpty()
     fun wareCost(id: String, grade: String, rating: Int?, parentGuid: String? = null) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareCost(id, grade, rating, parentGuid) }
     fun wareEssence(id: String, grade: String, rating: Int?, parentGuid: String? = null) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareEssence(id, grade, rating, parentGuid) }
+    /** What changing the grade and rating of the installed ware item [guid] would cost, in creation (null when nothing can be edited). */
+    fun wareEditPreview(guid: String, grade: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).wareEditPreview(guid, grade, rating) }
+    /** Give an installed ware item a new grade and rating, in creation. */
+    fun editWare(guid: String, grade: String, rating: Int?) = editCareer("Updated", "Cannot change that (nuyen, essence or availability)") { adv, _ -> adv.editWare(guid, grade, rating) }
+    /** Move an installed cyberware or bioware item to the next grade, paying only the difference in price. */
+    fun upgradeWare(guid: String) = editCareer("Upgraded", "Cannot upgrade that (nuyen or grade)") { adv, _ -> adv.upgradeWare(guid) != null }
     fun buyWare(id: String, grade: String, rating: Int?, parentGuid: String? = null) = editCareer("Installed", "Cannot install that (nuyen, essence or capacity)") { adv, _ -> adv.buyWare(id, grade, rating, parentGuid) != null }
     fun pluginOptions(parentGuid: String) = open?.let { gameData.career(it.character).pluginOptions(parentGuid) }.orEmpty()
     fun loadAmmo(weaponGuid: String, ammoGuid: String) = editCareer("Ammo loaded", "Cannot load that (no empty clip, or wrong ammunition)") { adv, _ -> adv.loadAmmo(weaponGuid, ammoGuid) }

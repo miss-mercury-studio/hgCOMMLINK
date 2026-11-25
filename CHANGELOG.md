@@ -6,6 +6,13 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ## [Unreleased]
 
+### Added
+- **Cyberware and bioware can be edited while you create a character.** Tap an item on the Ware tab to change its grade or rating without buying it again. The sheet shows the price and essence before and after, only the difference in nuyen is spent, and it refuses a change you cannot afford or that is over the availability limit.
+- **Cyberware and bioware can be upgraded in career mode.** The Ware tab shows an **Upgrade** button on each item that has a better grade, for example Standard to Alphaware. It charges only the difference in price (plug-ins fitted to the item are upgraded too), the essence you get back shows at once, and the button is dimmed when you cannot afford it. The log has an undo that puts the old grade and the nuyen back.
+
+### Changed
+- **The Ware tab is easier to read.** Each item is now a card, with cyberware and bioware grouped under their own headings, grade and rating shown as tags, plug-ins listed inside the item they belong to, and the Upgrade, Plug-in, Sell and Remove buttons all the same size.
+
 ### Fixed
 - **Numbers and buttons no longer get cut off on smaller screens or with a larger font.** The nuyen box now always shows how much is left, bottom buttons such as New, Critter and Import shrink to fit instead of losing letters, panel titles no longer break apart, armor and gear names no longer run into their values, and the tab bar scrolls sideways when the tabs do not fit.
 - **Creating a new character works again.** In the 0.1.4 download, New character failed with "the new character skeleton is missing". The built-in template was left out of the app, so no new characters could be made.

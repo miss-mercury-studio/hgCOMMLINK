@@ -1,6 +1,11 @@
 package studio.missmercury.hgcommlink
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -735,16 +740,47 @@ private fun Ware(g: chummer.core.engine.SheetSections, essence: Double, s: Sheet
     var buying by remember { mutableStateOf<Boolean?>(null) }
     var plugging by remember { mutableStateOf<chummer.core.engine.SheetSections.WareLine?>(null) }
     var selling by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var upgrading by remember { mutableStateOf<Pair<chummer.core.engine.SheetSections.WareLine, chummer.core.engine.WareUpgrade>?>(null) }
     selling?.let { (guid, name) -> SellSheet(name, { pct -> vm.sellPurchase(guid, pct) }, { vm.discardPurchase(guid) }) { selling = null } }
+    upgrading?.let { (w, up) ->
+        ConfirmSheet(
+            "Upgrade ${w.name}",
+            "Move it from ${up.from} to ${up.to} for ¥${formatNuyen(up.cost)}? Only the difference in price is charged (plug-ins in it are upgraded too), and you can undo it from the log.",
+            "Upgrade", { vm.upgradeWare(w.guid) }, { upgrading = null },
+        )
+    }
+    val upgrades = s.career?.wareUpgrades.orEmpty()
+    // In creation an item can be edited in place (grade and rating): tapping its card opens the editor.
+    val edits = s.creationBuy?.wareEdits.orEmpty()
+    var editing by remember { mutableStateOf<String?>(null) }
+    fun find(guid: String): chummer.core.engine.SheetSections.WareLine? {
+        fun walk(list: List<chummer.core.engine.SheetSections.WareLine>): chummer.core.engine.SheetSections.WareLine? =
+            list.firstNotNullOfOrNull { if (it.guid == guid) it else walk(it.children) }
+        return walk(g.ware)
+    }
+    editing?.let { guid ->
+        val item = find(guid)
+        val info = edits[guid]
+        if (item != null && info != null) WareEditSheet(item, info, vm, s.nuyen) { editing = null } else editing = null
+    }
+    val (bio, cyber) = g.ware.partition { it.isBioware }
     Column(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        item { Row2("Essence", formatEssence(essence), bold = true) }
-        val (bio, cyber) = g.ware.partition { it.isBioware }
-        if (cyber.isNotEmpty()) item { SubHeader("Cyberware") }
-        items(cyber) { WareRow(it, 0, pluginRoom?.get(it.guid), if (s.creationBuy != null) ({ vm.removePurchase(it.guid) }) else null, if (s.career != null) ({ selling = it.guid to it.name }) else null) { plugging = it } }
-        if (bio.isNotEmpty()) item { SubHeader("Bioware") }
-        items(bio) { WareRow(it, 0, pluginRoom?.get(it.guid), if (s.creationBuy != null) ({ vm.removePurchase(it.guid) }) else null, if (s.career != null) ({ selling = it.guid to it.name }) else null) { plugging = it } }
-        if (g.ware.isEmpty()) item { Text("No augmentations.") }
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item { TelemetryStrip(listOf("ESSENCE" to formatEssence(essence), "CYBERWARE" to cyber.size.toString(), "BIOWARE" to bio.size.toString())) }
+        for ((title, list, accent) in listOf(Triple("Cyberware", cyber, PhosphorGreen), Triple("Bioware", bio, AstralMagenta))) {
+            if (list.isEmpty()) continue
+            item { WareGroupHeader(title, list.size, accent) }
+            items(list, key = { it.guid.ifEmpty { it.name } }) { w ->
+                WareCard(
+                    w, accent, pluginRoom?.get(w.guid), upgrades[w.guid], edits,
+                    onEdit = { editing = it }, onUpgrade = { upgrading = w to upgrades.getValue(w.guid) },
+                    onRemove = if (s.creationBuy != null) ({ vm.removePurchase(w.guid) }) else null,
+                    onSell = if (s.career != null && w.guid.isNotEmpty()) ({ selling = w.guid to w.name }) else null,
+                    onPlug = { plugging = w },
+                )
+            }
+        }
+        if (g.ware.isEmpty()) item { Text("No augmentations.", color = MutedSilver) }
     }
     if (canBuy) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TerminalButton("+ Cyberware", { buying = false }, Modifier.weight(1f))
@@ -755,15 +791,134 @@ private fun Ware(g: chummer.core.engine.SheetSections, essence: Double, s: Sheet
     plugging?.let { w -> BuyWareDialog(w.isBioware, vm, s.nuyen, essence, parent = w) { plugging = null } }
 }
 
+/** The heading over a group of items: its name in the group's colour, the count, and a rule. */
 @Composable
-private fun WareRow(w: chummer.core.engine.SheetSections.WareLine, depth: Int, capacityLeft: Double? = null, onRemove: (() -> Unit)? = null, onSell: (() -> Unit)? = null, onPlug: () -> Unit = {}) {
-    Column(Modifier.padding(start = (depth * 16).dp)) {
-        Row2(w.name + if (w.rating > 0) " (rating ${w.rating})" else "", if (w.essence != 0.0) formatEssence(w.essence) else "", bold = depth == 0)
-        Small(w.grade.takeIf { !it.equals("Standard", true) }.orEmpty())
-        w.children.forEach { WareRow(it, depth + 1) }
-        if (onRemove != null && depth == 0) RemoveLink(onRemove)
-        if (onSell != null && depth == 0 && w.guid.isNotEmpty()) SellLink(onSell)
-        if (capacityLeft != null) Text("+ plug-in  (capacity left ${"%.0f".format(java.util.Locale.ROOT, capacityLeft)})", Modifier.clickable(onClick = onPlug).padding(vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = PhosphorGreen)
+private fun WareGroupHeader(title: String, count: Int, accent: Color) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("// ${title.uppercase()}", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = accent)
+            Text("$count ${if (count == 1) "item" else "items"}", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+        }
+        Hairline(Modifier.padding(top = 4.dp), color = accent.copy(alpha = 0.4f))
+    }
+}
+
+/**
+ * One installed item as a card: a bar in the group's colour down the left edge, the name and essence, tags for its grade and rating, the
+ * plug-ins inside it, and a row of actions. In creation the card is tappable (when it can be edited) and says so.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun WareCard(
+    w: chummer.core.engine.SheetSections.WareLine, accent: Color, capacityLeft: Double?, upgrade: chummer.core.engine.WareUpgrade?,
+    edits: Map<String, chummer.core.engine.WareEditInfo>, onEdit: (String) -> Unit, onUpgrade: () -> Unit, onRemove: (() -> Unit)?, onSell: (() -> Unit)?, onPlug: () -> Unit,
+) {
+    val editable = w.guid.isNotEmpty() && w.guid in edits
+    // The coloured bar down the left edge is drawn behind the content, so the card is as tall as what is in it (wrapped action chips included).
+    Box(Modifier.fillMaxWidth().background(MercurySlate).border(1.dp, TerminalGrid).drawBehind { drawRect(accent.copy(alpha = 0.85f), size = androidx.compose.ui.geometry.Size(4.dp.toPx(), size.height)) }) {
+        Column(Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                Modifier.fillMaxWidth().then(if (editable) Modifier.clickable { onEdit(w.guid) } else Modifier),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                WareTitle(w, bold = true, editable = editable)
+                WareTags(w)
+            }
+            if (w.children.isNotEmpty()) {
+                // Plug-ins sit inside the card behind a rule, so it is clear what belongs to what.
+                Box(Modifier.fillMaxWidth().padding(start = 4.dp).drawBehind { drawRect(accent.copy(alpha = 0.35f), size = androidx.compose.ui.geometry.Size(1.dp.toPx(), size.height)) }) {
+                    Column(Modifier.fillMaxWidth().padding(start = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        w.children.forEach { c ->
+                            val childEditable = c.guid.isNotEmpty() && c.guid in edits
+                            Column(Modifier.fillMaxWidth().then(if (childEditable) Modifier.clickable { onEdit(c.guid) } else Modifier)) {
+                                WareTitle(c, bold = false, editable = childEditable)
+                                WareTags(c)
+                            }
+                        }
+                    }
+                }
+            }
+            if (upgrade != null || onRemove != null || onSell != null || capacityLeft != null) FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Career: one grade up for the difference in price. Dimmed and inert when the character cannot pay it.
+                if (upgrade != null) CardAction("Upgrade to ${upgrade.to}  ¥${formatNuyen(upgrade.cost)}", onUpgrade, accent = PhosphorGreen, enabled = upgrade.affordable)
+                if (capacityLeft != null) CardAction(
+                    if (capacityLeft > 0) "+ Plug-in  (${"%.0f".format(java.util.Locale.ROOT, capacityLeft)} left)" else "Plug-ins full", onPlug, accent = Quicksilver, enabled = capacityLeft > 0,
+                )
+                if (onSell != null) CardAction("Sell", onSell, accent = DrainAmber)
+                if (onRemove != null) CardAction("Remove", onRemove, accent = CriticalRed)
+            }
+        }
+    }
+}
+
+/** An item's name and, on the right, its essence; the "edit" hint when tapping it opens the editor. */
+@Composable
+private fun WareTitle(w: chummer.core.engine.SheetSections.WareLine, bold: Boolean, editable: Boolean) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+        Text(
+            w.name, Modifier.weight(1f), fontWeight = if (bold) FontWeight.Bold else null, color = Quicksilver,
+            style = if (bold) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium,
+        )
+        Column(horizontalAlignment = Alignment.End) {
+            if (w.essence != 0.0) Text("${formatEssence(w.essence)} ESS", style = MaterialTheme.typography.labelMedium, color = MutedSilver)
+            if (editable) Text("EDIT ›", style = MaterialTheme.typography.labelSmall, color = PhosphorGreen.copy(alpha = 0.8f))
+        }
+    }
+}
+
+/** The grade (when it is not Standard) and rating of an item as small tags. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun WareTags(w: chummer.core.engine.SheetSections.WareLine) {
+    val grade = w.grade.takeIf { it.isNotBlank() && !it.equals("Standard", true) }
+    if (grade == null && w.rating <= 0) return
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (grade != null) Tag(grade, DrainAmber)
+        if (w.rating > 0) Tag("Rating ${w.rating}", MutedSilver)
+    }
+}
+
+/**
+ * Change the grade and rating of an installed item in creation. Shows what it would cost and the essence it would use before and after, and
+ * what you have; Apply is dimmed when the change is not allowed or cannot be paid.
+ */
+@Composable
+private fun WareEditSheet(w: chummer.core.engine.SheetSections.WareLine, info: chummer.core.engine.WareEditInfo, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
+    val grades = remember(w.isBioware) { vm.wareGrades(w.isBioware) }
+    var grade by remember(w.guid) { mutableStateOf(info.grade) }
+    var rating by remember(w.guid) { mutableStateOf(info.rating) }
+    val rated = info.maxRating > 0
+    val preview = vm.wareEditPreview(w.guid, grade, if (rated) rating else null)
+    val changed = grade != info.grade || (rated && rating != info.rating)
+    TerminalSheet("Edit ${w.name}", onDismiss) { close ->
+        Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (info.gradeEditable && grades.size > 1) ChoiceChips("Grade", grades.map { it to it }, grade, { grade = it })
+            if (rated) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("// RATING", style = MaterialTheme.typography.labelMedium, color = PhosphorGreen)
+                    Text("${info.minRating} to ${info.maxRating}", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+                }
+                StepButton("−", 48) { rating = (rating - 1).coerceAtLeast(info.minRating) }
+                Text(rating.toString(), Modifier.width(40.dp), style = MaterialTheme.typography.titleLarge, color = Quicksilver, textAlign = TextAlign.Center)
+                StepButton("+", 48) { rating = (rating + 1).coerceAtMost(info.maxRating) }
+            }
+            if (preview != null) {
+                TelemetryStrip(
+                    listOf("COST" to "¥${formatNuyen(preview.cost)} → ¥${formatNuyen(preview.newCost)}", "ESSENCE" to "${formatEssence(preview.essence)} → ${formatEssence(preview.newEssence)}"),
+                    accent = if (preview.problem != null) DrainAmber else PhosphorGreen,
+                )
+                Text(
+                    preview.problem?.replaceFirstChar { it.uppercase() } ?: "You have ¥$nuyen. Only the difference is spent; plug-ins in the item are re-priced with it.",
+                    style = MaterialTheme.typography.labelSmall, color = if (preview.problem != null) DrainAmber else MutedSilver,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TerminalButton("Cancel", close, Modifier.weight(1f))
+                TerminalButton("Apply", { close(); vm.editWare(w.guid, grade, if (rated) rating else null) }, Modifier.weight(1f), filled = true, enabled = changed && preview != null && preview.problem == null)
+            }
+        }
     }
 }
 

@@ -83,7 +83,7 @@ data class Sheet(
         /** Natural recovery dice pools (an A.I. has no natural stun recovery). */
         val physicalRecovery: Int? = null, val stunRecovery: Int? = null,
     )
-    data class CreationBuy(val ledger: NuyenLedger, val pluginCapacity: Map<String, Double>)
+    data class CreationBuy(val ledger: NuyenLedger, val pluginCapacity: Map<String, Double>, val wareEdits: Map<String, WareEditInfo> = emptyMap())
     /**
      * Career spending: the karma price of the next step of each attribute, skill (by GUID) and skill group (null at the
      * maximum), the GUID of each active skill by name, and the expense log, newest first.
@@ -97,6 +97,8 @@ data class Sheet(
         val qualityRemoval: Map<String, Int>,
         /** Capacity each installed ware item has left for plug-ins, by GUID (only items that take plug-ins). */
         val pluginCapacity: Map<String, Double>,
+        /** The grade upgrade on offer for each installed ware item, by GUID (items that cannot be upgraded are not listed). */
+        val wareUpgrades: Map<String, WareUpgrade> = emptyMap(),
     )
 
     data class SpellLine(val guid: String, val name: String, val category: String, val type: String, val range: String, val duration: String, val dv: String, val descriptors: String, val alchemical: Boolean = false)
@@ -212,7 +214,7 @@ data class Sheet(
                 isMagician = flag(c, "magician"),
                 limitNotes = LimitModifiers.of(c),
                 skillSpecs = if (!career && s.buildMethod in CREATION_BUILDS) SkillSpecEditor(c, data).info(active.filter { it.rating > 0 }.map { it.name }.toSet()) else emptyMap(),
-                creationBuy = if (!career && s.buildMethod in CREATION_BUILDS) CreationBuy(NuyenLedger.of(c, settings, data), CareerAdvancement(c, data, settings).pluginCapacity()) else null,
+                creationBuy = if (!career && s.buildMethod in CREATION_BUILDS) CareerAdvancement(c, data, settings).let { adv -> CreationBuy(NuyenLedger.of(c, settings, data), adv.pluginCapacity(), adv.wareEdits()) } else null,
                 career = if (career) careerLines(c, data, settings, shown.map { it.name }) else null,
                 karmaLedger = if (!career && s.buildMethod in CREATION_BUILDS) KarmaLedger.of(c, settings, data) else null,
                 points = if (!career) PointsLedger.of(c, data, settings = settings) else null,
@@ -239,6 +241,7 @@ data class Sheet(
                 expenses = entries.reversed(),
                 undoable = entries.filter { log.canUndo(it) }.map { it.guid }.toSet(),
                 pluginCapacity = adv.pluginCapacity(),
+                wareUpgrades = adv.wareUpgrades(),
                 qualityRemoval = c.root.child("qualities")?.children("quality").orEmpty().mapNotNull { q -> q.text("guid")?.trim()?.let { g -> adv.qualityRemovalCost(g)?.let { g to it } } }.toMap(),
                 specCosts = rows.mapNotNull { r -> adv.specializationOffer(r.guid).cost?.let { r.guid to it } }.toMap(),
                 specChoices = rows.filter { adv.specializationOffer(it.guid).cost != null }.associate { it.guid to adv.specializationChoices(it.guid) },

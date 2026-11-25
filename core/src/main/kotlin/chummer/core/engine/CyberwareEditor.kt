@@ -54,6 +54,21 @@ class CyberwareEditor(private val file: CharacterFile, private val data: GameDat
 
     private fun isBio(entry: Element) = entry.tagName == "bioware"
 
+    /** What a grade multiplies the price by (Standard 1, Alphaware 2, ...); 1 when the data does not name the grade. */
+    fun gradeCostMultiplier(bioware: Boolean, grade: String): Double =
+        gradeElement(bioware, grade)?.child("cost")?.textContent?.trim()?.toDoubleOrNull() ?: 1.0
+
+    /** Move an installed item, and the plug-ins in it (they are always at their parent's grade), to [grade]. False when there is no such item. */
+    fun setGrade(guid: String, grade: String): Boolean {
+        val item = findWare(guid) ?: return false
+        fun walk(e: Element) {
+            e.child("grade")?.textContent = grade
+            for (child in e.child("children")?.children("cyberware").orEmpty()) walk(child)
+        }
+        walk(item)
+        return true
+    }
+
     /** Rating used for a new item: the lowest the entry allows, or the one asked for within the range. */
     fun ratingFor(entry: Element, rating: Int?, parent: Element? = null): Int {
         val (min, max) = range(entry, parent)
@@ -184,12 +199,7 @@ class CyberwareEditor(private val file: CharacterFile, private val data: GameDat
         add("sortorder", list.children("cyberware").size.toString())
         list.appendChild(g)
 
-        val bonus = entry.child("bonus")
-        if (bonus != null && bonus.children().isNotEmpty()) {
-            val result = BonusHandlers.apply(bonus, BonusContext(if (bio) "Bioware" else "Cyberware", guid, maxOf(chosen, 1), "", d("name"), objects = EditorObjects(file, data)))
-            val imps = root.child("improvements") ?: el("improvements").also { root.appendChild(it) }
-            for (imp in result.improvements) imps.appendChild(ImprovementWriter.toElement(doc, imp))
-        }
+        applyBonus(entry, guid, chosen)
 
         // Gear the data lists comes with the item; subsystems come installed as plug-ins.
         val gearNodes = entry.child("gears")?.children("usegear").orEmpty()
@@ -204,6 +214,30 @@ class CyberwareEditor(private val file: CharacterFile, private val data: GameDat
             add(subId, usedGrade, sub.text("rating")?.trim()?.toIntOrNull(), parentGuid = guid, asDefault = true)
         }
         return guid
+    }
+
+    /** Write the improvements an item's bonus grants at [rating]. */
+    private fun applyBonus(entry: Element, guid: String, rating: Int) {
+        val bonus = entry.child("bonus")
+        if (bonus == null || bonus.children().isEmpty()) return
+        val bio = isBio(entry)
+        val result = BonusHandlers.apply(bonus, BonusContext(if (bio) "Bioware" else "Cyberware", guid, maxOf(rating, 1), "", entry.child("name")?.textContent?.trim().orEmpty(), objects = EditorObjects(file, data)))
+        val imps = root.child("improvements") ?: el("improvements").also { root.appendChild(it) }
+        for (imp in result.improvements) imps.appendChild(ImprovementWriter.toElement(doc, imp))
+    }
+
+    /** Change the rating of an installed item: its rating field, and the improvements its bonus grants at that rating. False when there is no such item or the rating is outside what it allows. */
+    fun setRating(guid: String, rating: Int): Boolean {
+        val item = findWare(guid) ?: return false
+        val entry = data[item.text("sourceid")?.trim().orEmpty()]?.element ?: return false
+        val parent = generateSequence(item.parentNode?.parentNode as? Element) { it.parentNode?.parentNode as? Element }.firstOrNull { it.tagName == "cyberware" }
+        val (min, max) = range(entry, parent)
+        if (max <= 0 || rating !in maxOf(min, 1)..max) return false
+        item.child("rating")?.textContent = rating.toString()
+        val imps = root.child("improvements")
+        if (imps != null) for (i in imps.children("improvement").filter { it.text("sourcename")?.trim().equals(guid, true) }) imps.removeChild(i)
+        applyBonus(entry, guid, rating)
+        return true
     }
 
     private fun findNamed(tag: String, name: String): String? =

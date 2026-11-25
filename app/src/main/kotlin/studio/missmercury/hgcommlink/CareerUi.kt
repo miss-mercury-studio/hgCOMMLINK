@@ -187,7 +187,7 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
     }
 }
 
-private fun formatNuyen(v: Double) = if (v == Math.rint(v)) "%,d".format(v.toLong()) else "%,.2f".format(v)
+internal fun formatNuyen(v: Double) = if (v == Math.rint(v)) "%,d".format(v.toLong()) else "%,.2f".format(v)
 
 /** Pick a weapon accessory ([kind] "accessory", for the weapon with [parentGuid]) or an armor mod ("mod"), choose mount and rating, and pay. */
 @Composable

@@ -176,6 +176,21 @@ fun TerminalButton(
     }
 }
 
+/**
+ * A compact action on a list item (upgrade, sell, remove, plug in): an outlined chip in the action's colour. Every one has the same height and
+ * type size, so a row of them reads as one set whatever the words say; they wrap to the next line on a narrow screen.
+ */
+@Composable
+fun CardAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, accent: Color = PhosphorGreen, enabled: Boolean = true) {
+    Box(
+        modifier.alpha(if (enabled) 1f else 0.4f).border(1.dp, accent.copy(alpha = 0.7f)).clickable(enabled = enabled, onClick = onClick)
+            .heightIn(min = 40.dp).padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label.uppercase(), style = MaterialTheme.typography.labelMedium, color = accent, textAlign = TextAlign.Center)
+    }
+}
+
 /** A bracketed − / + control, [-] and [+]. */
 @Composable
 fun StepButton(label: String, size: Int = 40, color: Color = PhosphorGreen, onClick: () -> Unit) {

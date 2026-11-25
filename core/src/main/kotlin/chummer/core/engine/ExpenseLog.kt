@@ -121,6 +121,14 @@ class ExpenseLog(
             val d = data ?: return false
             if (!CyberwareEditor(file, d).remove(entry.objectId)) return false
         }
+        // Taking back a ware upgrade puts the old grade back, as long as the item is still at the grade the upgrade gave it.
+        if (!entry.isKarma && entry.undoKind == "ManualSubtract" && entry.extra.startsWith(WARE_GRADE_PREFIX)) {
+            val d = data ?: return false
+            val (from, to) = entry.extra.removePrefix(WARE_GRADE_PREFIX).split(':').let { it.getOrElse(0) { "" } to it.getOrElse(1) { "" } }
+            val editor = CyberwareEditor(file, d)
+            if (editor.findWare(entry.objectId)?.text("grade")?.trim() != to) return false
+            if (!editor.setGrade(entry.objectId, from)) return false
+        }
         if (!entry.isKarma && entry.undoKind == "AddWeaponAccessory") {
             val d = data ?: return false
             if (!ArmorWeaponEditor(file, d).removeAccessory(entry.objectId)) return false
