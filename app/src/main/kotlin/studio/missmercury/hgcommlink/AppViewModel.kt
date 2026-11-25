@@ -364,6 +364,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun accessoryOptions() = gameData.accessoryOptions()
     fun setAccessoryEquipped(accessoryGuid: String, equipped: Boolean) = editCareer(null, "Cannot change that accessory") { adv, _ -> adv.setAccessoryEquipped(accessoryGuid, equipped) }
+    fun setArmorEquipped(guid: String, equipped: Boolean) = editCareer(null, "Cannot change that armor") { adv, _ -> adv.setArmorEquipped(guid, equipped) }
+    fun setArmorPartEquipped(guid: String, isMod: Boolean, equipped: Boolean) = editCareer(null, "Cannot change that part") { adv, _ ->
+        if (isMod) adv.setArmorModEquipped(guid, equipped) else adv.setArmorGearEquipped(guid, equipped)
+    }
+    fun setArmorSetEquipped(setGuid: String, equipped: Boolean) = editCareer(null, "Nothing to change in that set") { adv, _ -> adv.setArmorSetEquipped(setGuid, equipped) }
+    fun addArmorSet(name: String) = editCareer("Set added", "That name is empty or already used") { adv, _ -> adv.addArmorSet(name) }
+    fun renameArmorSet(guid: String, name: String) = editCareer("Set renamed", "That name is empty or already used") { adv, _ -> adv.renameArmorSet(guid, name) }
+    fun removeArmorSet(guid: String) = editCareer("Set removed (its armor is kept)", "Cannot remove that set") { adv, _ -> adv.removeArmorSet(guid) }
+    fun moveArmorToSet(armorGuid: String, setGuid: String) = editCareer(null, "Cannot move that armor") { adv, _ -> adv.moveArmorToSet(armorGuid, setGuid) }
     /** The accessories that fit this weapon. */
     fun accessoryOptions(weaponGuid: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).accessoryOptions(weaponGuid) } ?: gameData.accessoryOptions()
     fun armorModOptions() = gameData.armorModOptions()

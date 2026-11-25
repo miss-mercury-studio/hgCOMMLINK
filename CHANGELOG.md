@@ -8,8 +8,10 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 - **Use another Chummer version.** Menu > Game data: Get Chummer, then Choose zip or folder. You can go back to the built-in version any time.
 - **Game data shows what you are using.** Version, nightly or stable, and Verified or Unverified. Unverified data adds a warning on character sheets.
 - **Warning when desktop Chummer won't open a character.** Shown on the sheet, and sharing asks first.
+- **Armor sets.** Make named sets on Gear, tap one to add or remove armor, and wear or take off the whole set at once.
 
 ### Fixed
+- **Armor can be worn and taken off.** Tap an armor on Gear to wear it or take it off, switch its mods and installed gear, or sell it.
 - **An A.I. can no longer be given cyberware or bioware.** Desktop Chummer hung loading one. The Ware tab is hidden for an A.I.
 
 ## [0.1.5] - 2026-11-24

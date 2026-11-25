@@ -545,6 +545,123 @@ class ArmorWeaponEditor(private val file: CharacterFile, private val data: GameD
         return guid
     }
 
+    // ---- wearing armor, and armor sets
+
+    private fun flagText(on: Boolean) = if (on) "True" else "False"
+    private fun setFlag(node: Element, tag: String, on: Boolean) { (node.child(tag) ?: el(tag).also { node.appendChild(it) }).textContent = flagText(on) }
+    private fun isOn(node: Element, tag: String) = node.text(tag)?.trim().equals("True", true)
+
+    /** Turn the stored improvements of one source (`Armor`, `ArmorMod`, `Gear`) for one item on or off, as Chummer does when an item is equipped or not. */
+    private fun switchImprovements(source: String, sourceName: String, on: Boolean) {
+        val imps = root.child("improvements") ?: return
+        for (i in imps.children("improvement")) {
+            if (i.text("improvementsource")?.trim() != source || !i.text("sourcename")?.trim().equals(sourceName, true)) continue
+            (i.child("enabled") ?: el("enabled").also { i.appendChild(it) }).textContent = if (on) "1" else "0"
+        }
+    }
+
+    /** Switch the improvements of a piece of gear and of everything inside it. */
+    private fun switchGear(gear: Element, on: Boolean) {
+        gear.text("guid")?.trim()?.let { switchImprovements("Gear", it, on) }
+        for (c in gear.child("children")?.children("gear").orEmpty()) switchGear(c, on)
+    }
+
+    private fun armorNode(guid: String) = topItem("armors", "armor", guid)
+
+    /**
+     * Put an armor on or take it off. Like Chummer, this sets the flag and turns the armor's own improvements and those of the gear
+     * installed in it on or off; wearing one armor never takes another off. False when there is no such armor.
+     */
+    fun setArmorEquipped(guid: String, equipped: Boolean): Boolean {
+        val armor = armorNode(guid) ?: return false
+        setFlag(armor, "equipped", equipped)
+        switchImprovements("Armor", guid, equipped)
+        val gear = armor.child("gears")?.children("gear").orEmpty() +
+            armor.child("armormods")?.children("armormod").orEmpty().filter { !equipped || isOn(it, "equipped") }.flatMap { it.child("gears")?.children("gear").orEmpty() }
+        for (g in gear) if (!equipped || isOn(g, "equipped")) switchGear(g, equipped)
+        // Chummer looks a mod's improvements up by the armor's id here, so they are not switched with the armor (see PLAN.md).
+        return true
+    }
+
+    /** Switch an armor mod on or off. Its improvements come back only while its armor is worn. False when there is no such mod. */
+    fun setArmorModEquipped(guid: String, equipped: Boolean): Boolean {
+        val armor = root.child("armors")?.children("armor")?.firstOrNull { a -> a.child("armormods")?.children("armormod").orEmpty().any { it.text("guid")?.trim().equals(guid, true) } } ?: return false
+        val mod = armor.child("armormods")!!.children("armormod").first { it.text("guid")?.trim().equals(guid, true) }
+        setFlag(mod, "equipped", equipped)
+        if (equipped && !isOn(armor, "equipped")) return true
+        switchImprovements("ArmorMod", guid, equipped)
+        for (g in mod.child("gears")?.children("gear").orEmpty()) if (!equipped || isOn(g, "equipped")) switchGear(g, equipped)
+        return true
+    }
+
+    /** Switch gear installed in an armor (or in one of its mods) on or off. Its improvements follow only while the armor and mod are on. */
+    fun setArmorGearEquipped(guid: String, equipped: Boolean): Boolean {
+        for (armor in root.child("armors")?.children("armor").orEmpty()) {
+            val holders = listOf(armor) + armor.child("armormods")?.children("armormod").orEmpty()
+            for (holder in holders) {
+                val gear = findGear(holder.child("gears")?.children("gear").orEmpty(), guid) ?: continue
+                setFlag(gear, "equipped", equipped)
+                if (!equipped || (isOn(armor, "equipped") && (holder === armor || isOn(holder, "equipped")))) switchGear(gear, equipped)
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun findGear(list: List<Element>, guid: String): Element? {
+        for (g in list) {
+            if (g.text("guid")?.trim().equals(guid, true)) return g
+            findGear(g.child("children")?.children("gear").orEmpty(), guid)?.let { return it }
+        }
+        return null
+    }
+
+    private fun locationNode(guid: String) = root.child("armorlocations")?.children("location")?.firstOrNull { it.text("guid")?.trim().equals(guid, true) }
+
+    /** Make a new armor set (Chummer's armor location); returns its GUID, or null when the name is empty or already used. */
+    fun addArmorSet(name: String): String? {
+        val n = name.trim()
+        if (n.isEmpty() || root.child("armorlocations")?.children("location").orEmpty().any { it.text("name")?.trim().equals(n, true) }) return null
+        val list = root.child("armorlocations") ?: el("armorlocations").also { root.appendChild(it) }
+        val guid = UUID.randomUUID().toString()
+        val loc = el("location")
+        loc.appendChild(el("guid", guid)); loc.appendChild(el("name", n)); loc.appendChild(el("notes")); loc.appendChild(el("notesColor", NOTES_COLOR))
+        loc.appendChild(el("sortorder", list.children("location").size.toString()))
+        list.appendChild(loc)
+        return guid
+    }
+
+    fun renameArmorSet(guid: String, name: String): Boolean {
+        val n = name.trim()
+        val loc = locationNode(guid) ?: return false
+        if (n.isEmpty() || root.child("armorlocations")?.children("location").orEmpty().any { it !== loc && it.text("name")?.trim().equals(n, true) }) return false
+        loc.child("name")!!.textContent = n
+        return true
+    }
+
+    /** Delete a set; the armor in it stays, outside any set. */
+    fun removeArmorSet(guid: String): Boolean {
+        val loc = locationNode(guid) ?: return false
+        for (a in root.child("armors")?.children("armor").orEmpty()) if (a.text("location")?.trim().equals(guid, true)) a.child("location")?.textContent = ""
+        loc.parentNode.removeChild(loc)
+        return true
+    }
+
+    /** Put an armor in a set, or in none when [setGuid] is empty. */
+    fun moveArmorToSet(armorGuid: String, setGuid: String): Boolean {
+        val armor = armorNode(armorGuid) ?: return false
+        if (setGuid.isNotEmpty() && locationNode(setGuid) == null) return false
+        (armor.child("location") ?: el("location").also { armor.appendChild(it) }).textContent = setGuid
+        return true
+    }
+
+    /** Wear or take off every armor in a set (those in no set when [setGuid] is empty). Armor outside the set is left as it is. Returns how many changed. */
+    fun setArmorSetEquipped(setGuid: String, equipped: Boolean): Int {
+        val members = root.child("armors")?.children("armor").orEmpty().filter { (it.text("location")?.trim().orEmpty()).equals(setGuid, true) && isOn(it, "equipped") != equipped }
+        for (a in members) setArmorEquipped(a.text("guid")!!.trim(), equipped)
+        return members.size
+    }
+
     fun removeArmorMod(guid: String): Boolean {
         val node = root.child("armors")?.children("armor")?.flatMap { it.child("armormods")?.children("armormod").orEmpty() }
             ?.firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: return false

@@ -25,9 +25,12 @@ data class SheetSections(
     data class MartialArtLine(val guid: String, val name: String, val techniques: List<Pair<String, String>>)
     data class ArmorItemLine(val name: String, val value: String, val equipped: Boolean, val mods: List<String>, val guid: String = "",
         /** Gear installed in the armor, and the capacity left for more (null when the armor has none). */
-        val gear: List<String> = emptyList(), val capacityLeft: Double? = null)
-    /** Armor grouped by equipment set; the set name is empty for armor not in any set. */
-    data class ArmorSet(val name: String, val items: List<ArmorItemLine>)
+        val gear: List<String> = emptyList(), val capacityLeft: Double? = null,
+        /** The mods and installed gear that can be switched on and off, and whether each is on. */
+        val parts: List<ArmorPartLine> = emptyList())
+    data class ArmorPartLine(val guid: String, val name: String, val equipped: Boolean, val isMod: Boolean)
+    /** Armor grouped by equipment set; the set name (and [guid]) is empty for armor not in any set. A set with no armor still shows. */
+    data class ArmorSet(val name: String, val items: List<ArmorItemLine>, val guid: String = "")
     data class WareLine(val name: String, val grade: String, val rating: Int, val essence: Double, val isBioware: Boolean, val children: List<WareLine>, val guid: String = "", val sourceId: String = "")
     data class GearLine(val name: String, val category: String, val quantity: String, val rating: Int, val children: List<String>, val guid: String = "", val loaded: Boolean = false)
     data class VehicleLine(val name: String, val category: String, val stats: String, val guid: String = "", val mods: List<String> = emptyList())
@@ -41,10 +44,13 @@ data class SheetSections(
         fun read(c: CharacterFile, weapons: List<WeaponTotals>, essence: EssenceEngine, data: GameData? = null): SheetSections {
             val locations = c.armorLocations()
             val armors = c.root.child("armors")?.children("armor").orEmpty()
-            val sets = armors.groupBy { locations[it.t("location")].orEmpty() }.map { (set, items) ->
+            // Group by set id; a set with no armor still shows, so armor can be moved into it. An unknown id counts as no set.
+            val byId = armors.groupBy { it.t("location").takeIf { id -> id in locations }.orEmpty() }
+            val sets = (locations.keys + "").distinct().filter { it in byId || it.isNotEmpty() }.map { id -> id to byId[id].orEmpty() }.map { (id, items) ->
                 ArmorSet(
-                    set,
-                    items.map { a ->
+                    locations[id].orEmpty(),
+                    guid = id,
+                    items = items.map { a ->
                         ArmorItemLine(
                             a.t("name"), armorWithMods(a), a.t("equipped").equals("True", true),
                             a.child("armormods")?.children("armormod").orEmpty()
@@ -53,6 +59,9 @@ data class SheetSections(
                             a.t("guid"),
                             a.child("gears")?.children("gear").orEmpty().map { g -> g.t("name") + g.n("rating").takeIf { it > 0 }?.let { " $it" }.orEmpty() },
                             capacityLeft(c, data, a),
+                            parts = a.child("armormods")?.children("armormod").orEmpty().filter { it.t("included") != "True" }
+                                .map { m -> ArmorPartLine(m.t("guid"), m.t("name"), m.t("equipped").equals("True", true), true) } +
+                                a.child("gears")?.children("gear").orEmpty().map { g -> ArmorPartLine(g.t("guid"), g.t("name"), g.t("equipped").equals("True", true), false) },
                         )
                     },
                 )

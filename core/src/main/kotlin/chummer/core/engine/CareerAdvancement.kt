@@ -554,6 +554,16 @@ class CareerAdvancement(
     /** Switch a weapon accessory on or off (no cost; one that is off adds nothing to the weapon). */
     fun setAccessoryEquipped(accessoryGuid: String, equipped: Boolean): Boolean = ArmorWeaponEditor(file, data).setAccessoryEquipped(accessoryGuid, equipped)
 
+    // Wearing armor and armor sets: no cost, so no expense entry.
+    fun setArmorEquipped(guid: String, equipped: Boolean): Boolean = ArmorWeaponEditor(file, data).setArmorEquipped(guid, equipped)
+    fun setArmorModEquipped(guid: String, equipped: Boolean): Boolean = ArmorWeaponEditor(file, data).setArmorModEquipped(guid, equipped)
+    fun setArmorGearEquipped(guid: String, equipped: Boolean): Boolean = ArmorWeaponEditor(file, data).setArmorGearEquipped(guid, equipped)
+    fun addArmorSet(name: String): Boolean = ArmorWeaponEditor(file, data).addArmorSet(name) != null
+    fun renameArmorSet(guid: String, name: String): Boolean = ArmorWeaponEditor(file, data).renameArmorSet(guid, name)
+    fun removeArmorSet(guid: String): Boolean = ArmorWeaponEditor(file, data).removeArmorSet(guid)
+    fun moveArmorToSet(armorGuid: String, setGuid: String): Boolean = ArmorWeaponEditor(file, data).moveArmorToSet(armorGuid, setGuid)
+    fun setArmorSetEquipped(setGuid: String, equipped: Boolean): Boolean = ArmorWeaponEditor(file, data).setArmorSetEquipped(setGuid, equipped) > 0
+
     /** The accessories that may be fitted to this weapon (those whose weapon requirements it meets). */
     fun accessoryOptions(weaponGuid: String): List<ItemOption> {
         val pack = data as? chummer.core.DataPack ?: return emptyList()

@@ -682,26 +682,75 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         )
     }
     val armorCount = g.armorSets.sumOf { it.items.size }
+    // Naming a set (an empty id is a new one), and the armor whose sheet is open.
+    var namingSet by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var managingArmor by remember { mutableStateOf<String?>(null) }
+    var managingSet by remember { mutableStateOf<String?>(null) }
+    namingSet?.let { (guid, current) ->
+        var text by remember(guid) { mutableStateOf(current) }
+        TerminalSheet(if (guid.isEmpty()) "New armor set" else "Rename set", { namingSet = null }) { close ->
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                TerminalField(text, { text = it }, "name (Runner Armor, Social, ...)")
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Save", { close(); if (guid.isEmpty()) vm.addArmorSet(text) else vm.renameArmorSet(guid, text) }, Modifier.weight(1f), filled = true, enabled = text.isNotBlank())
+                }
+            }
+        }
+    }
+    // A set's own sheet: wear it all, what is in it, adding and taking out armor.
+    managingSet?.let { guid ->
+        val set = g.armorSets.firstOrNull { it.guid == guid }
+        if (set == null) managingSet = null
+        else ArmorSetSheet(
+            set, g.armorSets.filter { it.guid != guid }.flatMap { it.items }, vm,
+            onRename = { namingSet = guid to set.name }, onOpenArmor = { managingArmor = it }, onDismiss = { managingSet = null },
+        )
+    }
+    // An armor's own sheet: wear it, its set, its mods and gear, selling. It follows the armor as it changes.
+    managingArmor?.let { guid ->
+        val found = g.armorSets.firstNotNullOfOrNull { set -> set.items.firstOrNull { it.guid == guid }?.let { set to it } }
+        if (found == null) managingArmor = null
+        else ArmorSheet(
+            found.second, found.first.guid, g.armorSets, vm,
+            onAddMod = { attaching = "mod" to guid },
+            onAddGear = if ((found.second.capacityLeft ?: 0.0) > 0.0) ({ installing = guid to found.second.capacityLeft }) else null,
+            onSell = sell(guid, found.second.name), onRemove = remove(guid), onDismiss = { managingArmor = null },
+        )
+    }
     Column(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { TelemetryStrip(listOf("ARMOR" to armorCount.toString(), "WEAPONS" to g.weapons.size.toString(), "VEHICLES" to g.vehicles.size.toString(), "GEAR" to g.gear.size.toString())) }
-        if (armorCount > 0) item { GroupHeader("Armor", armorCount, PhosphorGreen) }
-        for (set in g.armorSets) items(set.items) { a ->
-            ItemCard(PhosphorGreen) {
-                CardTitle(a.name, trailing = "ARMOR ${a.value}")
-                CardTags(buildList {
-                    set.name.takeIf { it.isNotBlank() }?.let { add(it to Quicksilver) }
-                    if (!a.equipped) add("Off" to DrainAmber)
-                })
-                CardNote(a.mods.joinToString(", ").let { if (it.isBlank()) "" else "Mods: $it" })
-                if (a.gear.isNotEmpty()) CardNote("Gear: " + a.gear.joinToString(", "))
-                a.capacityLeft?.let { CardNote("Capacity left %.0f".format(java.util.Locale.ROOT, it)) }
-                val sellOrRemove = remove(a.guid) != null || sell(a.guid, a.name) != null
-                if (sellOrRemove || (canBuy && a.guid.isNotEmpty())) CardActions {
-                    if (canBuy && a.guid.isNotEmpty()) CardAction("+ Mod", { attaching = "mod" to a.guid }, accent = PhosphorGreen)
-                    if (canBuy && a.guid.isNotEmpty() && (a.capacityLeft ?: 0.0) > 0.0) CardAction("+ Gear", { installing = a.guid to a.capacityLeft }, accent = PhosphorGreen)
-                    sell(a.guid, a.name)?.let { CardAction("Sell", it, accent = DrainAmber) }
-                    remove(a.guid)?.let { CardAction("Remove", it, accent = CriticalRed) }
+        if (armorCount > 0 || g.armorSets.isNotEmpty()) item { GroupHeader("Armor", armorCount, PhosphorGreen) }
+        if (canBuy && armorCount > 0) item { CardActions { CardAction("+ New armor set", { namingSet = "" to "" }, accent = Quicksilver) } }
+        for (set in g.armorSets) {
+            if (set.guid.isNotEmpty()) item(key = "set-${set.guid}") {
+                ItemCard(Quicksilver, compact = true) {
+                    Column(Modifier.fillMaxWidth().then(if (canBuy) Modifier.clickable { managingSet = set.guid } else Modifier), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        CardTitle(set.name, trailing = "SET", hint = if (canBuy) "MANAGE ›" else null, bold = true)
+                        CardTags(buildList {
+                            add("${set.items.count { it.equipped }} of ${set.items.size} worn" to if (set.items.any { it.equipped }) PhosphorGreen else MutedSilver)
+                        })
+                    }
+                }
+            }
+            items(set.items) { a ->
+                // The card says what the armor is and what is on it; tapping it (when you can change things) opens its sheet.
+                val manage = canBuy && a.guid.isNotEmpty()
+                ItemCard(if (a.equipped) PhosphorGreen else MutedSilver) {
+                    Column(Modifier.fillMaxWidth().then(if (manage) Modifier.clickable { managingArmor = a.guid } else Modifier), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        CardTitle(a.name, trailing = "ARMOR ${a.value}", hint = if (manage) "MANAGE ›" else null)
+                        CardTags(buildList {
+                            add((if (a.equipped) "Worn" else "Off") to if (a.equipped) PhosphorGreen else DrainAmber)
+                            set.name.takeIf { it.isNotBlank() }?.let { add(it to Quicksilver) }
+                            a.parts.count { it.isMod }.takeIf { it > 0 }?.let { add("$it mod${if (it > 1) "s" else ""}" to MutedSilver) }
+                            a.parts.count { !it.isMod }.takeIf { it > 0 }?.let { add("$it gear" to MutedSilver) }
+                            a.parts.filter { !it.equipped }.forEach { add("${it.name} off" to DrainAmber) }
+                            a.capacityLeft?.let { add("capacity %.0f".format(java.util.Locale.ROOT, it) to MutedSilver) }
+                        })
+                        CardNote(a.mods.joinToString(", ").let { if (it.isBlank()) "" else "Mods: $it" })
+                        if (a.gear.isNotEmpty()) CardNote("Gear: " + a.gear.joinToString(", "))
+                    }
                 }
             }
         }
