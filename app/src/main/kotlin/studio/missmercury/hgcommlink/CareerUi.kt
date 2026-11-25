@@ -421,6 +421,39 @@ fun ArmorGearDialog(armorGuid: String, room: Double, vm: AppViewModel, nuyen: St
     }
 }
 
+/** Pick gear to plug into another gear item (what its categories and capacity allow), choose a rating, and pay. */
+@Composable
+fun GearPluginDialog(parentGuid: String, parentName: String, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
+    val options = remember(parentGuid) { vm.gearPluginOptions(parentGuid) }
+    val items = remember(options) {
+        options.map { o ->
+            PickItem(o.id, o.name, listOfNotNull(o.category, o.armorCapacity?.let { "capacity %.0f".format(it) }, o.cost?.let { "¥" + formatNuyen(it) } ?: "price not readable yet").joinToString("  ·  "), o.category, warn = o.cost == null || o.unsupported.isNotEmpty())
+        }
+    }
+    var chosen by remember { mutableStateOf<chummer.core.engine.GearOption?>(null) }
+    PickerSheet("Plug into $parentName", items, onPick = { id -> chosen = options.first { it.id == id } }, note = if (options.isEmpty()) "Nothing fits in this item." else "You have ¥$nuyen.", keepOpenFor = { true }, onDismiss = onDismiss)
+    chosen?.let { o ->
+        val hasRating = o.maxRating > 0
+        var rating by remember(o.id) { mutableStateOf(if (hasRating) maxOf(o.minRating, 1).toString() else "") }
+        val r = if (hasRating) rating.toIntOrNull()?.coerceIn(maxOf(o.minRating, 1), o.maxRating) else null
+        val cost = vm.gearCost(o.id, r, 1.0)
+        val have = nuyen.toDoubleOrNull() ?: 0.0
+        TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating (${maxOf(o.minRating, 1)}-${o.maxRating})", keyboardType = KeyboardType.Number)
+                Text(
+                    if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥$nuyen.",
+                    style = MaterialTheme.typography.labelSmall, color = if (cost == null || cost > have) DrainAmber else MutedSilver,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Buy", { close(); chosen = null; vm.buyGearPlugin(parentGuid, o.id, r); onDismiss() }, Modifier.weight(1f), filled = true, enabled = cost != null && cost <= have)
+                }
+            }
+        }
+    }
+}
+
 /** Initiation (or submersion) as list items: the grade, what the next one costs, and the metamagics (echoes) taken. */
 fun androidx.compose.foundation.lazy.LazyListScope.initiationItems(section: chummer.core.engine.InitiationSection, vm: AppViewModel, onInitiate: () -> Unit, onMetamagic: () -> Unit, onArt: () -> Unit = {}, onMore: (String) -> Unit = {}) {
     val word = if (section.technomancer) "Submersion" else "Initiation"

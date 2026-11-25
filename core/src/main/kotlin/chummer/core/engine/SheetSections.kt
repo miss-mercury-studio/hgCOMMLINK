@@ -32,7 +32,10 @@ data class SheetSections(
     /** Armor grouped by equipment set; the set name (and [guid]) is empty for armor not in any set. A set with no armor still shows. */
     data class ArmorSet(val name: String, val items: List<ArmorItemLine>, val guid: String = "")
     data class WareLine(val name: String, val grade: String, val rating: Int, val essence: Double, val isBioware: Boolean, val children: List<WareLine>, val guid: String = "", val sourceId: String = "")
+    data class GearPartLine(val guid: String, val name: String, val quantity: String, val rating: Int, val extra: String)
     data class GearLine(val name: String, val category: String, val quantity: String, val rating: Int, val children: List<String>, val guid: String = "", val loaded: Boolean = false, val mergeable: Boolean = false,
+        /** The plug-ins and included items inside it, and whether more can be plugged in. */
+        val parts: List<GearPartLine> = emptyList(), val pluggable: Boolean = false,
         /** What the item was chosen for (ammunition: the kind of weapon), shown after the name as Chummer does. */
         val extra: String = "")
     data class VehicleLine(val name: String, val category: String, val stats: String, val guid: String = "", val mods: List<String> = emptyList())
@@ -81,7 +84,10 @@ data class SheetSections(
                 GearLine(
                     g.t("name"), g.t("category"), g.t("qty").removeSuffix(".0"), g.n("rating"),
                     g.child("children")?.children("gear").orEmpty().map { it.t("name") },
-                    g.t("guid"), g.t("location") == "loaded", GearStacks.twins(allGear, g).isNotEmpty(), g.t("extra"),
+                    g.t("guid"), g.t("location") == "loaded", GearStacks.twins(allGear, g).isNotEmpty(),
+                    parts = g.child("children")?.children("gear").orEmpty().map { p -> GearPartLine(p.t("guid"), p.t("name"), p.t("qty").removeSuffix(".0"), p.n("rating"), p.t("extra")) },
+                    pluggable = (g.t("sourceid").takeIf { it.isNotEmpty() }?.let { data?.get(it)?.element } ?: g).let { GearPlugins.accepts(it) },
+                    extra = g.t("extra"),
                 )
             }.sortedWith(compareBy({ it.category }, { it.name }, { it.extra }))
 

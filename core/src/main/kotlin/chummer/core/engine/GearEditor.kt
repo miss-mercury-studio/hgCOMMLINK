@@ -128,6 +128,18 @@ class GearEditor(private val file: CharacterFile, private val data: GameData, pr
 
     private fun topGear() = root.child("gears")?.children("gear").orEmpty()
 
+    /** A gear item with this GUID anywhere in the character's gear, plug-ins included. */
+    fun find(guid: String): Element? {
+        fun walk(list: List<Element>): Element? {
+            for (g in list) {
+                if (g.text("guid")?.trim().equals(guid, true)) return g
+                walk(g.child("children")?.children("gear").orEmpty())?.let { return it }
+            }
+            return null
+        }
+        return walk(topGear())
+    }
+
     /** The loose top-level gear item with this GUID. */
     fun stack(guid: String): Element? = topGear().firstOrNull { it.text("guid")?.trim().equals(guid, true) }
 

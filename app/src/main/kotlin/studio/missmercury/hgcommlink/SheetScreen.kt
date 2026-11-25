@@ -686,6 +686,8 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     var namingSet by remember { mutableStateOf<Pair<String, String>?>(null) }
     var managingArmor by remember { mutableStateOf<String?>(null) }
     var managingSet by remember { mutableStateOf<String?>(null) }
+    var managingGear by remember { mutableStateOf<String?>(null) }
+    var pluggingInto by remember { mutableStateOf<Pair<String, String>?>(null) }
     namingSet?.let { (guid, current) ->
         var text by remember(guid) { mutableStateOf(current) }
         TerminalSheet(if (guid.isEmpty()) "New armor set" else "Rename set", { namingSet = null }) { close ->
@@ -698,6 +700,16 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
             }
         }
     }
+    // A gear item's own sheet: what is inside it, adding a plug-in, selling.
+    managingGear?.let { guid ->
+        val line = g.gear.firstOrNull { it.guid == guid }
+        if (line == null) managingGear = null
+        else GearSheet(
+            line, { id, name -> sell(id, name) }, { id -> remove(id) },
+            onPlugIn = if (line.pluggable) ({ pluggingInto = guid to line.name }) else null, onDismiss = { managingGear = null },
+        )
+    }
+    pluggingInto?.let { (guid, name) -> GearPluginDialog(guid, name, vm, s.nuyen) { pluggingInto = null } }
     // A set's own sheet: wear it all, what is in it, adding and taking out armor.
     managingSet?.let { guid ->
         val set = g.armorSets.firstOrNull { it.guid == guid }
@@ -794,8 +806,11 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         if (g.gear.isNotEmpty()) item { GroupHeader("Gear", g.gear.size, Quicksilver) }
         items(g.gear) { it ->
             // Gear comes in dozens, so its cards are compact: the tags and the one action (sell in career, remove in creation) share a line.
+            // Gear with something plugged in, or that takes plug-ins, opens its own sheet when you can change things.
+            val manage = canBuy && it.guid.isNotEmpty() && (it.parts.isNotEmpty() || it.pluggable)
             ItemCard(Quicksilver, compact = true) {
-                CardTitle(if (it.extra.isBlank()) it.name else "${it.name} (${it.extra})", trailing = if (it.quantity != "1") "x${it.quantity}" else null)
+                Column(Modifier.fillMaxWidth().then(if (manage) Modifier.clickable { managingGear = it.guid } else Modifier), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                CardTitle(if (it.extra.isBlank()) it.name else "${it.name} (${it.extra})", trailing = if (it.quantity != "1") "x${it.quantity}" else null, hint = if (manage) "MANAGE ›" else null)
                 val tags = buildList {
                     it.category.takeIf { c -> c.isNotBlank() }?.let { c -> add(c to MutedSilver) }
                     if (it.rating > 0) add("Rating ${it.rating}" to MutedSilver)
@@ -809,6 +824,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
                     if (gone != null) CardAction(gone.first, gone.second, accent = if (gone.first == "Sell") DrainAmber else CriticalRed)
                 }
                 if (it.children.isNotEmpty()) CardNote("Includes: " + it.children.joinToString(", "))
+                }
             }
         }
         if (armorCount + g.weapons.size + g.vehicles.size + g.gear.size == 0) item { Text("Nothing carried.", color = MutedSilver) }

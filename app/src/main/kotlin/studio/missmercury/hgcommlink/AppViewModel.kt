@@ -364,6 +364,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun accessoryOptions() = gameData.accessoryOptions()
     fun setAccessoryEquipped(accessoryGuid: String, equipped: Boolean) = editCareer(null, "Cannot change that accessory") { adv, _ -> adv.setAccessoryEquipped(accessoryGuid, equipped) }
+    fun gearPluginOptions(parentGuid: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).gearPluginOptions(parentGuid) }.orEmpty()
+    fun buyGearPlugin(parentGuid: String, id: String, rating: Int?) = editCareer("Plug-in installed", "Cannot install that (nuyen or capacity)") { adv, _ -> adv.buyGearPlugin(parentGuid, id, rating) != null }
     fun mergeGear(guid: String) = editCareer("Stacks merged", "Nothing to merge") { adv, _ -> adv.mergeGear(guid) }
     fun setArmorEquipped(guid: String, equipped: Boolean) = editCareer(null, "Cannot change that armor") { adv, _ -> adv.setArmorEquipped(guid, equipped) }
     fun setArmorPartEquipped(guid: String, isMod: Boolean, equipped: Boolean) = editCareer(null, "Cannot change that part") { adv, _ ->

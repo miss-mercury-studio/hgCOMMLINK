@@ -8,6 +8,7 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 - **Use another Chummer version.** Menu > Game data: Get Chummer, then Choose zip or folder. You can go back to the built-in version any time.
 - **Game data shows what you are using.** Version, nightly or stable, and Verified or Unverified. Unverified data adds a warning on character sheets.
 - **Warning when desktop Chummer won't open a character.** Shown on the sheet, and sharing asks first.
+- **Gear with plug-ins has its own sheet.** Tap a gear item with parts inside it, like a Fake SIN with licenses or a drug with a grade, to see what is in it, sell or remove a part, or plug in more.
 - **Merge gear stacks.** Identical gear listed on separate lines, such as ammo, gets a Merge button that combines the quantities.
 - **Armor sets.** Make named sets on Gear, tap one to add or remove armor, and wear or take off the whole set at once.
 

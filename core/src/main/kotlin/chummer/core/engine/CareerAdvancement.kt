@@ -551,6 +551,27 @@ class CareerAdvancement(
         return ArmorWeaponEditor(file, data).accessoryCost(entry, r, storedNumber(weapon, "cost"))
     }
 
+    /** The gear that may be plugged into this gear item. */
+    fun gearPluginOptions(parentGuid: String): List<GearOption> {
+        val pack = data as? chummer.core.DataPack ?: return emptyList()
+        val parent = GearEditor(file, data, settings).find(parentGuid) ?: return emptyList()
+        val entry = parent.text("sourceid")?.trim()?.let { data[it]?.element } ?: parent
+        return GearPlugins.options(pack, parent, entry)
+    }
+
+    /** Buy gear to plug into another gear item: pays for it, adds it inside the parent, and writes a "Purchased Gear" entry. */
+    fun buyGearPlugin(parentGuid: String, entryId: String, rating: Int? = null, qty: Double = 1.0, now: LocalDateTime = LocalDateTime.now()): String? {
+        if (gearPluginOptions(parentGuid).none { it.id.equals(entryId, true) }) return null
+        val cost = gearCost(entryId, rating, qty) ?: return null
+        if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating)) return null
+        val editor = GearEditor(file, data, settings)
+        val parent = editor.find(parentGuid) ?: return null
+        val container = parent.child("children") ?: file.doc.createElement("children").also { parent.appendChild(it) }
+        val guid = editor.addGear(entryId, rating, qty, into = container, parentId = parentGuid)
+        charge(cost, "Purchased Gear " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddGear", guid, qty, now)
+        return guid
+    }
+
     /** Fold identical loose gear stacks into this one (Chummer's Merge Quantity). */
     fun mergeGear(guid: String): Boolean = GearEditor(file, data, settings).mergeStacks(guid)
 
