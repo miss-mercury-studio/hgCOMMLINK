@@ -98,7 +98,7 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
                     add("Overview" to "STATS"); add("Skills" to "SKILL")
                     if (sheet.magic != null || sheet.powers != null) add("Magic" to "MAGIC")
                     if (sheet.complexForms != null) add("Resonance" to "MATRIX")
-                    add("Gear" to "GEAR"); add("Ware" to "WARE"); add("Life" to "LIFE"); add("Qualities" to "QUAL")
+                    add("Gear" to "GEAR"); if (!sheet.isAI || sheet.sections.ware.isNotEmpty()) add("Ware" to "WARE"); add("Life" to "LIFE"); add("Qualities" to "QUAL")
                 }
                 val current = if (tabs.any { it.first == tabName }) tabName else "Overview"
                 Box(Modifier.weight(1f).fillMaxWidth()) {

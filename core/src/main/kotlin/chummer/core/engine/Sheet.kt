@@ -51,6 +51,8 @@ data class Sheet(
     val movement: String = "",
     /** The nuyen budget and plug-in room of a Karma-build character in creation, where gear is bought from karma-bought nuyen. */
     val creationBuy: CreationBuy? = null,
+    /** An A.I.: it has no body, so there is no Ware tab (unless a file already has ware on it, so it can be removed). */
+    val isAI: Boolean = false,
     /** Creation: each active skill's specialization and what it could take (by skill name). */
     val skillSpecs: Map<String, SkillSpecInfo> = emptyMap(),
     /** An adept's power points and powers; null for anyone who is not an adept. */
@@ -133,7 +135,7 @@ data class Sheet(
             val essence = essenceEngine.essence(6.0, c.augmentations())
             val d = DerivedStats(set, attrs, essence, settings)
             // An A.I. has no Body (its metatype maximum is 0) and its monitors and recovery work differently (Chummer's `IsAI`).
-            val isAI = flag(c, "depenabled") && c.root.child("attributes")?.children("attribute")?.firstOrNull { it.text("name")?.trim() == "BOD" }?.text("metatypemax")?.trim()?.toIntOrNull() == 0
+            val isAI = isAI(c)
             d.isAI = isAI
 
             val str = attrs["STR"]?.totalValue ?: 0
@@ -214,6 +216,7 @@ data class Sheet(
                 isMagician = flag(c, "magician"),
                 limitNotes = LimitModifiers.of(c),
                 skillSpecs = if (!career && s.buildMethod in CREATION_BUILDS) SkillSpecEditor(c, data).info(active.filter { it.rating > 0 }.map { it.name }.toSet()) else emptyMap(),
+                isAI = isAI,
                 creationBuy = if (!career && s.buildMethod in CREATION_BUILDS) CareerAdvancement(c, data, settings).let { adv -> CreationBuy(NuyenLedger.of(c, settings, data), adv.pluginCapacity(), adv.wareEdits()) } else null,
                 career = if (career) careerLines(c, data, settings, shown.map { it.name }) else null,
                 karmaLedger = if (!career && s.buildMethod in CREATION_BUILDS) KarmaLedger.of(c, settings, data) else null,
@@ -261,3 +264,8 @@ data class Sheet(
             }
     }
 }
+
+/** An A.I. (Chummer's `IsAI`): Depth is on and the metatype has no Body. */
+fun isAI(c: chummer.core.CharacterFile): Boolean =
+    c.root.child("depenabled")?.textContent?.trim().equals("True", true) &&
+        c.root.child("attributes")?.children("attribute")?.firstOrNull { it.text("name")?.trim() == "BOD" }?.text("metatypemax")?.trim()?.toIntOrNull() == 0

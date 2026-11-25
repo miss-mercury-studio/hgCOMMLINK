@@ -609,6 +609,8 @@ class CareerAdvancement(
      * would take essence below zero, and writes a "Purchased Cyberware" entry. Returns the item's GUID, or null.
      */
     fun buyWare(entryId: String, grade: String = "Standard", rating: Int? = null, parentGuid: String? = null, now: LocalDateTime = LocalDateTime.now()): String? {
+        // An A.I. has no body to fit ware in, and desktop Chummer cannot open a file that gives it any.
+        if (isAI(file)) return null
         val editor = CyberwareEditor(file, data)
         val entry = data[entryId]?.element ?: return null
         if (grade in settings.bannedWareGrades) return null
