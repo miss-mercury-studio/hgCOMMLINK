@@ -6,6 +6,8 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-24
+
 ### Added
 - **Each weapon has its own sheet, with proper clip and ammunition handling.** Tap a gun on the Gear tab and choose Manage. You can see every clip it has (its own, plus one for each Spare Clip), what is loaded in each and how full it is, switch which clip the weapon fires from, load a clip with the ammunition and number of rounds you choose, top up a partly used clip, unload it, and spend rounds as you fire. The damage and AP shown follow the clip you are firing from, so switching from regular ammo to APDS changes them straight away. Accessories, selling and removing are in the same sheet.
 - **Weapon accessories are listed in the weapon sheet, and you can manage them.** Each accessory is a card showing its mount, rating and any clip slots it adds. You can switch off one that adds to the weapon's figures, such as accuracy or recoil compensation (it stops counting but stays fitted), sell it in career for a share of its price, or take it back in creation. Parts that come with the weapon can only be switched off.
