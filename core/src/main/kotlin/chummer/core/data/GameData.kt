@@ -61,31 +61,57 @@ object SupportedData {
 
 enum class DataStatus { SUPPORTED, UNCHECKED }
 
-/** The game data in use: what it is, and whether the engine is tested on it. [build] is Chummer's build number from its changelog, when known. */
+/**
+ * The game data in use: what it is, and whether the engine is tested on it. [release] and [commit] are the Chummer version and the start of
+ * its git commit, read from Chummer5.exe in the release the player imported (a nightly is "5.226.248", the stable release "5.226.0");
+ * [build] is Chummer's build number from its changelog, the fallback when there is no exe.
+ */
 data class GameDataVersion(
     val fingerprint: String, val name: String, val status: DataStatus, val build: String?, val source: String, val importedAt: String?,
+    val release: String? = null, val commit: String? = null,
 ) {
     val short: String get() = fingerprint.take(8)
 
-    /** For a player: "Chummer 5.226.0" when it is a data set we know, otherwise what we can say about it. */
-    val label: String get() = if (status == DataStatus.SUPPORTED) name else if (build != null) "Custom data: Chummer build $build (not checked)" else "Custom data: unknown Chummer version (not checked)"
+    /** For a player: the name from the supported list ("Chummer 5.226.0") when it is a data set we know, otherwise the version we could read. */
+    val label: String get() = when {
+        status == DataStatus.SUPPORTED -> name
+        release != null -> "Chummer $release"
+        build != null -> "Chummer build $build"
+        else -> "Unknown Chummer version"
+    }
 
     /** Whether the player imported this, rather than it being the data that came with the app. */
     val isCustom: Boolean get() = source != "bundled"
 
-    /** One line for reports and screens: label and the start of the fingerprint. */
-    val line: String get() = "$label [$short]"
+    /**
+     * "STABLE" for a Chummer release (its version ends in .0, like 5.226.0), "NIGHTLY" for anything between releases (5.226.248, where the last
+     * number counts the builds since); null when the version could not be read. A naming convention, not something Chummer states.
+     */
+    val channel: String? get() = release?.let { if (it.endsWith(".0")) "STABLE" else "NIGHTLY" }
+
+    /** One line for reports and screens: label, what is different about it, the commit and the start of the fingerprint. */
+    val line: String get() {
+        val notes = listOfNotNull(
+            if (isCustom) (channel?.lowercase() ?: "custom") else null,
+            if (status == DataStatus.UNCHECKED) "unverified" else null,
+        )
+        return label + (if (notes.isEmpty()) "" else " (" + notes.joinToString(", ") + ")") + (commit?.let { " @$it" } ?: "") + " [$short]"
+    }
 
     fun toText(): String = Properties().apply {
         setProperty("fingerprint", fingerprint); setProperty("name", name); setProperty("status", status.name)
         build?.let { setProperty("build", it) }; setProperty("source", source); importedAt?.let { setProperty("importedAt", it) }
+        release?.let { setProperty("release", it) }; commit?.let { setProperty("commit", it) }
     }.let { p -> java.io.StringWriter().also { w -> p.store(w, null) }.toString() }
 
     companion object {
         /** [name] and [status] come from the supported list, by fingerprint. */
-        fun identify(fingerprint: String, build: String?, supported: List<SupportedDataSet>, source: String, importedAt: String?): GameDataVersion {
+        fun identify(
+            fingerprint: String, build: String?, supported: List<SupportedDataSet>, source: String, importedAt: String?,
+            release: String? = null, commit: String? = null,
+        ): GameDataVersion {
             val known = supported.firstOrNull { it.fingerprint == fingerprint }
-            return GameDataVersion(fingerprint, known?.name.orEmpty(), if (known != null) DataStatus.SUPPORTED else DataStatus.UNCHECKED, build, source, importedAt)
+            return GameDataVersion(fingerprint, known?.name.orEmpty(), if (known != null) DataStatus.SUPPORTED else DataStatus.UNCHECKED, build, source, importedAt, release, commit)
         }
 
         fun fromText(text: String): GameDataVersion? = runCatching {
@@ -93,8 +119,48 @@ data class GameDataVersion(
             GameDataVersion(
                 p.getProperty("fingerprint"), p.getProperty("name").orEmpty(), DataStatus.valueOf(p.getProperty("status")),
                 p.getProperty("build"), p.getProperty("source").orEmpty(), p.getProperty("importedAt"),
+                p.getProperty("release"), p.getProperty("commit"),
             )
         }.getOrNull()
+    }
+}
+
+/** Reads the version Chummer5.exe was built as, for example "5.226.248+dcdede6e..." (the .NET product version, with the git commit after the plus). */
+object ExeVersion {
+    class Version(val release: String, val commit: String?)
+
+    private val key = "ProductVersion".toByteArray(Charsets.UTF_16LE)
+    private val shape = Regex("""(\d+(?:\.\d+){1,3})(?:\+([0-9a-fA-F]{7,40}))?""")
+
+    /** The version resource is UTF-16 text: the name "ProductVersion", padding, then the value. Null if there is none that looks like a version. */
+    fun parse(exe: ByteArray): Version? {
+        var from = 0
+        while (true) {
+            val at = indexOf(exe, key, from)
+            if (at < 0) return null
+            from = at + key.size
+            var i = from
+            while (i + 1 < exe.size && exe[i] == 0.toByte() && exe[i + 1] == 0.toByte() && i < from + 8) i += 2
+            val sb = StringBuilder()
+            while (i + 1 < exe.size && sb.length < 100) {
+                val c = (exe[i].toInt() and 0xff) or ((exe[i + 1].toInt() and 0xff) shl 8)
+                if (c == 0) break
+                sb.append(c.toChar()); i += 2
+            }
+            val m = shape.matchEntire(sb.toString().trim()) ?: continue
+            val parts = m.groupValues[1].split(".")
+            // Stable releases are "5.226.0.0"; show them as "5.226.0".
+            val release = if (parts.size == 4 && parts[3] == "0") parts.take(3).joinToString(".") else m.groupValues[1]
+            return Version(release, m.groupValues[2].takeIf { it.isNotEmpty() }?.take(7)?.lowercase())
+        }
+    }
+
+    private fun indexOf(h: ByteArray, n: ByteArray, from: Int): Int {
+        outer@ for (i in from..h.size - n.size) {
+            for (j in n.indices) if (h[i + j] != n[j]) continue@outer
+            return i
+        }
+        return -1
     }
 }
 
@@ -106,10 +172,11 @@ class GameDataImportException(message: String) : Exception(message)
  * stable releases) or inside up to three folders (a copy of the source tree, `Chummer/data`); the folder holding `data/metatypes.xml` is the root.
  */
 object GameDataZip {
-    class Result(val files: Int, val build: String?)
+    class Result(val files: Int, val build: String?, val exe: ExeVersion.Version? = null)
 
     /** Chummer's largest release zip is under 50 MB; a much bigger file is something else (for example the whole source repository). */
     const val MAX_ZIP_BYTES = 250L * 1024 * 1024
+    const val MAX_EXE_BYTES = 64L * 1024 * 1024
 
     private val dataMarker = Regex("""^((?:[^/]+/){0,3})data/metatypes\.xml$""")
 
@@ -125,6 +192,7 @@ object GameDataZip {
             val canonical = staging.canonicalFile
             var files = 0
             var build: String? = null
+            var exe: ExeVersion.Version? = null
             for (entry in z.entries()) {
                 if (entry.isDirectory || !entry.name.startsWith(prefix)) continue
                 val rel = entry.name.substring(prefix.length)
@@ -132,6 +200,7 @@ object GameDataZip {
                     rel.startsWith("data/") && rel.count { it == '/' } == 1 && rel.endsWith(".xml") -> "chummer-data/" + rel.removePrefix("data/")
                     rel == "lang/en-us.xml" -> "chummer-lang/en-us.xml"
                     rel.startsWith("customdata/") && !rel.endsWith(".xsd") -> "chummer-customdata/" + rel.removePrefix("customdata/")
+                    rel == "Chummer5.exe" -> { if (entry.size in 1..MAX_EXE_BYTES) exe = ExeVersion.parse(z.getInputStream(entry).use { it.readBytes() }); continue }
                     rel == "changelog.txt" -> { build = buildOf(z.getInputStream(entry).bufferedReader().use { it.readText() }); continue }
                     else -> continue
                 }
@@ -143,7 +212,7 @@ object GameDataZip {
                 files++
                 if (files % 25 == 0) progress(files)
             }
-            return Result(files, build)
+            return Result(files, build, exe)
         }
     }
 

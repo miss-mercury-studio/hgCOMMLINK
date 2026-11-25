@@ -60,7 +60,7 @@ object CrashReporter {
 
     /** The game data in use, from what was saved when it was last identified (a crash report must not load the data). */
     fun gameData(context: Context): String? = GameDataInfo.saved(context)?.let { v ->
-        GameDataVersion.identify(v.fingerprint, v.build, GameDataInfo.supported(context), v.source, v.importedAt).line
+        GameDataVersion.identify(v.fingerprint, v.build, GameDataInfo.supported(context), v.source, v.importedAt, v.release, v.commit).line
     }
 
     fun device() = "${Build.MANUFACTURER} ${Build.MODEL}"

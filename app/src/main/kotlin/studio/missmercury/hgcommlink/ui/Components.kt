@@ -131,7 +131,25 @@ fun StatCell(label: String, value: String, modifier: Modifier = Modifier, accent
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun TelemetryStrip(items: List<Pair<String, String>>, modifier: Modifier = Modifier, accent: Color = PhosphorGreen) {
+fun TelemetryStrip(items: List<Pair<String, String>>, modifier: Modifier = Modifier, accent: Color = PhosphorGreen, stacked: Boolean = false, valueColors: Map<String, Color> = emptyMap()) {
+    if (stacked) {
+        // One item per line, all left-aligned.
+        Column(
+            modifier.fillMaxWidth().clip(SquareShape).background(MercurySlate).border(1.dp, TerminalGrid, SquareShape).padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            items.forEach { (label, value) ->
+                Text(
+                    buildAnnotatedString {
+                        if (label.isNotEmpty()) withStyle(SpanStyle(color = MutedSilver)) { append("${label.uppercase()}: ") }
+                        withStyle(SpanStyle(color = valueColors[label] ?: accent)) { append(value) }
+                    },
+                    style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 2.dp),
+                )
+            }
+        }
+        return
+    }
     FlowRow(
         modifier.fillMaxWidth().clip(SquareShape).background(MercurySlate).border(1.dp, TerminalGrid, SquareShape).padding(horizontal = 10.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -154,14 +172,14 @@ fun TelemetryStrip(items: List<Pair<String, String>>, modifier: Modifier = Modif
 @Composable
 fun TerminalButton(
     label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
-    accent: Color = PhosphorGreen, filled: Boolean = false, enabled: Boolean = true,
+    accent: Color = PhosphorGreen, filled: Boolean = false, enabled: Boolean = true, outlineTint: Color? = null,
 ) {
     Box(
         modifier.alpha(if (enabled) 1f else 0.4f)
             .then(if (filled && enabled) Modifier.shadow(10.dp, CardShape, ambientColor = accent, spotColor = accent) else Modifier)
             .clip(CardShape)
             .background(if (filled) accent else MercurySlate)
-            .border(1.dp, if (filled) accent else TerminalGrid, CardShape)
+            .border(1.dp, if (filled) accent else outlineTint ?: TerminalGrid, CardShape)
             .clickable(enabled = enabled, onClick = onClick)
             .heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
@@ -171,7 +189,7 @@ fun TerminalButton(
         var fit by androidx.compose.runtime.remember(label) { androidx.compose.runtime.mutableFloatStateOf(1f) }
         Text(
             "[ ${label.uppercase().replace(' ', '_')} ]", style = base, fontSize = base.fontSize * fit, maxLines = 1, softWrap = false,
-            color = if (filled) Obsidian else Quicksilver,
+            color = if (filled) Obsidian else outlineTint ?: Quicksilver,
             onTextLayout = { if (it.hasVisualOverflow && fit > 0.55f) fit *= 0.92f },
         )
     }
@@ -545,11 +563,16 @@ fun TerminalMenu(expanded: Boolean, onDismiss: () -> Unit, content: @Composable 
 }
 
 @Composable
-fun TerminalMenuItem(label: String, onClick: () -> Unit, danger: Boolean = false) {
+fun TerminalMenuItem(label: String, onClick: () -> Unit, danger: Boolean = false, tag: String? = null, tagColor: Color = Quicksilver) {
     androidx.compose.material3.DropdownMenuItem(
         text = {
+            // The label keeps its colour; an optional tag after it has its own.
             Text(
-                "> ${label.uppercase()}", style = MaterialTheme.typography.labelLarge,
+                androidx.compose.ui.text.buildAnnotatedString {
+                    append("> ${label.uppercase()}")
+                    if (tag != null) withStyle(androidx.compose.ui.text.SpanStyle(color = tagColor)) { append(" [ ${tag.uppercase()} ]") }
+                },
+                style = MaterialTheme.typography.labelLarge,
                 color = if (danger) CriticalRed else Quicksilver,
             )
         },

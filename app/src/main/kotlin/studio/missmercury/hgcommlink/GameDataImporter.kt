@@ -28,9 +28,9 @@ object GameDataImporter {
     private const val SEARCH_DEPTH = 3
 
     /** What was installed: how many files, Chummer's build number if the changelog was there, and the fingerprint of the data. */
-    class Imported(val files: Int, val build: String?, val fingerprint: String)
+    class Imported(val files: Int, val build: String?, val fingerprint: String, val exe: chummer.core.data.ExeVersion.Version? = null)
 
-    class Found(val data: DocumentFile, val lang: DocumentFile?, val custom: DocumentFile?, val changelog: DocumentFile?)
+    class Found(val data: DocumentFile, val lang: DocumentFile?, val custom: DocumentFile?, val changelog: DocumentFile?, val exe: DocumentFile? = null)
 
     /** Imported data lives apart from the bundled copy, so the bundled one is never overwritten and "use the bundled data" is just deleting this. */
     fun root(context: Context) = File(context.filesDir, "imported-game-data")
@@ -68,7 +68,7 @@ object GameDataImporter {
                 }
             }
             val r = GameDataZip.extract(copy, staging) { progress("Copied $it files") }
-            return swapIn(context, staging, r.files, r.build)
+            return swapIn(context, staging, r.files, r.build, r.exe)
         } finally {
             copy.delete()
             staging.deleteRecursively()
@@ -88,14 +88,15 @@ object GameDataImporter {
             found.custom?.let { files += copyDir(context, it, File(staging, CUSTOM)) { n -> !n.endsWith(".xsd") } }
             progress("Copied $files files")
             val build = found.changelog?.let { f -> runCatching { context.contentResolver.openInputStream(f.uri)?.bufferedReader()?.use { GameDataZip.buildOf(it.readText()) } }.getOrNull() }
-            return swapIn(context, staging, files, build)
+            val exe = found.exe?.takeIf { it.length() in 1..GameDataZip.MAX_EXE_BYTES }?.let { f -> runCatching { context.contentResolver.openInputStream(f.uri)?.use { chummer.core.data.ExeVersion.parse(it.readBytes()) } }.getOrNull() }
+            return swapIn(context, staging, files, build, exe)
         } finally {
             staging.deleteRecursively()
         }
     }
 
     /** Replace the live folders with the staged ones, each as a whole. */
-    private fun swapIn(context: Context, staging: File, files: Int, build: String?): Imported {
+    private fun swapIn(context: Context, staging: File, files: Int, build: String?, exe: chummer.core.data.ExeVersion.Version?): Imported {
         if (!File(File(staging, DATA), MARKER).isFile) throw GameDataImportException("No Chummer game data found.")
         File(staging, CUSTOM).mkdirs()
         File(staging, LANG).mkdirs()
@@ -106,7 +107,7 @@ object GameDataImporter {
             target.parentFile?.mkdirs()
             if (!File(staging, name).renameTo(target)) throw GameDataImportException("Could not store the game data.")
         }
-        return Imported(files, build, fingerprint)
+        return Imported(files, build, fingerprint, exe)
     }
 
     /**
@@ -125,7 +126,7 @@ object GameDataImporter {
 
     private fun at(dir: DocumentFile): Found? {
         dir.findFile("data")?.takeIf { it.isDirectory && it.findFile(MARKER) != null }?.let {
-            return Found(it, dir.findFile("lang")?.takeIf(DocumentFile::isDirectory), dir.findFile("customdata")?.takeIf(DocumentFile::isDirectory), dir.findFile("changelog.txt"))
+            return Found(it, dir.findFile("lang")?.takeIf(DocumentFile::isDirectory), dir.findFile("customdata")?.takeIf(DocumentFile::isDirectory), dir.findFile("changelog.txt"), dir.findFile("Chummer5.exe"))
         }
         // The player chose the data folder itself: no way to reach its siblings, so the language file is left out.
         if (dir.findFile(MARKER) != null) return Found(dir, null, null, null)

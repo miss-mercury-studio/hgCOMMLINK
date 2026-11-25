@@ -89,7 +89,7 @@ class GameDataStore(private val context: Context) {
         resetCaches()
         val v = GameDataVersion.identify(
             r.fingerprint, r.build, GameDataInfo.supported(context), if (zip) "zip" else "folder",
-            java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date()),
+            java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date()), r.exe?.release, r.exe?.commit,
         )
         GameDataInfo.save(context, v)
         versionCache = v
@@ -112,7 +112,7 @@ class GameDataStore(private val context: Context) {
                 val fingerprint = saved?.fingerprint ?: bundledFingerprint() ?: GameDataFingerprint.ofDirectory(dataDir())
                 GameDataVersion.identify(
                     fingerprint, saved?.build, GameDataInfo.supported(context),
-                    saved?.source ?: "bundled", saved?.importedAt,
+                    saved?.source ?: "bundled", saved?.importedAt, saved?.release, if (saved == null) bundledCommit() else saved.commit,
                 ).also { GameDataInfo.save(context, it); versionCache = it }
             }
         }
@@ -120,6 +120,10 @@ class GameDataStore(private val context: Context) {
 
     private fun bundledFingerprint(): String? =
         runCatching { context.assets.open("chummer-data-fingerprint.txt").bufferedReader().use { it.readText().trim() } }.getOrNull()?.takeIf { it.isNotEmpty() }
+
+    /** The commit of the Chummer the bundled data comes from, written into the app at build time (chummer-version.txt: version, then commit). */
+    private fun bundledCommit(): String? =
+        runCatching { context.assets.open("chummer-version.txt").bufferedReader().readLines().filter { it.isNotBlank() }.getOrNull(1) }.getOrNull()
 
     private fun dataDir() = gameDir("chummer-data", "chummer-data")
 
@@ -342,8 +346,8 @@ class GameDataStore(private val context: Context) {
                 "${resolved.missing.size} custom data folder(s) from this profile were not found, so items they change may show " +
                     "Chummer's original values. Put their files (including manifest.xml) in your characters folder."
             dataVersion?.status == DataStatus.UNCHECKED ->
-                "Game data is ${dataVersion.label}. This app has not been checked against it, so numbers may differ from Chummer's. " +
-                    "Menu, Game data, shows which version it was checked with."
+                "Game data is ${dataVersion.label}, unverified: this app has never run the numbers on it, so they may differ from Chummer's. " +
+                    "Menu, Game data, shows which version is verified."
             else -> null
         }
         val data = packFor(resolved.dirs)

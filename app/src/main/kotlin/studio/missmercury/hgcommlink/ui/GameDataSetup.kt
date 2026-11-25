@@ -2,6 +2,9 @@ package studio.missmercury.hgcommlink.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import chummer.core.data.DataStatus
 import chummer.core.data.GameDataVersion
-import chummer.core.data.SupportedDataSet
 
 /**
  * The menu's "Game data": which Chummer data is in use, whether the app is checked with it, and how to use another Chummer version
@@ -22,7 +24,7 @@ import chummer.core.data.SupportedDataSet
  */
 @Composable
 fun GameDataSheet(
-    version: GameDataVersion?, recommended: SupportedDataSet?, importing: Boolean, progress: String?,
+    version: GameDataVersion?, bundledName: String?, importing: Boolean, progress: String?,
     onGet: () -> Unit, onZip: () -> Unit, onFolder: () -> Unit, onUseBundled: () -> Unit, onDismiss: () -> Unit,
 ) {
     TerminalSheet("Game data", onDismiss) {
@@ -33,28 +35,29 @@ fun GameDataSheet(
                 return@Column
             }
             if (version != null) {
-                if (version.isCustom) Text("[ CUSTOM DATA ] not the version that came with the app", style = MaterialTheme.typography.labelMedium, color = DrainAmber)
-                Text(version.label, style = MaterialTheme.typography.titleMedium, color = if (version.status == DataStatus.SUPPORTED) PhosphorGreen else DrainAmber)
-                Text(
-                    if (version.status == DataStatus.SUPPORTED) "The app is checked with this data: its numbers are tested against Chummer's."
-                    else "The app has not been checked with this data, so some numbers may differ from Chummer's.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(version.label, style = MaterialTheme.typography.titleMedium, color = if (version.status == DataStatus.SUPPORTED) PhosphorGreen else DrainAmber)
+                    if (version.isCustom) Text("[ ${version.channel ?: "CUSTOM"} ]", style = MaterialTheme.typography.labelMedium, color = dataTagColor(version))
+                }
                 val where = when (version.source) { "bundled" -> "Included in the app"; "zip" -> "Added from a zip"; "folder" -> "Added from a folder"; else -> version.source }
-                TelemetryStrip(listOfNotNull("SOURCE" to where, version.importedAt?.let { "ADDED" to it }, version.build?.let { "BUILD" to it }, "ID" to version.short))
+                TelemetryStrip(listOfNotNull("STATUS" to if (version.status == DataStatus.SUPPORTED) "VERIFIED" else "UNVERIFIED", "SOURCE" to where, version.importedAt?.let { "ADDED" to it }, (if (version.commit != null) "COMMIT" to version.commit!! else "ID" to version.short)), stacked = true,
+                    valueColors = mapOf("STATUS" to if (version.status == DataStatus.SUPPORTED) PhosphorGreen else DrainAmber))
             }
             Text(
-                "To use a Chummer version you know, download its release zip from Chummer's page and choose it here. The files are copied into the app " +
-                    "and stay on your phone; characters are not touched.",
+                "To use a Chummer version you know, download its release zip from Chummer's page and choose it here. Your characters are not touched.",
                 style = MaterialTheme.typography.bodySmall,
             )
-            if (version?.status != DataStatus.SUPPORTED && recommended != null) {
-                Text("The app is checked with ${recommended.name}.", style = MaterialTheme.typography.bodyMedium)
-            }
             TerminalButton("Get Chummer", onGet, Modifier.fillMaxWidth())
             TerminalButton("Choose zip", onZip, Modifier.fillMaxWidth(), filled = true)
             TerminalButton("Choose folder", onFolder, Modifier.fillMaxWidth())
-            if (version != null && version.source != "bundled") TerminalButton("Use the version that came with the app", onUseBundled, Modifier.fillMaxWidth())
+            if (version != null && version.source != "bundled") TerminalButton(bundledName?.removePrefix("Chummer ")?.let { "Revert to $it" } ?: "Revert to the included version", onUseBundled, Modifier.fillMaxWidth(), outlineTint = CriticalRed)
         }
     }
+}
+
+/** The colour of the NIGHTLY / STABLE / CUSTOM tag: red for a nightly, blue for a version that could not be read, amber for an imported release. */
+fun dataTagColor(version: GameDataVersion): Color = when (version.channel) {
+    "NIGHTLY" -> CriticalRed
+    null -> DataBlue
+    else -> DrainAmber
 }

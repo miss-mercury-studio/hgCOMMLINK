@@ -8,7 +8,7 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ### Added
 - **Use another Chummer version.** The app still comes with Chummer's latest stable game data, so it works as soon as it is installed. If you would rather use the exact version you know, open Game data in the menu, tap Get Chummer to open its download page, then Choose zip (no unzipping needed) or Choose folder. You can go back to the version that came with the app at any time. Your characters are not touched.
-- **Game data in the menu shows what you are using.** It names the Chummer version and says whether the app has been checked against it. If you have chosen your own version, it is marked **Custom data** (in the menu, on the Game data sheet and in About), with the date you added it. If the app has not been checked against it, character sheets show a warning that numbers may differ from Chummer's.
+- **Game data in the menu shows what you are using.** It names the Chummer version, including the exact version and commit for a nightly or other release you add, and marks it **Verified** (the app has been tested against that data) or **Unverified** (it has not). Data you chose yourself is tagged **Nightly**, **Stable** or **Custom** (in the menu, on the Game data sheet and in About). On an unverified version, character sheets show a warning that numbers may differ from Chummer's.
 
 ## [0.1.5] - 2026-11-24
 

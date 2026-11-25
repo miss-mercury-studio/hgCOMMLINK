@@ -39,9 +39,7 @@ fun AboutSheet(dataInUse: GameDataVersion?, onDismiss: () -> Unit) {
             Text("MISS MERCURY STUDIO // CHARACTER TERMINAL", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
             Text("Version $version", style = MaterialTheme.typography.labelMedium)
             if (dataInUse?.isCustom == true) {
-                Text("Chummer data in use: ${dataInUse.label}", style = MaterialTheme.typography.labelMedium, color = DrainAmber)
-                Text("Added from a ${dataInUse.source}${dataInUse.importedAt?.let { " on $it" }.orEmpty()}, ID ${dataInUse.short}. Menu, Game data, switches back.", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
-                chummer?.let { Text("Included with the app: Chummer 5a data ${it[0]}", style = MaterialTheme.typography.labelSmall, color = MutedSilver) }
+                Text("Chummer data: ${dataInUse.label} \u00b7 ${(dataInUse.channel ?: "custom").lowercase()}" + (dataInUse.commit?.let { " \u00b7 $it" } ?: " \u00b7 ID ${dataInUse.short}"), style = MaterialTheme.typography.labelMedium, color = DrainAmber)
             } else {
                 chummer?.let { Text("Chummer 5a data ${it[0]}  (commit ${it[1]})", style = MaterialTheme.typography.labelMedium, color = MutedSilver) }
             }

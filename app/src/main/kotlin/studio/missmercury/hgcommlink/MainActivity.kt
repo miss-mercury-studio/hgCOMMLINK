@@ -171,7 +171,7 @@ private fun App(vm: AppViewModel) {
     var showData by remember { mutableStateOf(false) }
     if (showData) {
         GameDataSheet(
-            vm.gameDataVersion, vm.recommendedData(), importing = vm.importingGameData, progress = vm.gameDataProgress,
+            vm.gameDataVersion, vm.bundledDataName(), importing = vm.importingGameData, progress = vm.gameDataProgress,
             onGet = { getChummer() }, onZip = { pickZip() }, onFolder = { dataFolderPicker.launch(null) }, onUseBundled = vm::useBundledData, onDismiss = { showData = false },
         )
     }
@@ -213,7 +213,11 @@ private fun App(vm: AppViewModel) {
                             if (vm.isSharedFolder) {
                                 TerminalMenuItem("Use app storage", onClick = { menu = false; vm.useAppFolder() })
                             }
-                            TerminalMenuItem(if (vm.gameDataVersion?.isCustom == true) "Game data (custom)" else "Game data", onClick = { menu = false; showData = true })
+                            TerminalMenuItem(
+                                "Game data", onClick = { menu = false; showData = true },
+                                tag = vm.gameDataVersion?.takeIf { it.isCustom }?.let { it.channel ?: "CUSTOM" },
+                                tagColor = vm.gameDataVersion?.let { dataTagColor(it) } ?: Quicksilver,
+                            )
                             TerminalMenuItem("Refresh", onClick = { menu = false; vm.refresh() })
                             TerminalMenuItem("What's new", onClick = { menu = false; whatsNew = true })
                             TerminalMenuItem("Report a problem", onClick = { menu = false; CrashReporter.open(appContext, CrashReporter.bugUrl(appContext, null)) })

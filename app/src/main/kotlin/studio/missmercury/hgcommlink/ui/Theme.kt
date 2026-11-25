@@ -30,6 +30,7 @@ val PhosphorGreen = Color(0xFF00E676)
 val AstralMagenta = Color(0xFFE040FB)
 val DrainAmber = Color(0xFFFFB300)
 val CriticalRed = Color(0xFFFF3D00)
+val DataBlue = Color(0xFF40C4FF)        // game data the app cannot place (custom)
 
 @OptIn(ExperimentalTextApi::class)
 private fun variable(res: Int, weight: Int) =

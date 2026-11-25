@@ -67,6 +67,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The release the "Get Chummer" button sends the player to: the newest one this app is checked against. */
+    /** The version bundled in the app, as the supported list names it ("Chummer 5.226.0"): the pinned data set the app is built with. */
+    fun bundledDataName(): String? = GameDataInfo.supported(getApplication()).firstOrNull { it.source == "pin" }?.name
+
     fun recommendedData() = SupportedData.recommended(GameDataInfo.supported(getApplication()))
 
     private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }
@@ -155,7 +158,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val v = io { gameData.import(uri, zip) { gameDataProgress = it } }
                 gameDataVersion = v
                 message = if (v.status == DataStatus.SUPPORTED) "Added ${v.label}."
-                else "Added ${v.label}. This app has not been checked against it, so numbers may differ from Chummer's."
+                else "Added ${v.label}, unverified: this app has never run the numbers on it, so they may differ from Chummer's."
             } catch (e: Exception) {
                 message = e.message ?: "Could not add the game data."
             } finally {

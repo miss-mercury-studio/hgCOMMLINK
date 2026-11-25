@@ -61,9 +61,31 @@ class GameDataTest {
         assertEquals("Chummer 5.1.0", known.label)
         val other = GameDataVersion.identify("b".repeat(64), "226", list, "zip", null)
         assertEquals(DataStatus.UNCHECKED, other.status)
-        assertEquals("Custom data: Chummer build 226 (not checked)", other.label)
-        assertEquals("Custom data: unknown Chummer version (not checked)", GameDataVersion.identify("c".repeat(64), null, list, "zip", null).label)
+        assertEquals("Chummer build 226", other.label)
+        assertEquals("Unknown Chummer version", GameDataVersion.identify("c".repeat(64), null, list, "zip", null).label)
         assertEquals("bbbbbbbb", other.short)
+        val nightly = GameDataVersion.identify("b".repeat(64), "226", list, "zip", null, "5.226.248", "dcdede6")
+        assertEquals("Chummer 5.226.248", nightly.label)
+        assertEquals("Chummer 5.226.248 (nightly, unverified) @dcdede6 [bbbbbbbb]", nightly.line)
+        assertEquals("Chummer 5.1.0 (custom) [aaaaaaaa]", known.line)
+        assertEquals("NIGHTLY", nightly.channel)
+        assertEquals("STABLE", GameDataVersion.identify("b".repeat(64), null, list, "zip", null, "5.226.0", "0c354ec").channel)
+        assertEquals(null, other.channel)
+    }
+
+    private fun versionResource(value: String): ByteArray =
+        ByteArray(40) { 7 } + "ProductVersion".toByteArray(Charsets.UTF_16LE) + ByteArray(2) + ByteArray(2) + value.toByteArray(Charsets.UTF_16LE) + ByteArray(2) + ByteArray(20)
+
+    @Test
+    fun theExeVersionGivesTheReleaseAndCommit() {
+        val nightly = ExeVersion.parse(versionResource("5.226.248+dcdede6e7ea23d126c4943490dfe37479a505bad"))!!
+        assertEquals("5.226.248", nightly.release)
+        assertEquals("dcdede6", nightly.commit)
+        val stable = ExeVersion.parse(versionResource("5.226.0.0+0c354ec2b81da5ccd2c93648f93ec8f6831c030e"))!!
+        assertEquals("5.226.0", stable.release)
+        assertEquals("0c354ec", stable.commit)
+        assertEquals(null, ExeVersion.parse(versionResource("not a version"))?.release)
+        assertEquals(null, ExeVersion.parse(ByteArray(100)))
     }
 
     @Test
