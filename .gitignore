@@ -9,3 +9,4 @@ build/
 # Never commit user characters or upstream Chummer data copies
 *.chum5
 /chummer-data-cache/
+tools/__pycache__/data_sets.cpython-37.pyc

@@ -10,6 +10,9 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 - **The character list reloads when you return to the app.** Files added to a shared folder while the app was in the background now appear without tapping Refresh, and the list stays where you scrolled.
 - **Lifestyles can be added.** The Life tab has a **+ Lifestyle** button: pick a lifestyle and the number of months, and the cost comes out of your nuyen. Lifestyles can be removed again, and in career the expense log can undo the purchase.
 
+### Changed
+- **The built-in game data is now Chummer's stable release (5.226.0)** instead of a nightly build, so it matches what you get from Chummer's download page.
+
 ## [0.1.3] - 2026-11-24
 
 ### Added
