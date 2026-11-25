@@ -721,11 +721,39 @@ object ArmorWeaponCatalog {
         return accessories(data).filter { it.id in fits }
     }
 
+    /** Armor mods a player can choose from: not the ones the data hides (Custom Fit and the like, which only come with an armor). */
     fun armorMods(data: chummer.core.DataPack): List<ItemOption> =
-        data.byId.entries.filter { it.value.file == "armor.xml" && it.value.element.tagName == "mod" }.map { (id, e) ->
+        data.byId.entries.filter { it.value.file == "armor.xml" && it.value.element.tagName == "mod" && it.value.element.child("hide") == null }.map { (id, e) ->
             val el = e.element
             fun t(tag: String) = el.child(tag)?.textContent?.trim().orEmpty()
             val max = t("maxrating").toIntOrNull() ?: 0
             ItemOption(id, t("name"), t("category"), GearEditor.unitCost(el, if (max > 1) 1 else 0), t("avail"), null, "armor ${t("armor")}  capacity ${readableCapacity(t("armorcapacity"))}", if (max > 1) max else 0)
         }.sortedBy { it.name.lowercase() }
+
+    /**
+     * The mods that may be fitted to an armor, as Chummer's mod picker decides. [armor] is the armor's data entry and [installed] the names of the mods it
+     * already has. A mod needs a category the armor allows (General, the armor's own category or name, and its `addmodcategory`; `forcemodcategory` replaces
+     * all of those), must pass its `required` and `forbidden` armor details, and its required or forbidden mods must (not) be fitted.
+     */
+    fun armorModsFor(data: chummer.core.DataPack, armor: Element, installed: List<String>): List<ItemOption> {
+        fun t(e: Element, tag: String) = e.child(tag)?.textContent?.trim().orEmpty()
+        fun split(v: String) = v.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        val forced = t(armor, "forcemodcategory")
+        val allowed = if (forced.isNotEmpty()) split(forced).toSet()
+        else (setOf("General", t(armor, "category"), t(armor, "name")) + split(t(armor, "addmodcategory"))).filter { it.isNotEmpty() }.toSet()
+        fun mods(node: Element?, group: String) = node?.child(group)?.children("armormod").orEmpty().map { it.textContent.trim() }
+        val fits = data.byId.entries.filter { it.value.file == "armor.xml" && it.value.element.tagName == "mod" }.filter { (_, e) ->
+            val mod = e.element
+            if (t(mod, "category") !in allowed) return@filter false
+            val forbidden = mod.child("forbidden")
+            if (forbidden?.child("parentdetails")?.let { WeaponFilter.passes(armor, it) } == true) return@filter false
+            if (mods(forbidden, "oneof").any { it in installed }) return@filter false
+            val required = mod.child("required")
+            if (required?.child("parentdetails")?.let { WeaponFilter.passes(armor, it) } == false) return@filter false
+            val oneOf = mods(required, "oneof")
+            if (oneOf.isNotEmpty() && oneOf.none { it in installed }) return@filter false
+            mods(required, "allof").all { it in installed }
+        }.map { it.key }.toSet()
+        return armorMods(data).filter { it.id in fits }
+    }
 }

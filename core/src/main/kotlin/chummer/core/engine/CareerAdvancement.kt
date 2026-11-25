@@ -571,6 +571,15 @@ class CareerAdvancement(
         return ArmorWeaponCatalog.accessoriesFor(pack, weapon)
     }
 
+    /** The mods that may be fitted to this armor (those its category, name and parts allow). */
+    fun armorModOptions(armorGuid: String): List<ItemOption> {
+        val pack = data as? chummer.core.DataPack ?: return emptyList()
+        val saved = root.child("armors")?.children("armor")?.firstOrNull { it.text("guid")?.trim().equals(armorGuid, true) } ?: return ArmorWeaponCatalog.armorMods(pack)
+        val entry = saved.text("sourceid")?.trim()?.let { data[it]?.element } ?: saved
+        val installed = saved.child("armormods")?.children("armormod").orEmpty().mapNotNull { it.text("name")?.trim() }
+        return ArmorWeaponCatalog.armorModsFor(pack, entry, installed)
+    }
+
     fun buyAccessory(weaponGuid: String, entryId: String, mount: String? = null, rating: Int? = null, now: LocalDateTime = LocalDateTime.now()): String? {
         val cost = accessoryCost(weaponGuid, entryId, rating) ?: return null
         if (ArmorWeaponEditor(file, data).accessoryProblem(weaponGuid, entryId) != null) return null

@@ -376,6 +376,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** The accessories that fit this weapon. */
     fun accessoryOptions(weaponGuid: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).accessoryOptions(weaponGuid) } ?: gameData.accessoryOptions()
     fun armorModOptions() = gameData.armorModOptions()
+    /** The mods that fit this armor. */
+    fun armorModOptions(armorGuid: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).armorModOptions(armorGuid) } ?: gameData.armorModOptions()
     fun accessoryCost(weaponGuid: String, id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).accessoryCost(weaponGuid, id, rating) }
     fun armorModCost(id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).armorModCost(id, rating) }
     fun buyAccessory(weaponGuid: String, id: String, mount: String?, rating: Int?) = editCareer("Accessory bought", "Not enough nuyen") { adv, _ -> adv.buyAccessory(weaponGuid, id, mount, rating) != null }
