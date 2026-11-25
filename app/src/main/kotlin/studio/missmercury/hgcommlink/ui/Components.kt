@@ -51,6 +51,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -252,6 +253,58 @@ fun TerminalLine(text: String, modifier: Modifier = Modifier, color: Color = Pho
         style = MaterialTheme.typography.labelLarge.copy(shadow = Shadow(color.copy(alpha = 0.5f), blurRadius = 12f)),
         color = color, modifier = modifier,
     )
+}
+
+/** Flavor lines for the app's real waiting spots; each loader tells a short story about what the app is doing. */
+object LoadLines {
+    val storage = listOf("mounting storage volumes", "locating character folder", "scanning for .chum5 files", "reading character headers", "sorting the roster", "checking for black ICE")
+    val gameData = listOf(
+        "verifying Chummer data pack", "parsing metatypes.xml", "parsing skills.xml", "parsing qualities.xml", "parsing spells.xml", "parsing gear.xml",
+        "indexing entries by id", "registering bonus handlers", "building picker catalogs", "polishing the chrome", "waking the decker",
+    )
+    val character = listOf(
+        "jacking in", "resolving settings profile", "checking custom data", "parsing game data", "reading the improvements", "tallying karma and nuyen",
+        "weighing essence against magic", "rolling the dice pools", "counting contacts", "paying the fixer", "handshaking with the matrix",
+    )
+}
+
+/**
+ * A loading indicator written as terminal output: [lines] are logged one after another from the top left, each finished line gets
+ * a green [ OK ], and the line in progress has a spinner. The log grows down through all the height it is offered and only then scrolls
+ * (when the height is unbounded, as inside a scrolling sheet, it keeps the last [fallbackLines]). If the wait outlasts the lines they
+ * start over, so the log keeps moving for as long as the wait does. When [real] has lines (what the app is truly doing, from LoadLog), those
+ * are shown instead of the flavor lines, as they arrive.
+ */
+@Composable
+fun TerminalLoader(lines: List<String>, modifier: Modifier = Modifier, real: List<String> = emptyList(), fallbackLines: Int = 6) {
+    var shown by androidx.compose.runtime.remember(lines) { androidx.compose.runtime.mutableIntStateOf(1) }
+    var tick by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    androidx.compose.runtime.LaunchedEffect(lines) {
+        var n = 0
+        while (true) {
+            kotlinx.coroutines.delay(90)
+            tick++; n++
+            if (n % 3 == 0) shown++
+        }
+    }
+    val spinner = "|/-\\"
+    val rowHeight = 24.dp
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        val capacity = if (constraints.hasBoundedHeight) (maxHeight / rowHeight).toInt().coerceAtLeast(1) else fallbackLines
+        val total = if (real.isNotEmpty()) real.size else shown
+        val first = (total - capacity).coerceAtLeast(0)
+        Column {
+            for (i in first until total) {
+                val done = i < total - 1
+                Row(Modifier.height(rowHeight), verticalAlignment = Alignment.CenterVertically) {
+                    Text("> ", style = MaterialTheme.typography.labelMedium, color = MutedSilver)
+                    Text(if (real.isNotEmpty()) real[i] else lines[i % lines.size], Modifier.weight(1f), maxLines = 1, style = MaterialTheme.typography.labelMedium, color = if (done) Quicksilver else PhosphorGreen)
+                    if (done) Text("[ OK ]", style = MaterialTheme.typography.labelMedium, color = PhosphorGreen)
+                    else Text("[ ${spinner[tick % spinner.length]} ]", style = MaterialTheme.typography.labelMedium, color = PhosphorGreen)
+                }
+            }
+        }
+    }
 }
 
 /** A single-line input as a shell prompt: "> text", with a green block cursor and a clear button. */

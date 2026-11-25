@@ -50,9 +50,17 @@ class CharacterRepository(private val context: Context) {
     }
 
     @Synchronized
-    fun list(): List<CharacterEntry> = storage.list().sortedBy { it.name.lowercase() }.map { f ->
-        val key = f.modified to f.size
-        summaryCache[f.id]?.takeIf { it.first == key }?.second ?: read(f).also { summaryCache[f.id] = key to it }
+    fun list(): List<CharacterEntry> {
+        val log = LoadLog.storage
+        log.reset()
+        log.add("scanning ${storage.label}")
+        val files = storage.list().sortedBy { it.name.lowercase() }
+        log.add("found ${files.size} character file(s)")
+        return files.map { f ->
+            val key = f.modified to f.size
+            summaryCache[f.id]?.takeIf { it.first == key }?.second?.also { log.add("${f.name}: unchanged") }
+                ?: run { log.add("reading ${f.name}"); read(f).also { summaryCache[f.id] = key to it } }
+        }.also { log.add("roster ready") }
     }
 
     private fun read(f: StoredFile): CharacterEntry = try {

@@ -75,8 +75,8 @@ fun SheetScreen(open: OpenCharacter, vm: AppViewModel) {
     Column(Modifier.fillMaxSize()) {
         when {
             sheet == null && open.sheetError == null -> Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                TerminalLine("JACKING_IN // PREPARING_GAME_DATA")
                 Text("This takes several seconds the first time, and again whenever custom data changes.", style = MaterialTheme.typography.bodySmall, color = MutedSilver)
+                TerminalLoader(LoadLines.character, real = LoadLog.data.lines)
             }
             sheet == null -> Text(
                 "Could not calculate this character: ${open.sheetError}",

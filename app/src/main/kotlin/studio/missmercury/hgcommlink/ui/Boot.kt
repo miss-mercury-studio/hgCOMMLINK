@@ -13,7 +13,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,7 +27,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -32,32 +37,70 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
+/** What the boot log says: the real start-up chores of the app, in terminal voice. The status is what follows the line when it is done. */
 private val BOOT_LINES = listOf(
-    "MOUNTING STORAGE" to "OK",
-    "READING GAME DATA" to "OK",
-    "CALIBRATING DICE POOLS" to "OK",
-    "OPENING LINK" to "OK",
+    "mounting storage volumes" to "OK",
+    "locating character folder" to "OK",
+    "scanning for .chum5 files" to "OK",
+    "reading character headers" to "OK",
+    "resolving settings.xml profiles" to "OK",
+    "checking custom data folders" to "OK",
+    "verifying Chummer data pack" to "OK",
+    "parsing metatypes.xml" to "OK",
+    "parsing priorities.xml" to "OK",
+    "parsing skills.xml" to "OK",
+    "parsing qualities.xml" to "OK",
+    "parsing spells.xml" to "OK",
+    "parsing powers.xml" to "OK",
+    "parsing martialarts.xml" to "OK",
+    "parsing lifestyles.xml" to "OK",
+    "parsing gear.xml" to "OK",
+    "parsing weapons.xml" to "OK",
+    "parsing armor.xml" to "OK",
+    "parsing cyberware.xml" to "OK",
+    "parsing bioware.xml" to "OK",
+    "parsing vehicles.xml" to "OK",
+    "indexing entries by id" to "OK",
+    "registering bonus handlers" to "OK",
+    "loading improvement tables" to "OK",
+    "building picker catalogs" to "OK",
+    "wiring karma ledger" to "OK",
+    "wiring nuyen ledger" to "OK",
+    "opening expense log" to "OK",
+    "seeding availability rules" to "OK",
+    "checking essence and magic limits" to "OK",
+    "calibrating dice pools" to "OK",
+    "weighing recoil against strength" to "OK",
+    "polishing the chrome" to "OK",
+    "waking the decker" to "OK",
+    "paying the fixer" to "OK",
+    "checking for black ICE" to "CLEAR",
+    "tuning to the local grid" to "OK",
+    "handshaking with the matrix" to "OK",
+    "opening link" to "ONLINE",
 )
 
-/** The start-up screen: the logo glitches in, boot lines type out, a meter fills, then the screen fades. Tap to skip. */
+/**
+ * The start-up screen, a terminal window anchored to the top left: the logo glitches in, then log lines fill the screen from the
+ * top and scroll as it fills, while a meter at the foot fills. Tap to skip.
+ */
 @Composable
 fun BootScreen(onDone: () -> Unit) {
     val version = LocalContext.current.let { c -> runCatching { c.packageManager.getPackageInfo(c.packageName, 0).versionName }.getOrNull() ?: "" }
     var glitch by remember { mutableIntStateOf(0) }
-    var shown by remember { mutableIntStateOf(0) }        // boot lines fully written
-    var typed by remember { mutableIntStateOf(0) }        // characters of the line being written
-    var progress by remember { mutableStateOf(0f) }
+    var shown by remember { mutableIntStateOf(0) }        // log lines written
+    val list = rememberLazyListState()
     val fade = remember { Animatable(1f) }
 
     LaunchedEffect(Unit) {
         // Logo flicker: a few frames of colour-split ghosting.
         repeat(7) { glitch = if (it % 2 == 0) (it % 3) + 1 else 0; delay(45) }
         glitch = 0
-        BOOT_LINES.forEachIndexed { i, (text, _) ->
-            for (c in 1..text.length) { typed = c; progress = (i + c / text.length.toFloat()) / BOOT_LINES.size; delay(14) }
-            shown = i + 1; typed = 0; delay(110)
+        for (i in 1..BOOT_LINES.size) {
+            shown = i
+            list.scrollToItem(i + 1) // past the last row: the newest line sits at the foot, as in a terminal
+            delay(if (i == BOOT_LINES.size) 120 else 32)
         }
-        progress = 1f
         delay(250)
         fade.animateTo(0f, tween(260))
         onDone()
@@ -68,28 +111,31 @@ fun BootScreen(onDone: () -> Unit) {
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDone() },
     ) {
         GridBackdrop()
-        Column(Modifier.fillMaxSize().padding(horizontal = 28.dp), verticalArrangement = Arrangement.Center) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 20.dp)) {
+            // The logo and version stay put; only the log below scrolls.
             // Logo, with ghost copies offset sideways while glitching.
-            Box {
-                if (glitch != 0) {
-                    Text("hgCOMMLINK", Modifier.offset(x = (-5 * glitch).dp), style = MaterialTheme.typography.displaySmall, color = AstralMagenta.copy(alpha = 0.8f))
-                    Text("hgCOMMLINK", Modifier.offset(x = (5 * glitch).dp), style = MaterialTheme.typography.displaySmall, color = PhosphorGreen.copy(alpha = 0.8f))
+            Column(Modifier.padding(bottom = 16.dp)) {
+                Box {
+                    if (glitch != 0) {
+                        Text("hgCOMMLINK", Modifier.offset(x = (-5 * glitch).dp), style = MaterialTheme.typography.displaySmall, color = AstralMagenta.copy(alpha = 0.8f))
+                        Text("hgCOMMLINK", Modifier.offset(x = (5 * glitch).dp), style = MaterialTheme.typography.displaySmall, color = PhosphorGreen.copy(alpha = 0.8f))
+                    }
+                    Text(
+                        "hgCOMMLINK",
+                        style = MaterialTheme.typography.displaySmall.copy(shadow = Shadow(PhosphorGreen.copy(alpha = 0.5f), blurRadius = 22f)),
+                        color = Quicksilver, modifier = Modifier.alpha(if (glitch == 2) 0.6f else 1f),
+                    )
                 }
-                Text(
-                    "hgCOMMLINK",
-                    style = MaterialTheme.typography.displaySmall.copy(shadow = Shadow(PhosphorGreen.copy(alpha = 0.5f), blurRadius = 22f)),
-                    color = Quicksilver, modifier = Modifier.alpha(if (glitch == 2) 0.6f else 1f),
-                )
+                Text("MISS MERCURY STUDIO // CHARACTER TERMINAL  $version", style = MaterialTheme.typography.labelSmall, color = MutedSilver, modifier = Modifier.padding(top = 4.dp))
             }
-            Text("MERCURY STUDIO // CHARACTER TERMINAL  $version", style = MaterialTheme.typography.labelSmall, color = MutedSilver, modifier = Modifier.padding(top = 4.dp, bottom = 28.dp))
-
-            BOOT_LINES.forEachIndexed { i, (text, status) ->
-                if (i < shown) BootRow(text, status)
-                else if (i == shown) BootRow(text.take(typed), "")
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, userScrollEnabled = false) {
+                items(shown) { i -> BootRow(BOOT_LINES[i].first, BOOT_LINES[i].second) }
+                item { Spacer(Modifier.height(1.dp)) }
             }
 
-            Row(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 val total = 24
+                val progress = shown / BOOT_LINES.size.toFloat()
                 repeat(total) { i ->
                     val on = (i + 1) <= (progress * total)
                     Box(Modifier.weight(1f).height(10.dp).background(if (on) PhosphorGreen else TerminalGrid.copy(alpha = 0.5f), RoundedCornerShape(1.dp)))
