@@ -89,6 +89,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var started = false
+
+    /** Coming back to the app (from a file manager or a sync app): pick up files added to the folder meanwhile. The list stays on screen while it reloads, so the scroll position holds. */
+    override fun onStart() {
+        super.onStart()
+        if (started) vm.refresh()
+        started = true
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIncoming(intent)
