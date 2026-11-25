@@ -102,7 +102,19 @@ val copyChangelog = tasks.register<Copy>("copyChangelog") {
     from(rootProject.file("CHANGELOG.md"))
     into(layout.buildDirectory.dir("generated/chummerAssets"))
 }
+// Which Chummer the bundled data comes from (its version and the pinned commit), for the About sheet.
+val writeChummerVersion = tasks.register("writeChummerVersion") {
+    val csproj = File(chummerSrc.get(), "Chummer/Chummer.csproj")
+    val pin = rootProject.file("chummer-pin.txt")
+    val out = layout.buildDirectory.file("generated/chummerAssets/chummer-version.txt")
+    inputs.files(csproj, pin)
+    outputs.file(out)
+    doLast {
+        val version = Regex("<VersionPrefix>([^<]+)</VersionPrefix>").find(csproj.readText())?.groupValues?.get(1)?.removeSuffix(".0")?.removeSuffix(".0") ?: "unknown"
+        out.get().asFile.apply { parentFile.mkdirs(); writeText(listOf(version, pin.readText().trim().take(7)).joinToString(System.lineSeparator(), postfix = System.lineSeparator())) }
+    }
+}
 android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/chummerAssets"))
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(copyChummerData, copyChummerCustomData, copyChummerLang, copyChangelog) }
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(copyChummerData, copyChummerCustomData, copyChummerLang, copyChangelog, writeChummerVersion) }
 // Lint reads the same generated assets, so it must wait for them too.
-tasks.matching { it.name.contains("lint", ignoreCase = true) }.configureEach { dependsOn(copyChummerData, copyChummerCustomData, copyChummerLang, copyChangelog) }
+tasks.matching { it.name.contains("lint", ignoreCase = true) }.configureEach { dependsOn(copyChummerData, copyChummerCustomData, copyChummerLang, copyChangelog, writeChummerVersion) }

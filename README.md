@@ -61,6 +61,8 @@ Your own `.chum5` files are never committed (see `.gitignore`).
 
 ## License and credits
 
+hgCOMMLINK is made by Miss Mercury Studio.
+
 This project is a port of behavior and uses data from Chummer 5a, which is licensed under the GNU GPL v3. This project is therefore GPL-3 as well. Chummer's copyright notices apply to the game data it ships.
 
 Shadowrun is a trademark of The Topps Company, Inc. This is an unofficial fan project, not affiliated with or endorsed by Chummer, Catalyst Game Labs or Topps.

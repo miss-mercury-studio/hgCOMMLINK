@@ -151,6 +151,8 @@ private fun App(vm: AppViewModel) {
     BackHandler(enabled = open != null) { vm.close() }
     var whatsNew by remember { mutableStateOf(false) }
     if (whatsNew) WhatsNewSheet { whatsNew = false }
+    var about by remember { mutableStateOf(false) }
+    if (about) AboutSheet { about = false }
     // After a crash, the next launch offers to report it (the report was saved by CrashReporter).
     val appContext = LocalContext.current
     var crash by remember { mutableStateOf(CrashReporter.pending(appContext)) }
@@ -181,6 +183,7 @@ private fun App(vm: AppViewModel) {
                             TerminalMenuItem("What's new", onClick = { menu = false; whatsNew = true })
                             TerminalMenuItem("Report a problem", onClick = { menu = false; CrashReporter.open(appContext, CrashReporter.bugUrl(appContext, null)) })
                             TerminalMenuItem("Send feedback", onClick = { menu = false; CrashReporter.open(appContext, CrashReporter.feedbackUrl(appContext)) })
+                            TerminalMenuItem("About", onClick = { menu = false; about = true })
                         }
                     },
                 )
@@ -244,7 +247,7 @@ private fun App(vm: AppViewModel) {
 @Composable
 private fun CharacterList(vm: AppViewModel) {
     when {
-        vm.loading && vm.entries.isEmpty() -> TerminalLine("SCANNING_STORAGE", Modifier.padding(24.dp))
+        vm.loading && vm.entries.isEmpty() -> TerminalLoader(LoadLines.storage, Modifier.padding(24.dp), real = LoadLog.storage.lines)
         vm.entries.isEmpty() -> Text(
             "No characters in ${vm.storageLabel} yet.\n\nTap + to import a .chum5 file, or open one from another app (Files, email, chat).",
             Modifier.padding(24.dp),
@@ -315,7 +318,7 @@ private fun NewCharacterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
 
     TerminalSheet("New character", onDismiss, tall = true) { close ->
         when {
-            options == null -> TerminalLine("LOADING_GAME_DATA", Modifier.padding(vertical = 20.dp))
+            options == null -> TerminalLoader(LoadLines.gameData, Modifier.padding(vertical = 20.dp), real = LoadLog.data.lines)
             options.profiles.isEmpty() -> Text(
                 "No settings profile with the Karma build method was found. Put your profile's .xml file in your characters folder.",
                 Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.error,
@@ -418,7 +421,7 @@ private fun NewCritterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
     var picking by remember { mutableStateOf(false) }
     TerminalSheet("New critter", onDismiss) { close ->
         when {
-            options == null -> TerminalLine("LOADING_GAME_DATA", Modifier.padding(vertical = 20.dp))
+            options == null -> TerminalLoader(LoadLines.gameData, Modifier.padding(vertical = 20.dp), real = LoadLog.data.lines)
             else -> Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TerminalField(name, { name = it }, "name")
                 TerminalButton(chosen?.name ?: "Choose a critter…", { picking = true }, Modifier.fillMaxWidth())
