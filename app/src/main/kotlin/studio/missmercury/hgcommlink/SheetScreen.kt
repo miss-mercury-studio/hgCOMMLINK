@@ -795,15 +795,17 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         items(g.gear) { it ->
             // Gear comes in dozens, so its cards are compact: the tags and the one action (sell in career, remove in creation) share a line.
             ItemCard(Quicksilver, compact = true) {
-                CardTitle(it.name, trailing = if (it.quantity != "1") "x${it.quantity}" else null)
+                CardTitle(if (it.extra.isBlank()) it.name else "${it.name} (${it.extra})", trailing = if (it.quantity != "1") "x${it.quantity}" else null)
                 val tags = buildList {
                     it.category.takeIf { c -> c.isNotBlank() }?.let { c -> add(c to MutedSilver) }
                     if (it.rating > 0) add("Rating ${it.rating}" to MutedSilver)
                     if (it.loaded) add("Loaded" to PhosphorGreen)
                 }
                 val gone: Pair<String, () -> Unit>? = sell(it.guid, it.name)?.let { x -> "Sell" to x } ?: remove(it.guid)?.let { x -> "Remove" to x }
-                if (tags.isNotEmpty() || gone != null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                val merge = it.mergeable && canBuy && it.guid.isNotEmpty()
+                if (tags.isNotEmpty() || gone != null || merge) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) { CardTags(tags) }
+                    if (merge) CardAction("Merge", { vm.mergeGear(it.guid) }, accent = Quicksilver)
                     if (gone != null) CardAction(gone.first, gone.second, accent = if (gone.first == "Sell") DrainAmber else CriticalRed)
                 }
                 if (it.children.isNotEmpty()) CardNote("Includes: " + it.children.joinToString(", "))

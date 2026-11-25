@@ -32,7 +32,9 @@ data class SheetSections(
     /** Armor grouped by equipment set; the set name (and [guid]) is empty for armor not in any set. A set with no armor still shows. */
     data class ArmorSet(val name: String, val items: List<ArmorItemLine>, val guid: String = "")
     data class WareLine(val name: String, val grade: String, val rating: Int, val essence: Double, val isBioware: Boolean, val children: List<WareLine>, val guid: String = "", val sourceId: String = "")
-    data class GearLine(val name: String, val category: String, val quantity: String, val rating: Int, val children: List<String>, val guid: String = "", val loaded: Boolean = false)
+    data class GearLine(val name: String, val category: String, val quantity: String, val rating: Int, val children: List<String>, val guid: String = "", val loaded: Boolean = false, val mergeable: Boolean = false,
+        /** What the item was chosen for (ammunition: the kind of weapon), shown after the name as Chummer does. */
+        val extra: String = "")
     data class VehicleLine(val name: String, val category: String, val stats: String, val guid: String = "", val mods: List<String> = emptyList())
     data class ContactLine(val name: String, val type: String, val connection: Int, val loyalty: Int, val notes: String)
     data class LifestyleLine(val name: String, val type: String, val monthly: String, val notes: String, val guid: String = "", val months: String = "")
@@ -74,13 +76,14 @@ data class SheetSections(
             )
             val wares = c.augmentations().map { ware(it, false) }
 
-            val gear = c.root.child("gears")?.children("gear").orEmpty().map { g ->
+            val allGear = c.root.child("gears")?.children("gear").orEmpty()
+            val gear = allGear.map { g ->
                 GearLine(
                     g.t("name"), g.t("category"), g.t("qty").removeSuffix(".0"), g.n("rating"),
                     g.child("children")?.children("gear").orEmpty().map { it.t("name") },
-                    g.t("guid"), g.t("location") == "loaded",
+                    g.t("guid"), g.t("location") == "loaded", GearStacks.twins(allGear, g).isNotEmpty(), g.t("extra"),
                 )
-            }.sortedWith(compareBy({ it.category }, { it.name }))
+            }.sortedWith(compareBy({ it.category }, { it.name }, { it.extra }))
 
             val vehicles = c.root.child("vehicles")?.children("vehicle").orEmpty().map { v ->
                 VehicleLine(

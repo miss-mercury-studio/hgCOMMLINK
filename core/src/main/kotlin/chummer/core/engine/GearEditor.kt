@@ -126,6 +126,35 @@ class GearEditor(private val file: CharacterFile, private val data: GameData, pr
         return guid
     }
 
+    private fun topGear() = root.child("gears")?.children("gear").orEmpty()
+
+    /** The loose top-level gear item with this GUID. */
+    fun stack(guid: String): Element? = topGear().firstOrNull { it.text("guid")?.trim().equals(guid, true) }
+
+    /**
+     * Add gear the way Chummer's picker does: ammunition joins an identical loose stack (same name, rating and weapon type) instead of starting a new one.
+     * Returns the GUID of the stack that now holds it.
+     */
+    fun addOrStack(entryId: String, rating: Int? = null, qty: Double = 1.0, extra: String = ""): String {
+        val guid = addGear(entryId, rating, qty, extra)
+        val added = stack(guid)!!
+        if (!GearStacks.isAmmo(added)) return guid
+        val into = GearStacks.twins(topGear(), added).firstOrNull() ?: return guid
+        GearStacks.setQuantity(into, GearStacks.quantity(into) + GearStacks.quantity(added))
+        removeGear(guid)
+        return into.text("guid")!!.trim()
+    }
+
+    /** Fold every identical loose stack into this one, adding their quantities. False when there is none to merge. */
+    fun mergeStacks(guid: String): Boolean {
+        val target = stack(guid) ?: return false
+        val others = GearStacks.twins(topGear(), target)
+        if (others.isEmpty()) return false
+        GearStacks.setQuantity(target, GearStacks.quantity(target) + others.sumOf { GearStacks.quantity(it) })
+        for (o in others) removeGear(o.text("guid")!!.trim())
+        return true
+    }
+
     /** The gear entry with this name (and category, when given), as the data's `usegear` nodes name them. */
     fun findGear(name: String, category: String = ""): String? =
         (data as? DataPack)?.byId?.entries?.firstOrNull {

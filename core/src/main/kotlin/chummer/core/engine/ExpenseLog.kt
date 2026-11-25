@@ -155,7 +155,11 @@ class ExpenseLog(
         }
         if (!entry.isKarma && entry.undoKind == "AddGear") {
             val d = data ?: return false
-            if (!GearEditor(file, d, settings).removeGear(entry.objectId)) return false
+            // Ammunition bought into an existing stack takes back only what that purchase added.
+            val stack = GearEditor(file, d, settings).stack(entry.objectId)
+            val have = stack?.let { GearStacks.quantity(it) } ?: 0.0
+            if (stack != null && entry.qty > 0.0 && have > entry.qty + 1e-9) GearStacks.setQuantity(stack, have - entry.qty)
+            else if (!GearEditor(file, d, settings).removeGear(entry.objectId)) return false
         }
         if (entry.isKarma && entry.undoKind == "AddMartialArt") {
             val d = data ?: return false

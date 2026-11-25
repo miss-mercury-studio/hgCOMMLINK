@@ -397,7 +397,7 @@ class CareerAdvancement(
     fun buyGear(entryId: String, rating: Int? = null, qty: Double = 1.0, extra: String = "", now: LocalDateTime = LocalDateTime.now()): String? {
         val cost = gearCost(entryId, rating, qty) ?: return null
         if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating)) return null
-        val guid = GearEditor(file, data, settings).addGear(entryId, rating, qty, extra)
+        val guid = GearEditor(file, data, settings).addOrStack(entryId, rating, qty, extra)
         val name = data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty()
         charge(cost, "Purchased Gear $name", "AddGear", guid, qty, now)
         return guid
@@ -550,6 +550,9 @@ class CareerAdvancement(
         val r = if (max <= 0) 0 else (rating ?: 1).coerceIn(1, max)
         return ArmorWeaponEditor(file, data).accessoryCost(entry, r, storedNumber(weapon, "cost"))
     }
+
+    /** Fold identical loose gear stacks into this one (Chummer's Merge Quantity). */
+    fun mergeGear(guid: String): Boolean = GearEditor(file, data, settings).mergeStacks(guid)
 
     /** Switch a weapon accessory on or off (no cost; one that is off adds nothing to the weapon). */
     fun setAccessoryEquipped(accessoryGuid: String, equipped: Boolean): Boolean = ArmorWeaponEditor(file, data).setAccessoryEquipped(accessoryGuid, equipped)
