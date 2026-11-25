@@ -6,6 +6,8 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-25
+
 ### Added
 - **Use another Chummer version.** Menu > Game data: Get Chummer, then Choose zip or folder. You can go back to the built-in version any time.
 - **Game data shows what you are using.** Version, nightly or stable, and Verified or Unverified. Unverified data adds a warning on character sheets.
