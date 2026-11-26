@@ -11,4 +11,4 @@ build/
 # The app's own empty-character template is bundled into the app and must be committed
 !core/src/main/resources/chummer/new-character-karma.chum5
 /chummer-data-cache/
-tools/__pycache__/data_sets.cpython-37.pyc
+tools/__pycache__/

@@ -2,6 +2,7 @@ package chummer.core
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 
@@ -36,7 +37,9 @@ class RoundTripTest {
 
     @Test
     fun editingOneValueLeavesEverythingElseUntouched() {
-        val f = fixtures.first { it.name == "Viper_career.chum5" }
+        val f = fixtures.firstOrNull { it.name == "Viper_career.chum5" }
+        assumeTrue("needs the Viper reference character", f != null)
+        f!!
         val c = CharacterIo.readFile(f)
         val before = c.root.children().filter { it.tagName != "name" }.map { it.textContent.length }
         c.root.child("name")!!.textContent = "Renamed"

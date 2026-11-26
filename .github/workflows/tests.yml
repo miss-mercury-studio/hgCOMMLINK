@@ -1,0 +1,47 @@
+name: Tests
+
+# Runs the core tests that need nothing but public files: the engine against Chummer's own test characters, at the commit in
+# chummer-pin.txt. The tests that read the private reference characters are left out (-Pchummer.publicOnly) and run from the
+# private fixtures repository instead. No secrets are used here, so it is safe to run on pull requests from forks.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out Chummer at the pinned commit
+        run: |
+          git clone --filter=blob:none https://github.com/chummer5a/chummer5a.git ../chummer5a
+          git -C ../chummer5a checkout "$(cat chummer-pin.txt)"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Core tests that need only public files
+        run: ./gradlew -Pchummer.src=$GITHUB_WORKSPACE/../chummer5a -Pchummer.publicOnly=true :core:test
+
+      - name: Keep the test report if it failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-report
+          path: core/build/reports/tests/test
+          retention-days: 7

@@ -1,0 +1,105 @@
+name: Watch Chummer nightlies
+
+# Chummer publishes a nightly build most days (a prerelease tagged Nightly-v5.xxx.yyy). This checks each new one against the engine
+# and keeps one issue, "Chummer nightly status", up to date: whether the data drift test still passes, whether the tests that use only
+# Chummer's own public test characters still pass on the nightly's data, and what the nightly's data changes since the pinned data.
+# That is the list of what players will get when it becomes a stable release. A comment is added only when the result changes.
+# A nightly is never added to chummer-supported.txt. The tests that need private characters run from the private fixtures repository.
+# See tools/nightly_watch.py and docs/RELEASING.md.
+on:
+  schedule:
+    - cron: "40 3 * * *"   # Chummer builds its nightly around 00:35 UTC
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Check the newest nightly again even if it was already checked"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: chummer-nightly-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find the newest nightly and the status issue
+        id: find
+        run: |
+          tag=$(gh api "repos/chummer5a/chummer5a/releases?per_page=30" --jq '[.[] | select(.tag_name | startswith("Nightly-"))][0].tag_name')
+          if [ -z "$tag" ] || [ "$tag" = "null" ]; then echo "::error::No Chummer nightly found."; exit 1; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          gh label create chummer-nightly --color 5319e7 --description "Chummer nightly status" 2>/dev/null || true
+          number=$(gh issue list --label chummer-nightly --state open --json number --jq '.[0].number // empty')
+          echo "issue=$number" >> "$GITHUB_OUTPUT"
+          : > previous.md
+          if [ -n "$number" ]; then gh issue view "$number" --json body --jq .body > previous.md; fi
+          if [ "${{ inputs.force }}" != "true" ] && grep -q "nightly-state: tag=$tag " previous.md; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "$tag was already checked."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out Chummer at the pinned commit (for its test characters and the data to compare with)
+        if: steps.find.outputs.skip == 'false'
+        run: |
+          git clone --filter=blob:none https://github.com/chummer5a/chummer5a.git ../chummer5a
+          git -C ../chummer5a checkout "$(cat chummer-pin.txt)"
+
+      - uses: actions/setup-java@v4
+        if: steps.find.outputs.skip == 'false'
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.find.outputs.skip == 'false'
+
+      - name: Run the public tests on the nightly's data
+        if: steps.find.outputs.skip == 'false'
+        run: |
+          mkdir -p "$RUNNER_TEMP/zip"
+          gh release download "${{ steps.find.outputs.tag }}" -R chummer5a/chummer5a -p '*.zip' -D "$RUNNER_TEMP/zip"
+          zip=$(ls "$RUNNER_TEMP"/zip/*.zip | head -1)
+          echo "ZIP=$zip" >> "$GITHUB_ENV"
+          # A failing test is the result being reported, not a failure of this workflow.
+          python3 tools/data_sets.py test --zip "$zip" --checkout ../chummer5a -- -Pchummer.publicOnly=true || true
+
+      - name: Write the report
+        if: steps.find.outputs.skip == 'false'
+        run: |
+          python3 tools/nightly_watch.py report --tag "${{ steps.find.outputs.tag }}" --zip "$ZIP" \
+            --pin-data ../chummer5a/Chummer/data --results core/build/test-results/test \
+            --previous-state previous.md --out body.md --diff-out diff.md --state-out state.txt
+          cat state.txt >> "$GITHUB_ENV"
+
+      - name: Update the status issue
+        if: steps.find.outputs.skip == 'false'
+        run: |
+          number="${{ steps.find.outputs.issue }}"
+          if [ -z "$number" ]; then
+            gh issue create --title "Chummer nightly status" --label chummer-nightly --body-file body.md
+          else
+            gh issue edit "$number" --body-file body.md
+            if [ "$changed" = "true" ]; then
+              gh issue comment "$number" --body "The result changed with ${{ steps.find.outputs.tag }}: \`$state\`"
+            fi
+          fi
+
+      - name: Keep the full data diff
+        if: steps.find.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-data-diff
+          path: diff.md
+          retention-days: 30

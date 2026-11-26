@@ -31,7 +31,7 @@ object Fixtures {
     fun submitted(): List<File> =
         submittedDir?.walkTopDown()?.filter { it.isFile && it.extension == "chum5" }?.sortedBy { it.path }?.toList().orEmpty()
 
-    fun characters(): List<File> = upstream() + File(reference, "Viper_career.chum5") + submitted()
+    fun characters(): List<File> = upstream() + listOf(File(reference, "Viper_career.chum5")).filter { it.isFile } + submitted()
 
     private fun isSubmitted(file: File) = submittedDir != null && file.startsWith(submittedDir)
 
