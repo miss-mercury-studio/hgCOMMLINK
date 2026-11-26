@@ -318,7 +318,7 @@ private fun CharacterList(vm: AppViewModel) {
                         if (s.alias.isNotBlank()) Text("\"${s.alias}\"", style = MaterialTheme.typography.bodyLarge)
                         Text(listOf(s.metatype, s.buildMethod).filter { it.isNotBlank() }.joinToString("  ·  "), style = MaterialTheme.typography.labelMedium)
                         // A character in creation stores no karma (the amount left is calculated), so only careers show it here.
-                        val money = listOfNotNull(s.karma.takeIf { s.isCareer && it.isNotBlank() }?.let { "KARMA" to it }, s.nuyen.takeIf { s.isCareer && it.isNotBlank() }?.let { "NUYEN" to "¥$it" })
+                        val money = listOfNotNull(s.karma.takeIf { s.isCareer && it.isNotBlank() }?.let { "KARMA" to it }, s.nuyen.takeIf { s.isCareer && it.isNotBlank() }?.let { "NUYEN" to "¥${it.toDoubleOrNull()?.let(::formatNuyen) ?: it}" })
                         if (money.isNotEmpty()) TelemetryStrip(money)
                     }
                 }

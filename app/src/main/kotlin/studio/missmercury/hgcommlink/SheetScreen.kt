@@ -202,7 +202,7 @@ private fun Header(s: Sheet, warning: String?) {
             TelemetryStrip(
                 listOfNotNull(
                     "" to (s.metatype.takeIf { it.isNotBlank() }?.let { "$it " }.orEmpty() + if (s.isCareer) "CAREER" else "CREATION"),
-                    s.nuyen.takeIf { it.isNotBlank() }?.let { "¥" to it },
+                    s.nuyen.takeIf { it.isNotBlank() }?.let { "¥" to (it.toDoubleOrNull()?.let(::formatNuyen) ?: it) },
                     if (l != null) "KARMA" to "${l.remaining}" else s.karma.takeIf { it.isNotBlank() }?.let { "KARMA" to it },
                 ),
                 accent = if (l != null && l.remaining < 0) CriticalRed else PhosphorGreen,

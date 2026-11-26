@@ -123,7 +123,7 @@ class CharacterFile(val doc: Document) {
         name = name, alias = root.text("alias").orEmpty(), metatype = root.text("metatype").orEmpty(),
         buildMethod = buildMethod, isCareer = root.text("created")?.trim().equals("True", true),
         karma = root.text("karma")?.trim().orEmpty(),
-        nuyen = root.text("nuyen")?.trim()?.toBigDecimalOrNull()?.stripTrailingZeros()?.toPlainString().orEmpty(),
+        nuyen = root.text("nuyen")?.trim()?.toBigDecimalOrNull()?.setScale(2, java.math.RoundingMode.HALF_UP)?.stripTrailingZeros()?.toPlainString().orEmpty(),
         appVersion = appVersion, edition = root.text("gameedition").orEmpty(),
     )
 

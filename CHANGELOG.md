@@ -8,6 +8,7 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ### Fixed
 - **Characters saved by very old Chummer versions show the right attributes.** They were showing 1 or 2 too high.
+- **Nuyen shows as money.** A balance like 2702.7799999997 now reads ¥2,702.78, with thousands separators.
 
 ## [0.2.0] - 2026-11-25
 

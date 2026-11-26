@@ -55,7 +55,7 @@ fun CareerCard(s: Sheet, vm: AppViewModel) {
     var undoing by remember { mutableStateOf<ExpenseEntry?>(null) }
     TerminalCard("Career", tag = "00") {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            TelemetryStrip(listOf("KARMA" to s.karma, "NUYEN" to "¥${s.nuyen}"))
+            TelemetryStrip(listOf("KARMA" to s.karma, "NUYEN" to "¥${s.nuyen.toDoubleOrNull()?.let(::formatNuyen) ?: s.nuyen}"))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 TerminalButton("Add entry", { adding = true }, Modifier.weight(1f))
                 TerminalButton(if (showLog) "Hide log" else "Log (${career.expenses.size})", { showLog = !showLog }, Modifier.weight(1f))
