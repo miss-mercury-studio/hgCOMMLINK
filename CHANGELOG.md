@@ -6,6 +6,9 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ## [Unreleased]
 
+### Fixed
+- **Characters saved by very old Chummer versions show the right attributes.** They were showing 1 or 2 too high.
+
 ## [0.2.0] - 2026-11-25
 
 ### Added

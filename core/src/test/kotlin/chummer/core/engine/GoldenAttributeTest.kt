@@ -1,8 +1,8 @@
 package chummer.core.engine
 
 import chummer.core.CharacterIo
+import chummer.core.Fixtures
 import chummer.core.child
-import chummer.core.data.CharacterSettings
 import chummer.core.children
 import chummer.core.int
 import chummer.core.text
@@ -18,9 +18,7 @@ import java.io.File
  */
 class GoldenAttributeTest {
     private val src = File(System.getProperty("chummer.src"))
-    private val fixtures: List<File> =
-        File(src, "Chummer.Tests/TestFiles").listFiles { f -> f.extension == "chum5" }.orEmpty().sortedBy { it.name } +
-            File(System.getProperty("chummer.reference"), "Viper_career.chum5")
+    private val fixtures: List<File> = Fixtures.characters()
 
     @Test
     fun attributesMatchChummerStoredTotals() {
@@ -28,7 +26,7 @@ class GoldenAttributeTest {
         val misses = ArrayList<String>()
         for (f in fixtures) {
             val c = CharacterIo.readFile(f)
-            val rules = CharacterSettings.find(c.root.text("settings").orEmpty(), File(src, "Chummer/data/settings.xml"), listOf(File(System.getProperty("chummer.reference"), "Viper_career/settings"))).toRuleSettings()
+            val rules = Fixtures.ruleSettings(f, c)
             val calc = AttributeEngine.forFile(c, rules)
             for (row in c.root.child("attributes")?.children("attribute").orEmpty()) {
                 val name = row.text("name").orEmpty()
@@ -46,6 +44,6 @@ class GoldenAttributeTest {
     }
 
     companion object {
-        const val KNOWN_MISSES = 14
+        const val KNOWN_MISSES = 4
     }
 }

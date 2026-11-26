@@ -8,9 +8,7 @@ import java.io.File
 /** Every reference character must survive read -> write -> read with identical content. */
 class RoundTripTest {
     private val src = File(System.getProperty("chummer.src"))
-    private val fixtures: List<File> =
-        File(src, "Chummer.Tests/TestFiles").listFiles { f -> f.extension == "chum5" }.orEmpty().sortedBy { it.name } +
-            File(System.getProperty("chummer.reference"), "Viper_career.chum5")
+    private val fixtures: List<File> = Fixtures.characters()
 
     @Test
     fun everyFixtureRoundTripsLosslessly() {

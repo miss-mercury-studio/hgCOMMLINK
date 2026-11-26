@@ -2,8 +2,8 @@ package chummer.core.engine
 
 import chummer.core.CharacterIo
 import chummer.core.DataPack
+import chummer.core.Fixtures
 import chummer.core.child
-import chummer.core.data.CharacterSettings
 import chummer.core.children
 import chummer.core.text
 import org.junit.Assert.assertTrue
@@ -14,9 +14,7 @@ import kotlin.math.abs
 /** Golden test: recompute Essence and compare with the totaless value Chummer stored. */
 class GoldenEssenceTest {
     private val src = File(System.getProperty("chummer.src"))
-    private val fixtures: List<File> =
-        File(src, "Chummer.Tests/TestFiles").listFiles { f -> f.extension == "chum5" }.orEmpty().sortedBy { it.name } +
-            File(System.getProperty("chummer.reference"), "Viper_career.chum5")
+    private val fixtures: List<File> = Fixtures.characters()
 
     @Test
     fun essenceMatchesChummerStoredValue() {
@@ -27,7 +25,7 @@ class GoldenEssenceTest {
             val c = CharacterIo.readFile(f)
             val stored = c.root.text("totaless")?.trim()?.toDoubleOrNull() ?: continue
             val career = c.root.text("created")?.trim().equals("True", true)
-            val rules = CharacterSettings.find(c.root.text("settings").orEmpty(), File(src, "Chummer/data/settings.xml"), listOf(File(System.getProperty("chummer.reference"), "Viper_career/settings"))).toRuleSettings()
+            val rules = Fixtures.ruleSettings(f, c)
             val set = ImprovementSet(Improvement.parseAll(c.root), career)
             val essRow = c.root.child("attributes")?.children("attribute").orEmpty().first { it.text("name") == "ESS" }
             val max = essRow.text("metatypemax")?.trim()?.toDoubleOrNull() ?: 6.0

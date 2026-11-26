@@ -5,6 +5,7 @@ import chummer.core.child
 import chummer.core.children
 import chummer.core.int
 import chummer.core.text
+import org.w3c.dom.Element
 
 /** Rule options that change attribute maths. Defaults match Chummer's; read from settings later. */
 data class RuleSettings(
@@ -167,9 +168,28 @@ class AttributeEngine(
         fun forSet(c: CharacterFile, set: ImprovementSet, settings: RuleSettings = RuleSettings()): Map<String, AttributeResult> {
             val engine = AttributeEngine(set, settings, c.root.text("critter")?.trim().equals("True", true), c.augmentations())
             val rows = c.root.child("attributes")?.children("attribute").orEmpty()
-            return rows.map {
-                Raw(it.text("name").orEmpty(), it.int("metatypemin"), it.int("metatypemax"), it.int("metatypeaugmax"), it.int("base"), it.int("karma"))
-            }.filter { it.name != "ESS" }.associate { it.name to engine.calculate(it) }
+            val usesPoints = c.root.text("buildmethod")?.trim() in setOf("Priority", "SumtoTen")
+            return rows.map { readRaw(it, usesPoints) }.filter { it.name != "ESS" }.associate { it.name to engine.calculate(it) }
+        }
+
+        /**
+         * One stored attribute. Files from old Chummer versions have a `value` element and keep the metatype minimum inside `base`; Chummer
+         * converts them on load to the split used now (base and karma counted above the minimum), and so must we.
+         */
+        private fun readRaw(e: Element, usesPoints: Boolean): Raw {
+            val min = e.int("metatypemin")
+            var base = e.int("base")
+            var karma = e.int("karma")
+            val legacy = e.text("value")?.trim()?.toIntOrNull()
+            if (legacy != null) {
+                var rest = legacy - min
+                if (usesPoints) {
+                    base = maxOf(base - min, 0)
+                    rest -= base
+                }
+                if (rest > 0) karma = rest
+            }
+            return Raw(e.text("name").orEmpty(), min, e.int("metatypemax"), e.int("metatypeaugmax"), maxOf(base, 0), maxOf(karma, 0))
         }
     }
 }
