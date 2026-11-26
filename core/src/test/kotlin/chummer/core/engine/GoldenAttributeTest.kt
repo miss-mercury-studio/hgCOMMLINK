@@ -26,7 +26,7 @@ class GoldenAttributeTest {
         val misses = ArrayList<String>()
         for (f in fixtures) {
             val c = CharacterIo.readFile(f)
-            val rules = Fixtures.ruleSettings(f, c)
+            val rules = Fixtures.settings(f, c).toRuleSettings()
             val calc = AttributeEngine.forFile(c, rules)
             for (row in c.root.child("attributes")?.children("attribute").orEmpty()) {
                 val name = row.text("name").orEmpty()

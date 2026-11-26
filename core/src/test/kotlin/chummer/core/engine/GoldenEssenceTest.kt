@@ -1,7 +1,6 @@
 package chummer.core.engine
 
 import chummer.core.CharacterIo
-import chummer.core.DataPack
 import chummer.core.Fixtures
 import chummer.core.child
 import chummer.core.children
@@ -18,14 +17,15 @@ class GoldenEssenceTest {
 
     @Test
     fun essenceMatchesChummerStoredValue() {
-        val pack = DataPack.load(File(src, "Chummer/data"))
         var checked = 0
         val misses = ArrayList<String>()
         for (f in fixtures) {
             val c = CharacterIo.readFile(f)
             val stored = c.root.text("totaless")?.trim()?.toDoubleOrNull() ?: continue
             val career = c.root.text("created")?.trim().equals("True", true)
-            val rules = Fixtures.ruleSettings(f, c)
+            val settings = Fixtures.settings(f, c)
+            val rules = settings.toRuleSettings()
+            val pack = Fixtures.pack(f, settings)
             val set = ImprovementSet(Improvement.parseAll(c.root), career)
             val essRow = c.root.child("attributes")?.children("attribute").orEmpty().first { it.text("name") == "ESS" }
             val max = essRow.text("metatypemax")?.trim()?.toDoubleOrNull() ?: 6.0
