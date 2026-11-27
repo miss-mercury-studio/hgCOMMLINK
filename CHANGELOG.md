@@ -6,6 +6,8 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-27
+
 ### Added
 - **Vehicles and drones have their own sheet.** Tap a vehicle on Gear to see its mods and gear, take off or sell what you added, or sell the whole vehicle.
 - **Buy mods and gear for a vehicle or drone.** Only mods that fit that vehicle are offered, priced from its own figures, with the mod slots they use.
