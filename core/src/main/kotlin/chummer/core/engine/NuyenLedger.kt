@@ -92,9 +92,12 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
                 val own = formula(v.text("cost").orEmpty(), 0, v.text("name").orEmpty())
                 var total = own
                 for (m in v.child("mods")?.children("mod").orEmpty()) {
-                    if (m.text("included")?.trim() == "True") continue
-                    total += vehicleFormula(m.text("cost").orEmpty(), num(m, "rating"), v, own, m.text("name").orEmpty(), m.text("slots").orEmpty())
-                    total += gearsIn(m)
+                    // A mod that came with the vehicle is paid for, but ware fitted into it (a drone limb's) is not.
+                    if (m.text("included")?.trim() != "True") {
+                        total += vehicleFormula(m.text("cost").orEmpty(), num(m, "rating"), v, own, m.text("name").orEmpty(), m.text("slots").orEmpty())
+                        total += gearsIn(m)
+                    }
+                    for (cw in m.child("cyberwares")?.children("cyberware").orEmpty()) total += ware(cw)
                 }
                 total += gearsIn(v)
                 for (mount in v.child("weaponmounts")?.children("weaponmount").orEmpty()) {

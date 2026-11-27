@@ -682,6 +682,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     var managingVehicle by remember { mutableStateOf<String?>(null) }
     var modding by remember { mutableStateOf<String?>(null) }
     var gearingVehicle by remember { mutableStateOf<String?>(null) }
+    var warePart by remember { mutableStateOf<String?>(null) }
     val career = s.career != null
     selling?.let { (guid, name) -> SellSheet(name, { pct -> vm.sellPurchase(guid, pct) }, { vm.discardPurchase(guid) }) { selling = null } }
     // What a card offers for taking an item away: creation takes it back for free, career sells it.
@@ -701,7 +702,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         val v = g.vehicles.firstOrNull { it.guid == guid }
         if (v == null) managingVehicle = null
         else VehicleSheet(
-            v, vm, onAddMod = { modding = guid }, onAddGear = { gearingVehicle = guid },
+            v, vm, onAddMod = { modding = guid }, onAddGear = { gearingVehicle = guid }, onAddWare = { warePart = it },
             onSell = sell(guid, v.name), onRemove = remove(guid),
             sell = { id, n -> sell(id, n) }, remove = { id -> remove(id) }, onDismiss = { managingVehicle = null },
         )
@@ -874,6 +875,10 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     buying?.let { BuyGearDialog(it, vm, s.nuyen) { buying = null } }
     modding?.let { guid -> VehicleModDialog(guid, vm, s.nuyen) { modding = null } }
     gearingVehicle?.let { guid -> BuyGearDialog("gear", vm, s.nuyen, vehicleGuid = guid) { gearingVehicle = null } }
+    warePart?.let { guid ->
+        val part = g.vehicles.flatMap { it.modLines }.firstOrNull { it.guid == guid }
+        if (part == null) warePart = null else DroneWareDialog(guid, part.name, part.capacityTotal - part.capacityUsed, vm, s.nuyen) { warePart = null }
+    }
     attaching?.let { (kind, guid) -> AttachPartDialog(kind, guid, vm, s.nuyen) { attaching = null } }
     installing?.let { (armor, room) -> ArmorGearDialog(armor, room ?: 0.0, vm, s.nuyen) { installing = null } }
 }

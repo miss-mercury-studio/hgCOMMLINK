@@ -39,7 +39,10 @@ data class SheetSections(
         /** What the item was chosen for (ammunition: the kind of weapon), shown after the name as Chummer does. */
         val extra: String = "")
     /** A mod on a vehicle. [included] ones came with it (already paid, cannot be taken off); [slots] is what it uses. */
-    data class VehicleModLine(val guid: String, val name: String, val rating: Int, val included: Boolean, val slots: Int)
+    data class VehicleModLine(val guid: String, val name: String, val rating: Int, val included: Boolean, val slots: Int,
+        /** For a drone arm or leg: whether it takes cyberware, the capacity used and in all, and the ware in it. */
+        val takesWare: Boolean = false, val capacityUsed: Double = 0.0, val capacityTotal: Double = 0.0, val ware: List<DroneWareLine> = emptyList())
+    data class DroneWareLine(val guid: String, val name: String, val category: String, val rating: Int, val capacity: String)
     data class VehicleLine(val name: String, val category: String, val stats: String, val guid: String = "", val mods: List<String> = emptyList(),
         /** Each mod and each piece of gear on it, for the vehicle's own sheet. */
         val modLines: List<VehicleModLine> = emptyList(), val gearLines: List<GearPartLine> = emptyList(),
@@ -114,7 +117,12 @@ data class SheetSections(
                     },
                     v.t("guid"), v.child("mods")?.children("mod").orEmpty().map { it.t("name") },
                     modLines = v.child("mods")?.children("mod").orEmpty().map { m ->
-                        VehicleModLine(m.t("guid"), m.t("name"), m.n("rating"), m.t("included").equals("True", true), VehicleFormula.slots(m.t("slots"), m.n("rating"), v) ?: 0)
+                        val takes = data?.get(m.t("sourceid"))?.element?.child("subsystems")?.children("subsystem").orEmpty().isNotEmpty()
+                        VehicleModLine(m.t("guid"), m.t("name"), m.n("rating"), m.t("included").equals("True", true), VehicleFormula.slots(m.t("slots"), m.n("rating"), v) ?: 0,
+                            takesWare = takes,
+                            capacityUsed = m.child("cyberwares")?.children("cyberware").orEmpty().sumOf { Regex("""^\[([0-9.]+)\]$""").find(it.t("capacity"))?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0 },
+                            capacityTotal = m.t("capacity").toDoubleOrNull() ?: 0.0,
+                            ware = m.child("cyberwares")?.children("cyberware").orEmpty().map { w -> DroneWareLine(w.t("guid"), w.t("name"), w.t("category"), w.n("rating"), w.t("capacity")) })
                     },
                     gearLines = v.child("gears")?.children("gear").orEmpty().map { g -> GearPartLine(g.t("guid"), g.t("name"), g.t("qty").removeSuffix(".0"), g.n("rating"), g.t("extra"), !g.t("equipped").equals("False", true)) },
                     slotsUsed = VehicleFormula.slots(v).first, slotsTotal = VehicleFormula.slots(v).second,

@@ -12,7 +12,8 @@ import java.util.UUID
  * Adds vehicles and drones to a character in the layout Chummer writes (field order and defaults read from Viper's three
  * vehicles). A vehicle comes with the mods and gear its data entry lists, already paid for (`included`, cost 0 for gear).
  * Mods can be added to and removed from a vehicle afterwards ([modOptions], [addMod], [removeMod]); gear goes in through
- * `CareerAdvancement.buyVehicleGear`. Not built: weapon mounts and vehicle weapons, and the effect of a mod's bonus on the figures.
+ * `CareerAdvancement.buyVehicleGear`. A mod with capacity and subsystems (a drone arm or leg) takes cyberware ([wareOptions], [addWare]), kept in the
+ * mod as Chummer keeps it. Not built: weapon mounts and vehicle weapons, and the effect of a mod's or its ware's bonus on the figures.
  */
 class VehicleEditor(private val file: CharacterFile, private val data: DataPack) {
     companion object {
@@ -175,6 +176,108 @@ class VehicleEditor(private val file: CharacterFile, private val data: DataPack)
         val vehicle = vehicleNode(vehicleGuid)!!
         val mods = vehicle.child("mods") ?: el("mods").also { vehicle.appendChild(it) }
         return writeMod(mods, entryId, data[entryId]!!.element, rating, included = false, vehicle = vehicle)
+    }
+
+    // ---- cyberware in a mod (a drone's arms and legs)
+
+    private fun modNode(modGuid: String): Element? =
+        root.child("vehicles")?.children("vehicle").orEmpty().firstNotNullOfOrNull { v -> v.child("mods")?.children("mod")?.firstOrNull { it.text("guid")?.trim().equals(modGuid, true) } }
+
+    private fun subsystemsOf(modEntry: Element?): Set<String> = modEntry?.child("subsystems")?.children("subsystem").orEmpty().map { it.textContent.trim() }.filter { it.isNotEmpty() }.toSet()
+
+    /** The mod's data entry, or the stored mod when the data no longer has it. */
+    private fun modEntryOf(mod: Element): Element? = mod.text("sourceid")?.trim()?.let { data[it]?.element }
+
+    /** True when this installed mod takes cyberware: its data entry lists subsystems (a drone arm or leg). */
+    fun takesWare(modGuid: String): Boolean = modNode(modGuid)?.let { subsystemsOf(modEntryOf(it)).isNotEmpty() } == true
+
+    /** What a piece of ware uses of its mod's capacity: the number in brackets (`[8]`); `[*]` and anything else use none. */
+    private fun capacityNeed(capacityText: String): Double = Regex("""^\[([0-9.]+)\]$""").find(capacityText.trim())?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+
+    /** Capacity the mod has in all, and what its ware uses. */
+    fun wareCapacity(modGuid: String): Pair<Double, Double>? {
+        val mod = modNode(modGuid) ?: return null
+        val total = mod.text("capacity")?.trim()?.toDoubleOrNull() ?: modEntryOf(mod)?.child("capacity")?.textContent?.trim()?.toDoubleOrNull() ?: 0.0
+        return total to wareUsed(mod)
+    }
+
+    private fun wareUsed(mod: Element) = mod.child("cyberwares")?.children("cyberware").orEmpty().sumOf { capacityNeed(it.text("capacity").orEmpty()) }
+
+    /**
+     * The cyberware that may go into this mod: entries of the categories the mod lists as subsystems that name this part in their `required` parent
+     * details (so a Cyberarm Gyromount is offered to an arm and not a leg) and are not `forbidden` for it. Left out: items that need a choice made first, items that plug into other
+     * ware, and the limb attribute upgrades, whose limits depend on the limb's own Agility and Strength, which a drone limb has not been given here.
+     * [WareOption.cost] is the Standard grade price at the lowest rating; the drone has no essence, so [WareOption.essence] is null.
+     */
+    fun wareOptions(modGuid: String): List<WareOption> {
+        val mod = modNode(modGuid) ?: return emptyList()
+        val entry = modEntryOf(mod) ?: return emptyList()
+        val allowed = subsystemsOf(entry)
+        if (allowed.isEmpty()) return emptyList()
+        val ed = CyberwareEditor(file, data)
+        return data.byId.entries.filter { it.value.file == "cyberware.xml" && it.value.element.tagName == "cyberware" }.filter { (_, e) ->
+            val w = e.element
+            if (w.child("category")?.textContent?.trim() !in allowed || CyberwareEditor.problem(w) != null) return@filter false
+            val forbidden = w.child("forbidden")?.child("parentdetails")
+            if (forbidden != null && WeaponFilter.passes(entry, forbidden)) return@filter false
+            // Only ware the data names for this part. The category list alone would let a Datajack or an "Obvious Full Arm" into a drone's arm, since those
+            // entries make no demand of their parent; the ones made for a drone limb say "Drone Arm" or "Drone Leg".
+            val required = w.child("required")?.child("parentdetails") ?: return@filter false
+            if (!WeaponFilter.passes(entry, required)) return@filter false
+            // The attribute upgrades name the limb's own figures in their rating limits.
+            !((w.child("minrating")?.textContent.orEmpty() + w.child("rating")?.textContent.orEmpty()).contains("{"))
+        }.map { (id, e) ->
+            val w = e.element
+            fun t(tag: String) = w.child(tag)?.textContent?.trim().orEmpty()
+            val (min, max) = ed.range(w, null)
+            val r = if (max > 0) maxOf(min, 1) else 0
+            WareOption(id, t("name"), t("category"), false, CyberwareEditor.formula(t("cost"), r, min), null, t("avail"), min, max, "", null, emptyList(), capacity = t("capacity"))
+        }.filter { it.name.isNotEmpty() }.sortedWith(compareBy({ it.category }, { it.name.lowercase() }))
+    }
+
+    /** Why this ware cannot go into this mod now; null when it can. */
+    fun wareProblem(modGuid: String, entryId: String): String? {
+        if (modNode(modGuid) == null) return "no such mod"
+        if (wareOptions(modGuid).none { it.id.equals(entryId, true) }) return "that does not fit this part"
+        val need = capacityNeed(data[entryId]?.element?.child("capacity")?.textContent.orEmpty())
+        val (total, used) = wareCapacity(modGuid) ?: return "no such mod"
+        return if (used + need > total + 1e-9) "not enough capacity" else null
+    }
+
+    /** The Standard grade price of this ware at [rating]; null when the entry is unknown or its formula cannot be read. */
+    fun wareCost(entryId: String, rating: Int?): Double? {
+        val w = data[entryId]?.element?.takeIf { it.tagName == "cyberware" } ?: return null
+        val ed = CyberwareEditor(file, data)
+        val (min, max) = ed.range(w, null)
+        val r = if (max > 0) (rating ?: maxOf(min, 1)).coerceIn(maxOf(min, 1), max) else 0
+        return CyberwareEditor.formula(w.child("cost")?.textContent.orEmpty(), r, min)
+    }
+
+    /** Fit ware into a mod at the Standard grade, in Chummer's layout; returns its GUID. Its bonuses are not applied: it is the drone's, not the character's. */
+    fun addWare(modGuid: String, entryId: String, rating: Int?): String {
+        wareProblem(modGuid, entryId)?.let { error("Cannot fit this: $it") }
+        val mod = modNode(modGuid)!!
+        val w = data[entryId]!!.element
+        val ed = CyberwareEditor(file, data)
+        val (min, max) = ed.range(w, null)
+        val chosen = if (max > 0) (rating ?: maxOf(min, 1)).coerceIn(maxOf(min, 1), max) else 0
+        val guid = UUID.randomUUID().toString()
+        val g = ed.wareElement(entryId, w, guid, "Standard", chosen, max > 0, asDefault = false, parentGuid = null)
+        val list = mod.child("cyberwares") ?: el("cyberwares").also { mod.appendChild(it) }
+        g.appendChild(el("sortorder", list.children("cyberware").size.toString()))
+        list.appendChild(g)
+        return guid
+    }
+
+    /** Take ware out of a drone's mod. */
+    fun removeWare(guid: String): Boolean {
+        for (v in root.child("vehicles")?.children("vehicle").orEmpty()) for (m in v.child("mods")?.children("mod").orEmpty()) {
+            val list = m.child("cyberwares") ?: continue
+            val node = list.children("cyberware").firstOrNull { it.text("guid")?.trim().equals(guid, true) } ?: continue
+            list.removeChild(node)
+            return true
+        }
+        return false
     }
 
     /** Take a mod off a vehicle, with the improvements it gave. A mod that came with the vehicle stays. */

@@ -457,6 +457,8 @@ class CareerAdvancement(
 
     private fun removeVehicleMod(guid: String): Boolean = (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).removeMod(guid) } == true
 
+    private fun removeVehicleWare(guid: String): Boolean = (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).removeWare(guid) } == true
+
     private fun removeLifestyle(guid: String): Boolean = (data as? chummer.core.DataPack)?.let { LifestyleEditor(file, it).remove(guid) } == true
 
     // ---- lifestyles
@@ -476,7 +478,7 @@ class CareerAdvancement(
 
     private fun removeAny(guid: String, includeArts: Boolean = true): Boolean {
         val aw = ArmorWeaponEditor(file, data)
-        return removeVehicle(guid) || removeVehicleMod(guid) || removeLifestyle(guid) || GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
+        return removeVehicle(guid) || removeVehicleMod(guid) || removeVehicleWare(guid) || removeLifestyle(guid) || GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
             aw.removeAccessory(guid) || aw.removeArmorMod(guid) || CyberwareEditor(file, data).remove(guid) || (includeArts && removeMartialArtItem(guid))
     }
 
@@ -561,6 +563,34 @@ class CareerAdvancement(
         val cost = vehicleModCost(vehicleGuid, entryId, rating) ?: return null
         val guid = VehicleEditor(file, pack).addMod(vehicleGuid, entryId, rating, settings.bool("dronemods"))
         charge(cost, "Purchased Vehicle Mod " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddVehicleMod", guid, 0.0, now)
+        return guid
+    }
+
+    /** The cyberware that fits this drone limb (or other mod with capacity and subsystems); empty for a mod that takes none. */
+    fun droneWareOptions(modGuid: String): List<WareOption> = (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).wareOptions(modGuid) }.orEmpty()
+
+    fun droneWareCost(entryId: String, rating: Int? = null): Double? = (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).wareCost(entryId, rating) }
+
+    /** Why ware cannot be bought for this mod right now, in words for a player; null when it can. */
+    fun droneWareBlockReason(modGuid: String, entryId: String, rating: Int? = null): String? {
+        val pack = data as? chummer.core.DataPack ?: return "No game data"
+        VehicleEditor(file, pack).wareProblem(modGuid, entryId)?.let { return if (it == "not enough capacity") "Not enough capacity left in that part" else "That does not fit this part" }
+        val cost = droneWareCost(entryId, rating) ?: return "The price of that item cannot be worked out yet"
+        if (cost > nuyenLeft() + 0.004) return "Not enough nuyen"
+        if (availabilityBlocked(entryId, rating)) return "Its availability is over the limit of ${settings.int("availability", 12)} for a new character"
+        return null
+    }
+
+    /**
+     * Buy cyberware for a drone's limb: it goes into the mod at the Standard grade and costs nuyen only (a drone has no essence, and its bonuses are not
+     * the character's). Returns the item's GUID, or null when it does not fit, cannot be paid for or is over the creation availability limit.
+     */
+    fun buyDroneWare(modGuid: String, entryId: String, rating: Int? = null, now: LocalDateTime = LocalDateTime.now()): String? {
+        if (droneWareBlockReason(modGuid, entryId, rating) != null) return null
+        val pack = data as? chummer.core.DataPack ?: return null
+        val cost = droneWareCost(entryId, rating) ?: return null
+        val guid = VehicleEditor(file, pack).addWare(modGuid, entryId, rating)
+        charge(cost, "Purchased Drone Cyberware " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddVehicleWare", guid, 0.0, now)
         return guid
     }
 

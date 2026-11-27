@@ -315,6 +315,64 @@ fun VehicleModDialog(vehicleGuid: String, vm: AppViewModel, nuyen: String, onDis
     }
 }
 
+/**
+ * Pick cyberware for a drone's arm or leg ([modGuid]): only what the data makes for that part, with the capacity each piece uses and what is left. Bought
+ * at the Standard grade for nuyen alone; the drone has no essence, and the ware belongs to the drone, not to the character.
+ */
+@Composable
+fun DroneWareDialog(modGuid: String, partName: String, capacityLeft: Double, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
+    val options = remember(modGuid) { vm.droneWareOptions(modGuid) }
+    fun need(o: chummer.core.engine.WareOption) = Regex("""^\[([0-9.]+)\]$""").find(o.capacity.trim())?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+    val items = remember(options, capacityLeft) {
+        options.map { o ->
+            val n = need(o)
+            PickItem(
+                o.id, o.name,
+                listOfNotNull(
+                    o.category, if (n > 0) "uses ${chummer.core.engine.GearStacks.format(n)}" else null,
+                    o.cost?.let { (if (o.maxRating > 1) "from ¥" else "¥") + formatNuyen(it) } ?: "price not readable yet",
+                    o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + runCatching { chummer.core.engine.GearEditor.availText(it, maxOf(o.minRating, 1)) }.getOrDefault(it) },
+                    if (n > capacityLeft + 1e-9) "too big for what is left" else null,
+                ).joinToString("  ·  "),
+                o.category, warn = o.cost == null || n > capacityLeft + 1e-9,
+            )
+        }
+    }
+    var chosen by remember { mutableStateOf<chummer.core.engine.WareOption?>(null) }
+    PickerSheet(
+        "Fit to $partName", items, onPick = { id -> chosen = options.first { it.id == id } },
+        note = if (options.isEmpty()) "Nothing is made for this part." else "Capacity left ${chummer.core.engine.GearStacks.format(capacityLeft)}. You have ¥${money(nuyen)}.",
+        keepOpenFor = { true }, onDismiss = onDismiss,
+    )
+    chosen?.let { o ->
+        val hasRating = o.maxRating > 0
+        val low = maxOf(o.minRating, 1)
+        var rating by remember(o.id) { mutableStateOf(if (hasRating) low.toString() else "") }
+        val r = if (hasRating) rating.toIntOrNull()?.coerceIn(minOf(low, o.maxRating), o.maxRating) else null
+        val cost = vm.droneWareCost(o.id, r)
+        val have = nuyen.toDoubleOrNull() ?: 0.0
+        val n = need(o)
+        val fits = n <= capacityLeft + 1e-9
+        TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (hasRating) NumberStepper("Rating", rating, { rating = it }, min = low, max = o.maxRating)
+                Text(
+                    if (n > 0) "Uses ${chummer.core.engine.GearStacks.format(n)} of the part's capacity; ${chummer.core.engine.GearStacks.format(capacityLeft)} left." else "Uses no capacity.",
+                    style = MaterialTheme.typography.labelSmall, color = if (fits) MutedSilver else DrainAmber,
+                )
+                Text(
+                    if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥${money(nuyen)}.",
+                    style = MaterialTheme.typography.labelSmall, color = if (cost == null || cost > have) DrainAmber else MutedSilver,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Buy", { close(); chosen = null; vm.buyDroneWare(modGuid, o.id, r); onDismiss() }, Modifier.weight(1f), filled = true, enabled = cost != null && cost <= have && fits)
+                }
+            }
+        }
+    }
+}
+
 /** Pick cyberware or bioware, choose grade and rating, see price and essence, and install it. */
 @Composable
 fun BuyWareDialog(bioware: Boolean, vm: AppViewModel, nuyen: String, essence: Double, parent: chummer.core.engine.SheetSections.WareLine? = null, onDismiss: () -> Unit) {

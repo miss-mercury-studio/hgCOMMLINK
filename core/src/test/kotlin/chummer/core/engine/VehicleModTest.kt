@@ -228,4 +228,92 @@ class VehicleModTest {
         assertTrue(v.gearLines.any { it.name == "Flashlight" })
         assertTrue(v.slotsTotal > 0)
     }
+
+    // ---- cyberware in a drone's limbs
+
+    private fun modGuid(c: CharacterFile, vehicle: String, mod: String, nth: Int = 0) = mods(c, vehicle).filter { it.text("name") == mod }[nth].text("guid")!!.trim()
+
+    @Test
+    fun aDroneArmAndLegTakeDifferentWare() {
+        val (c, guid) = creation("Saeder-Krupp Direktionssekretar")
+        val ed = VehicleEditor(c, data)
+        val arm = modGuid(c, guid, "Drone Arm"); val leg = modGuid(c, guid, "Drone Leg")
+        assertTrue(ed.takesWare(arm) && ed.takesWare(leg))
+        val armNames = ed.wareOptions(arm).map { it.name }
+        val legNames = ed.wareOptions(leg).map { it.name }
+        println("ARM ${armNames.size} LEG ${legNames.size}")
+        assertTrue("Cyberarm Gyromount" in armNames && "Cyberarm Gyromount" !in legNames)
+        assertTrue(legNames.any { it == "Digigrade Legs" || it.contains("Foot") || it.contains("Skates") })
+        assertTrue("the limb's attribute upgrades are left out", ed.wareOptions(arm).none { data[it.id]!!.element.child("rating")?.textContent.orEmpty().contains("{") })
+        assertTrue("only ware the data names for the part", ed.wareOptions(arm).all { data[it.id]!!.element.child("required")?.child("parentdetails") != null })
+        assertTrue("nothing made for no part in particular", "Datajack" !in armNames && "Obvious Full Arm" !in armNames)
+        assertTrue("every option is of a category the part lists", ed.wareOptions(arm).all { it.category in setOf("Bodyware", "Headware", "Cosmetic Enhancement", "Cyberlimb", "Cyberlimb Enhancement", "Cyberlimb Accessory", "Cyber Implant Weapon") })
+    }
+
+    @Test
+    fun aPartWithNoSubsystemsTakesNoWare() {
+        val (c, guid) = creation("Dodge Xenon")
+        val ed = VehicleEditor(c, data)
+        assertTrue(mods(c, guid).none { ed.takesWare(it.text("guid")!!.trim()) })
+        assertTrue(ed.wareOptions(guid).isEmpty())
+    }
+
+    @Test
+    fun wareIsPaidForUsesCapacityAndStaysOutOfTheCharactersOwnWare() {
+        val (c, guid) = creation("Saeder-Krupp Direktionssekretar")
+        val adv = CareerAdvancement(c, data, settings)
+        val arm = modGuid(c, guid, "Drone Arm")
+        val gyro = adv.droneWareOptions(arm).first { it.name == "Cyberarm Gyromount" }
+        val (total, usedBefore) = VehicleEditor(c, data).wareCapacity(arm)!!
+        assertEquals(15.0, total, 0.001); assertEquals(0.0, usedBefore, 0.001)
+        val before = NuyenLedger.of(c, settings, data).remaining
+        val ware = adv.buyDroneWare(arm, gyro.id)
+        assertNotNull(ware)
+        assertEquals(before - 6000.0, NuyenLedger.of(c, settings, data).remaining, 0.01)
+        assertEquals(8.0, VehicleEditor(c, data).wareCapacity(arm)!!.second, 0.001)
+        // No second one: 8 + 8 is more than the 15 the arm has.
+        assertNull(adv.buyDroneWare(arm, gyro.id))
+        assertEquals("Not enough capacity left in that part", adv.droneWareBlockReason(arm, gyro.id))
+        // The same arm on the other side is a separate part with its own capacity.
+        assertNotNull(adv.buyDroneWare(modGuid(c, guid, "Drone Arm", 1), gyro.id))
+        // It is the drone's: the character's own ware and essence are untouched.
+        assertTrue(c.root.child("cyberwares")?.children("cyberware").orEmpty().isEmpty())
+        assertTrue(c.augmentations().isEmpty())
+        // Taking it back in creation gives the nuyen back.
+        assertTrue(adv.removePurchase(ware!!))
+        assertEquals(0.0, VehicleEditor(c, data).wareCapacity(arm)!!.second, 0.001)
+    }
+
+    @Test
+    fun wareBoughtInCareerIsLoggedUndoneAndSold() {
+        val (c, guid, log) = career("Saeder-Krupp Direktionssekretar")
+        val adv = CareerAdvancement(c, data, settings)
+        val arm = modGuid(c, guid, "Drone Arm")
+        val gyro = adv.droneWareOptions(arm).first { it.name == "Cyberarm Gyromount" }
+        val start = log.nuyen
+        val ware = adv.buyDroneWare(arm, gyro.id)!!
+        assertEquals(start - 6000.0, log.nuyen, 0.01)
+        assertEquals("AddVehicleWare", log.entries().last().undoKind)
+        assertTrue(log.undo(log.entries().last().guid))
+        assertEquals(start, log.nuyen, 0.01)
+        assertEquals(0.0, VehicleEditor(c, data).wareCapacity(arm)!!.second, 0.001)
+        val again = adv.buyDroneWare(arm, gyro.id)!!
+        assertEquals(3000.0, adv.sellPurchase(again, 50)!!, 0.01)
+        assertEquals(0.0, VehicleEditor(c, data).wareCapacity(arm)!!.second, 0.001)
+        assertNotNull(ware)
+    }
+
+    @Test
+    fun theSheetShowsAnArmsWareAndCapacity() {
+        val (c, guid, _) = career("Saeder-Krupp Direktionssekretar")
+        val adv = CareerAdvancement(c, data, settings)
+        val arm = modGuid(c, guid, "Drone Arm")
+        adv.buyDroneWare(arm, adv.droneWareOptions(arm).first { it.name == "Cyberarm Gyromount" }.id)
+        val v = SheetSections.read(c, emptyList(), EssenceEngine(ImprovementSet(Improvement.parseAll(c.root), true), data, true, 2, false), data).vehicles.first { it.guid == guid }
+        val line = v.modLines.first { it.guid == arm }
+        assertTrue(line.takesWare)
+        assertEquals(15.0, line.capacityTotal, 0.001); assertEquals(8.0, line.capacityUsed, 0.001)
+        assertEquals(listOf("Cyberarm Gyromount"), line.ware.map { it.name })
+        assertTrue(v.modLines.first { it.name == "Rigger Interface" }.takesWare.not())
+    }
 }

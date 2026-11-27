@@ -366,6 +366,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         var why: String? = null
         editCareer("Mod fitted", "Cannot fit that mod", { why }) { adv, _ -> why = adv.vehicleModBlockReason(vehicleGuid, id, rating); adv.buyVehicleMod(vehicleGuid, id, rating) != null }
     }
+    /** The cyberware that fits this drone arm or leg. */
+    fun droneWareOptions(modGuid: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).droneWareOptions(modGuid) }.orEmpty()
+    fun droneWareCost(id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).droneWareCost(id, rating) }
+    fun buyDroneWare(modGuid: String, id: String, rating: Int?) {
+        var why: String? = null
+        editCareer("Fitted to the drone", "Cannot fit that", { why }) { adv, _ -> why = adv.droneWareBlockReason(modGuid, id, rating); adv.buyDroneWare(modGuid, id, rating) != null }
+    }
     fun buyVehicleGear(vehicleGuid: String, id: String, rating: Int?, qty: Double, extra: String = "") {
         var why: String? = null
         editCareer("Gear added", "Not enough nuyen", { why }) { adv, _ -> why = adv.gearBlockReason(id, rating, qty); adv.buyVehicleGear(vehicleGuid, id, rating, qty, extra) != null }
