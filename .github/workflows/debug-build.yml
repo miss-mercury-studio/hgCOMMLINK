@@ -39,6 +39,16 @@ jobs:
       - name: Build the debug app
         run: ./gradlew -Pchummer.src=$GITHUB_WORKSPACE/../chummer5a :app:assembleDebug
 
+      - name: Show what is in the APK
+        run: |
+          apk=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          ls -l "$apk"
+          echo "--- game data and other assets (uncompressed size, name)"
+          unzip -l "$apk" | grep ' assets/' | awk '{print $1, $4}' | sort -rn | head -15
+          echo "assets: $(unzip -l "$apk" | grep -c ' assets/chummer-data/') data files, $(unzip -l "$apk" | grep -c ' assets/chummer-customdata/') custom data files"
+          echo "--- largest parts"
+          unzip -l "$apk" | awk '{print $1, $4}' | sort -rn | head -12
+
       - name: Core tests that need only public files
         run: ./gradlew -Pchummer.src=$GITHUB_WORKSPACE/../chummer5a -Pchummer.publicOnly=true :core:test
 
