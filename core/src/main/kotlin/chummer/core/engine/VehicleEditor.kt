@@ -127,7 +127,7 @@ class VehicleEditor(private val file: CharacterFile, private val data: DataPack)
     private fun vehicleOwnCost(vehicle: Element) = VehicleFormula.number(vehicle.text("cost").orEmpty())
 
     /**
-     * The mods that may be fitted to this vehicle, as the mod picker in Chummer offers them: not hidden, not for a weapon mount, drone-only
+     * The mods that may be fitted to this vehicle, as the mod picker in Chummer offers them: not hidden, not for a weapon mount or an add-on to one, drone-only
      * ones only on a drone when the settings allow drone mods, and each one's `required` and `forbidden` vehicle details met. [cost] is the
      * price at the lowest rating, or null when its formula cannot be read.
      */
@@ -139,6 +139,9 @@ class VehicleEditor(private val file: CharacterFile, private val data: DataPack)
         return data.byId.entries.filter { it.value.file == "vehicles.xml" && it.value.element.tagName == "mod" }.filter { (_, e) ->
             val mod = e.element
             if (mod.child("hide") != null || mod.child("weaponmountcategories") != null) return@filter false
+            // The mods in the data's own weaponmountmods list (add-ons and ammo bins) belong to a weapon mount, and a price can name the mount ("Parent Slots * 100").
+            // The app has no weapon mounts yet, so they are not plain vehicle mods.
+            if (mod.parentNode?.nodeName == "weaponmountmods") return@filter false
             if (mod.child("optionaldrone") != null && !(drone && droneMods)) return@filter false
             val forbidden = mod.child("forbidden")?.child("vehicledetails")
             if (forbidden != null && WeaponFilter.passes(entry, forbidden)) return@filter false
