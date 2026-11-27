@@ -13,6 +13,7 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 ### Changed
 - **Rating and quantity have − and + buttons.** In every buy dialog the number is labelled with its range, and you can still type it.
 - **Buy dialogs show your nuyen with separators.** ¥117,675, not ¥117675.
+- **The armor mod list shows prices.** They used to appear only after you tapped a mod.
 - **Weapon accessory prices are shown as money.** A Smartgun System, Internal shows its real price for that weapon instead of "Weapon Cost".
 
 ### Fixed
