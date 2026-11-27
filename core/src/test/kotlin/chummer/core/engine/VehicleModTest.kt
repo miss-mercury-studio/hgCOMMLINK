@@ -349,4 +349,86 @@ class VehicleModTest {
         assertEquals(5000.0, adv.sellPurchase(ware!!, 50)!!, 0.01)
         assertEquals(4, ed.limbFigure(arm, "AGI"))
     }
+
+    // ---- the vehicle's figures with its mods applied
+
+    private fun vehicleNode(c: CharacterFile, guid: String) = c.root.child("vehicles")!!.children("vehicle").first { it.text("guid")?.trim() == guid }
+    private fun figures(c: CharacterFile, guid: String) = VehicleFigures.total(vehicleNode(c, guid), data)
+
+    @Test
+    fun aSignedBonusAddsToTheFigure() {
+        val (c, guid) = creation("Dodge Xenon")
+        val ed = VehicleEditor(c, data)
+        val base = VehicleFigures.base(vehicleNode(c, guid))
+        ed.addMod(guid, modId("Speed Enhancement"), 3, droneMods = false)
+        val t = figures(c, guid)
+        assertEquals(base["speed"]!! + 3, t["speed"]); assertEquals(base["offroadspeed"]!! + 3, t["offroadspeed"])
+        assertEquals(base["handling"], t["handling"])
+        ed.addMod(guid, modId("Off-Road Tires"), 4, droneMods = false)   // handling -1 on road, +1 off road, whatever the quantity
+        val t2 = figures(c, guid)
+        assertEquals(base["handling"]!! - 1, t2["handling"]); assertEquals(base["offroadhandling"]!! + 1, t2["offroadhandling"])
+    }
+
+    @Test
+    fun anUnsignedBonusSetsTheFigure() {
+        val (c, guid) = creation("Saeder-Krupp Direktionssekretar")   // Pilot 4
+        val ed = VehicleEditor(c, data)
+        ed.addMod(guid, modId("Pilot Program (Drone)"), 6, droneMods = true)
+        assertEquals("the rating is the new Pilot", 6, figures(c, guid)["pilot"])
+        // A drone upgrade: Handling (Drone) at rating 6 on Handling 4 makes it 6, and a -1 from another mod then takes it to 5.
+        ed.addMod(guid, modId("Handling (Drone)"), 6, droneMods = true)
+        assertEquals(6, figures(c, guid)["handling"])
+        ed.addMod(guid, modId("Handling Downgrade (Drone)"), null, droneMods = true)
+        assertEquals(5, figures(c, guid)["handling"])
+        // Immobile sets speed and acceleration to nothing.
+        ed.addMod(guid, modId("Immobile (Drone)"), null, droneMods = true)
+        assertEquals(0, figures(c, guid)["speed"]); assertEquals(0, figures(c, guid)["accel"])
+    }
+
+    @Test
+    fun aFigureNeverGoesBelowZero() {
+        val (c, guid) = creation("Saeder-Krupp Direktionssekretar")   // Armor 3
+        val ed = VehicleEditor(c, data)
+        repeat(3) { ed.addMod(guid, modId("Armor Downgrade (Drone)"), null, droneMods = true) }   // -3 each
+        assertEquals(0, figures(c, guid)["armor"])
+    }
+
+    @Test
+    fun modsThatCameWithTheVehicleOrAreSwitchedOffAddNothing() {
+        val (c, guid) = creation("Dodge Xenon")
+        val base = VehicleFigures.base(vehicleNode(c, guid))
+        val mod = VehicleEditor(c, data).addMod(guid, modId("Speed Enhancement"), 3, droneMods = false)
+        val node = mods(c, guid).first { it.text("guid")?.trim() == mod }
+        node.child("equipped")!!.textContent = "False"
+        assertEquals(base["speed"], figures(c, guid)["speed"])
+        node.child("equipped")!!.textContent = "True"; node.child("included")!!.textContent = "True"
+        assertEquals("an included mod is already in the base figures", base["speed"], figures(c, guid)["speed"])
+    }
+
+    @Test
+    fun increasedSeatingAddsHalfTheSeats() {
+        val (c, guid) = creation("Dodge Xenon")
+        val seats = VehicleFigures.base(vehicleNode(c, guid))["seats"]!!
+        VehicleEditor(c, data).addMod(guid, modId("Increased Seating"), null, droneMods = false)
+        assertEquals(seats + Math.round(seats * 0.5).toInt(), figures(c, guid)["seats"])
+    }
+
+    @Test
+    fun theSheetShowsTheTotalsAndWhatChanged() {
+        val (c, guid, _) = career("Dodge Xenon")
+        val adv = CareerAdvancement(c, data, settings)
+        fun line() = SheetSections.read(c, emptyList(), EssenceEngine(ImprovementSet(Improvement.parseAll(c.root), true), data, true, 2, false), data).vehicles.first { it.guid == guid }
+        val before = line()
+        assertTrue(before.changes.isEmpty())
+        val speed = VehicleFigures.base(vehicleNode(c, guid))["speed"]!!
+        adv.buyVehicleMod(guid, modId("Speed Enhancement"), 2)
+        val after = line()
+        assertTrue("the stats line shows the new speed: ${after.stats}", Regex("Speed ${speed + 2}\\b").containsMatchIn(after.stats))
+        val off = VehicleFigures.base(vehicleNode(c, guid))["offroadspeed"]!!
+        // On-road and off-road speed moved together, so it is one line.
+        assertEquals(listOf("Speed " + (if (speed == off) "$speed" else "$speed/$off") + " → " + (if (speed == off) "${speed + 2}" else "${speed + 2}/${off + 2}")), after.changes)
+        // Taking the mod off puts the figure back.
+        assertTrue(CareerAdvancement(c, data, settings).discardPurchase(mods(c, guid).first { it.text("included") == "False" }.text("guid")!!.trim()))
+        assertTrue(line().changes.isEmpty())
+    }
 }

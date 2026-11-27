@@ -30,7 +30,8 @@ internal fun VehicleSheet(
                 v.slotsTotal.takeIf { it > 0 }?.let { "SLOTS" to "${v.slotsUsed} / $it" },
             ), accent = DrainAmber)
             CardTags(v.stats.split("  ").map { it.trim() }.filter { it.isNotEmpty() }.map { it to MutedSilver })
-            CardNote("These are the vehicle's own figures. What fitted mods add to them is not worked out yet.")
+            // The figures above include the fitted mods; say what they changed so a figure that moved is not a surprise.
+            CardNote(if (v.changes.isEmpty()) "Figures are the vehicle's own." else "Fitted mods changed: " + v.changes.joinToString(", ") + ".")
             if (v.slotsTotal > 0 && v.slotsUsed > v.slotsTotal) CardTags(listOf("Over by ${v.slotsUsed - v.slotsTotal} slot${if (v.slotsUsed - v.slotsTotal > 1) "s" else ""}" to DrainAmber))
 
             GroupHeader("Mods", v.modLines.size, DrainAmber)

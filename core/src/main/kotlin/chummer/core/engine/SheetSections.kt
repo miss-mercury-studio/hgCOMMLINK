@@ -49,7 +49,9 @@ data class SheetSections(
         /** Each mod and each piece of gear on it, for the vehicle's own sheet. */
         val modLines: List<VehicleModLine> = emptyList(), val gearLines: List<GearPartLine> = emptyList(),
         /** Mod slots used by mods added to it, and the slots it has. */
-        val slotsUsed: Int = 0, val slotsTotal: Int = 0)
+        val slotsUsed: Int = 0, val slotsTotal: Int = 0,
+        /** What fitted mods changed in the figures, "Handling 4 → 5". */
+        val changes: List<String> = emptyList())
     data class ContactLine(val name: String, val type: String, val connection: Int, val loyalty: Int, val notes: String)
     data class LifestyleLine(val name: String, val type: String, val monthly: String, val notes: String, val guid: String = "", val months: String = "")
 
@@ -113,9 +115,11 @@ data class SheetSections(
                 VehicleLine(
                     v.t("name"), v.t("category"),
                     run {
-                        fun fig(on: String, off: String) = if (off.isNotEmpty() && off != v.t(on)) "${v.t(on)}/$off" else v.t(on)
-                        "Handling ${fig("handling", v.t("offroadhandling"))}  Speed ${fig("speed", v.t("offroadspeed"))}  Accel ${fig("accel", v.t("offroadaccel"))}  Body ${v.t("body")}  Armor ${v.t("armor")}  Pilot ${v.t("pilot")}  Sensor ${v.t("sensor")}" +
-                            (v.t("seats").takeIf { it.isNotEmpty() && it != "0" }?.let { "  Seats $it" } ?: "")
+                        // The figures with the fitted mods applied (see VehicleFigures); "4/3" is on-road and off-road.
+                        val t = VehicleFigures.total(v, data)
+                        fun fig(on: String, off: String) = if (t[off] != t[on]) "${t[on]}/${t[off]}" else "${t[on]}"
+                        "Handling ${fig("handling", "offroadhandling")}  Speed ${fig("speed", "offroadspeed")}  Accel ${fig("accel", "offroadaccel")}  Body ${t["body"]}  Armor ${t["armor"]}  Pilot ${t["pilot"]}  Sensor ${t["sensor"]}" +
+                            (t["seats"]?.takeIf { it != 0 }?.let { "  Seats $it" } ?: "")
                     },
                     v.t("guid"), v.child("mods")?.children("mod").orEmpty().map { it.t("name") },
                     modLines = v.child("mods")?.children("mod").orEmpty().map { m ->
@@ -129,6 +133,7 @@ data class SheetSections(
                     },
                     gearLines = v.child("gears")?.children("gear").orEmpty().map { g -> GearPartLine(g.t("guid"), g.t("name"), g.t("qty").removeSuffix(".0"), g.n("rating"), g.t("extra"), !g.t("equipped").equals("False", true)) },
                     slotsUsed = VehicleFormula.slots(v).first, slotsTotal = VehicleFormula.slots(v).second,
+                    changes = VehicleFigures.changes(VehicleFigures.base(v), VehicleFigures.total(v, data)),
                 )
             }
 
