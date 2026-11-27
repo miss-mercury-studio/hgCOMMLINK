@@ -79,7 +79,7 @@ class AttributeEngine(
             }
         }
         total = minOf(total, totalAugMax)
-        if (total < 1) total = lowFloor(abbrev, total)
+        if (total < 1) total = lowFloor(abbrev, total, totalMaximum)
         return AttributeResult(abbrev, totalMinimum, totalMaximum, value, total)
     }
 
@@ -136,8 +136,9 @@ class AttributeEngine(
     }
 
     /** Attributes can only fall below 1 for some attributes, or through encumbrance. */
-    private fun lowFloor(abbrev: String, total: Int): Int {
-        if (isCritter || abbrev in ZERO_MIN) return maxOf(total, 0)
+    private fun lowFloor(abbrev: String, total: Int, totalMaximum: Int): Int {
+        // An attribute the metatype cannot have at all (an A.I.'s physical attributes) stays 0.
+        if (isCritter || totalMaximum == 0 || abbrev in ZERO_MIN) return maxOf(total, 0)
         // Only encumbrance-driven reductions to AGI and REA may take the attribute to 0.
         if (abbrev == "AGI" || abbrev == "REA") {
             val encumbrance = improvements.matching("Attribute", abbrev).filter { it.source == "ArmorEncumbrance" }.sumOf { it.augmented * it.rating }

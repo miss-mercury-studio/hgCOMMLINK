@@ -24,6 +24,8 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 - **Vehicle mods whose price depends on the vehicle count toward your nuyen.** Drone upgrades and other mods priced from Handling, Speed or Armor were being counted as free.
 - **Characters saved by very old Chummer versions show the right attributes.** They were showing 1 or 2 too high.
 - **Nuyen shows as money.** A balance like 2702.7799999997 now reads ¥2,702.78, with thousands separators.
+- **An A.I.'s physical attributes show 0.** Strength, Agility, Reaction and Body were showing 1, which also threw off anything worked out from them.
+- **An A.I.'s sheet leaves off attributes it cannot have.** Strength, Agility, Reaction and Body no longer show as a row of zeros.
 
 ## [0.2.0] - 2026-11-25
 

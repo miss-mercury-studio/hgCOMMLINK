@@ -268,10 +268,12 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
             }
         }
 
+        // An attribute this character cannot have at all (an A.I.'s physical ones: maximum 0, value 0) is left off.
+        val shownAttributes = s.attributes.filterNot { it.maximum == 0 && it.total == 0 }
         Section("Attributes") {
             if (creation) {
                 // Two to a row, each with its own minus and plus, so the buttons are big enough to hit.
-                s.attributes.chunked(2).forEach { pair ->
+                shownAttributes.chunked(2).forEach { pair ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         pair.forEach { a -> AttributeTile(a, a.name in BUYABLE, vm, Modifier.weight(1f)) }
                         repeat(2 - pair.size) { Spacer(Modifier.weight(1f)) }
@@ -280,7 +282,7 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
             } else if (s.career != null) {
                 // Career: two to a row, each with the karma price of its next point.
                 val karma = s.karma.toIntOrNull() ?: 0
-                s.attributes.chunked(2).forEach { pair ->
+                shownAttributes.chunked(2).forEach { pair ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         pair.forEach { a ->
                             val cost = if (a.name in BUYABLE) s.career!!.attributeCosts[a.name] else null
@@ -297,7 +299,7 @@ private fun Overview(s: Sheet, vm: AppViewModel) {
                 }
             } else {
                 // Four to a row reads well on a phone held upright.
-                s.attributes.chunked(4).forEach { row ->
+                shownAttributes.chunked(4).forEach { row ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         row.forEach { a -> Stat(a.name, a.total.toString(), Modifier.weight(1f)) }
                         repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }

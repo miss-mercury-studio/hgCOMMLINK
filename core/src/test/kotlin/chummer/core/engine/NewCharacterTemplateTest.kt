@@ -140,7 +140,9 @@ class NewCharacterTemplateTest {
             // Every attribute starts at the metatype's minimum.
             for (a in sheet.attributes.filter { it.name in setOf("BOD", "AGI", "REA", "STR", "CHA", "INT", "LOG", "WIL") }) {
                 val min = entry.element.child(a.name.lowercase() + "min")!!.textContent.trim().toInt()
-                assertEquals("$name ${a.name}", maxOf(min, 1), a.total)
+                val max = entry.element.child(a.name.lowercase() + "max")!!.textContent.trim().toInt()
+                // An attribute the metatype cannot have (an A.I.'s physical ones) stays 0.
+                assertEquals("$name ${a.name}", if (max == 0) 0 else maxOf(min, 1), a.total)
             }
             assertEquals("Test $name", sheet.name)
             assertEquals(name, sheet.metatype)
