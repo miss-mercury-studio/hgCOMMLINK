@@ -233,7 +233,8 @@ fun AttachPartDialog(kind: String, parentGuid: String, vm: AppViewModel, nuyen: 
                 o.id, o.name,
                 listOfNotNull(o.category.takeIf { it.isNotBlank() }, o.detail.takeIf { it.isNotBlank() }?.let { if (kind == "accessory") accessoryPrice(parentGuid, o, vm) else it },
                     // An armor mod's list line has its figures; its price goes after them. A rated one is priced at its lowest rating.
-                    if (kind == "accessory") null else o.cost?.let { (if (o.maxRating > 1) "from ¥" else "¥") + formatNuyen(it) } ?: "price not readable yet",, o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + chummer.core.engine.GearEditor.availText(it, 1) }).joinToString("  ·  "),
+                    if (kind == "accessory") null else (o.cost?.let { (if (o.maxRating > 1) "from ¥" else "¥") + formatNuyen(it) } ?: "price not readable yet"),
+                    o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + chummer.core.engine.GearEditor.availText(it, 1) }).joinToString("  ·  "),
                 o.category,
             )
         }
