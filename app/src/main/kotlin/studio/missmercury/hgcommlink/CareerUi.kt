@@ -211,6 +211,18 @@ internal fun money(raw: String) = raw.toDoubleOrNull()?.let { formatNuyen(it) } 
 
 internal fun formatNuyen(v: Double) = if (v == Math.rint(v)) "%,d".format(v.toLong()) else "%,.2f".format(v)
 
+/**
+ * What an accessory costs on this weapon, as money. Some prices depend on the weapon ("Weapon Cost", a share of it), so the price is worked out for
+ * [parentGuid]; one that cannot be worked out keeps the data's own wording.
+ */
+private fun accessoryPrice(parentGuid: String, o: chummer.core.engine.ItemOption, vm: AppViewModel): String {
+    val price = vm.accessoryCost(parentGuid, o.id, if (o.maxRating > 0) 1 else null)
+    return when {
+        price != null -> (if (o.maxRating > 1) "from ¥" else "¥") + formatNuyen(price)
+        else -> "cost " + (o.detail.toDoubleOrNull()?.let { "¥" + formatNuyen(it) } ?: o.detail)
+    }
+}
+
 /** Pick a weapon accessory ([kind] "accessory", for the weapon with [parentGuid]) or an armor mod ("mod"), choose mount and rating, and pay. */
 @Composable
 fun AttachPartDialog(kind: String, parentGuid: String, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
@@ -219,7 +231,7 @@ fun AttachPartDialog(kind: String, parentGuid: String, vm: AppViewModel, nuyen: 
         options.map { o ->
             PickItem(
                 o.id, o.name,
-                listOfNotNull(o.category.takeIf { it.isNotBlank() }, o.detail.takeIf { it.isNotBlank() }?.let { if (kind == "accessory") "cost $it" else it }, o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + chummer.core.engine.GearEditor.availText(it, 1) }).joinToString("  ·  "),
+                listOfNotNull(o.category.takeIf { it.isNotBlank() }, o.detail.takeIf { it.isNotBlank() }?.let { if (kind == "accessory") accessoryPrice(parentGuid, o, vm) else it }, o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + chummer.core.engine.GearEditor.availText(it, 1) }).joinToString("  ·  "),
                 o.category,
             )
         }
