@@ -48,6 +48,35 @@ class LoadedAmmoRemovalTest {
         assertEquals("Ammo: Regular Ammo", totals(c).clips.first().ammo)
     }
 
+    @Test
+    fun boughtAmmoNeverJoinsTheLoadedStack() {
+        val (c, adv, w) = setup()
+        // Exactly one clip's worth, so the clip uses the bought stack itself.
+        val first = adv.buyGear(id("gear.xml", "gear", "Ammo: Regular Ammo"), null, 15.0, "Heavy Pistols")!!
+        assertTrue(ArmorWeaponEditor(c, data).loadAmmo(w, first, 0, null))
+        val more = adv.buyGear(id("gear.xml", "gear", "Ammo: Regular Ammo"), null, 30.0, "Heavy Pistols")!!
+        assertTrue("a new stack, not added to the loaded one", more != first)
+        val stacks = c.root.child("gears")!!.children("gear").associate { it.text("guid")!!.trim() to it.text("qty")!!.trim().removeSuffix(".0") }
+        assertEquals("15", stacks[first])
+        assertEquals("30", stacks[more])
+    }
+
+    @Test
+    fun mergingTheLooseStackNeverTakesTheLoadedRounds() {
+        val (c, adv, w) = setup()
+        val ammo = adv.buyGear(id("gear.xml", "gear", "Ammo: Regular Ammo"), null, 60.0, "Heavy Pistols")!!
+        assertTrue(ArmorWeaponEditor(c, data).loadAmmo(w, ammo, 0, null))
+        val before = clips(c).first().text("id")!!.trim()
+        // Neither the loose stack nor the loaded one is offered a Merge: they are not the same thing.
+        val lines = SheetSections.read(c, emptyList(), EssenceEngine(ImprovementSet(Improvement.parseAll(c.root), true), data, true, 2, false), data).gear
+        assertTrue("no Merge offered: " + lines.map { it.name + ":" + it.mergeable }, lines.none { it.mergeable })
+        assertEquals("one of the two is shown as loaded", 1, lines.count { it.loaded })
+        assertTrue(!adv.mergeGear(ammo))
+        assertTrue("the loaded stack is still there", c.root.child("gears")!!.children("gear").any { it.text("guid")?.trim() == before })
+        assertEquals(15, totals(c).clips.first().rounds)
+        assertEquals("Ammo: Regular Ammo", totals(c).clips.first().ammo)
+    }
+
     private fun clips(c: CharacterFile) = c.root.child("weapons")!!.children("weapon").first { it.text("name") == "Ares Predator V" }.child("clips")?.children("clip").orEmpty()
     private fun totals(c: CharacterFile) = WeaponEngine(c.root, ImprovementSet(Improvement.parseAll(c.root), isCareer = true), 5, 5).all().first { it.name == "Ares Predator V" }
 

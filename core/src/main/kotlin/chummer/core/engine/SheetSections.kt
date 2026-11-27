@@ -92,11 +92,12 @@ data class SheetSections(
             val wares = c.augmentations().map { ware(it, false) }
 
             val allGear = c.root.child("gears")?.children("gear").orEmpty()
+            val inClips = GearStacks.loadedIds(c.root)
             val gear = allGear.map { g ->
                 GearLine(
                     g.t("name"), g.t("category"), g.t("qty").removeSuffix(".0"), g.n("rating"),
                     includes(g.child("children")?.children("gear").orEmpty()),
-                    g.t("guid"), g.t("location") == "loaded", GearStacks.twins(allGear, g).isNotEmpty(),
+                    g.t("guid"), g.t("location") == "loaded" || g.t("guid").lowercase() in inClips, GearStacks.twins(allGear, g, inClips).isNotEmpty(),
                     parts = g.child("children")?.children("gear").orEmpty().map { p -> GearPartLine(p.t("guid"), p.t("name"), p.t("qty").removeSuffix(".0"), p.n("rating"), p.t("extra"), !p.t("equipped").equals("False", true)) },
                     pluggable = (g.t("sourceid").takeIf { it.isNotEmpty() }?.let { data?.get(it)?.element } ?: g).let { GearPlugins.accepts(it) },
                     extra = g.t("extra"),

@@ -17,6 +17,7 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 - **Weapon accessory prices are shown as money.** A Smartgun System, Internal shows its real price for that weapon instead of "Weapon Cost".
 
 ### Fixed
+- **Merge no longer touches loaded ammo.** Rounds in a clip were being folded back into the loose stack, which left the clip showing "Empty". Loaded stacks now show as Loaded, and bought ammo never joins them.
 - **Removing loaded ammo empties its clip.** The clip used to keep counting the rounds and show "Empty" with a full bar.
 - **A clip with no ammo behind its rounds says "Ammo missing".** Tap Unload on it to clear it.
 - **Vehicle mods priced from the vehicle's Handling, Speed or Armor count toward your nuyen.** They were being counted as free.

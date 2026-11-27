@@ -200,7 +200,7 @@ class GearEditor(private val file: CharacterFile, private val data: GameData, pr
         val siblings = (into ?: root.child("gears"))?.children("gear").orEmpty()
         val added = siblings.first { it.text("guid")?.trim().equals(guid, true) }
         if (!GearStacks.isAmmo(added)) return guid
-        val into = GearStacks.twins(siblings, added).firstOrNull() ?: return guid
+        val into = GearStacks.twins(siblings, added, GearStacks.loadedIds(root)).firstOrNull() ?: return guid
         GearStacks.setQuantity(into, GearStacks.quantity(into) + GearStacks.quantity(added))
         removeGear(guid)
         return into.text("guid")!!.trim()
@@ -209,7 +209,7 @@ class GearEditor(private val file: CharacterFile, private val data: GameData, pr
     /** Fold every identical loose stack into this one, adding their quantities. False when there is none to merge. */
     fun mergeStacks(guid: String): Boolean {
         val target = stack(guid) ?: return false
-        val others = GearStacks.twins(topGear(), target)
+        val others = GearStacks.twins(topGear(), target, GearStacks.loadedIds(root))
         if (others.isEmpty()) return false
         GearStacks.setQuantity(target, GearStacks.quantity(target) + others.sumOf { GearStacks.quantity(it) })
         for (o in others) removeGear(o.text("guid")!!.trim())
