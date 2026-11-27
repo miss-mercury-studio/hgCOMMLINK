@@ -8,21 +8,20 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ### Added
 - **Vehicles and drones have their own sheet.** Tap a vehicle on Gear to see its mods and gear, take off or sell what you added, or sell the whole vehicle.
-- **Drone arms and legs take cyberware.** Open the drone, tap + Ware on a limb, and pick from what is made for that limb. It uses the limb's capacity and costs nuyen only, and it belongs to the drone, not your character's essence. Each limb shows its Strength (the drone's Body) and Agility (its Pilot), which Customized Strength and Agility raise up to double. Cyberlimb Optimization asks which skill, and a custom cyberfinger asks what it is for.
-- **Vehicle figures include the fitted mods.** Handling, Speed, Acceleration, Armor, Sensor, Pilot, Body and Seats show the totals, and the vehicle sheet lists what changed. Tires, speed and armor upgrades and drone upgrades all count.
 - **Buy mods and gear for a vehicle or drone.** Only mods that fit that vehicle are offered, priced from its own figures, with the mod slots they use.
+- **Vehicle figures include the fitted mods.** Handling, Speed, Acceleration, Armor, Sensor, Pilot, Body and Seats show the totals, and the vehicle sheet lists what changed. Tires, speed and armor upgrades and drone upgrades all count.
+- **Drone arms and legs take cyberware.** Tap + Ware on a limb and pick from what is made for it. It uses the limb's capacity and costs nuyen only. It belongs to the drone, so your essence is not touched.
+- **Drone limbs show Strength and Agility.** Strength is the drone's Body and Agility its Pilot. Customized Strength and Customized Agility raise them, up to double.
+- **Some drone ware asks a question.** Cyberlimb Optimization asks which of your skills, and a custom cyberfinger asks what it is for.
 
 ### Changed
 - **Rating and quantity have − and + buttons.** In every buy dialog the number is labelled with its range, and you can still type it.
-- **Buy dialogs show your nuyen with separators.** ¥117,675, not ¥117675.
-- **The armor mod list shows prices.** They used to appear only after you tapped a mod.
-- **Weapon accessory prices are shown as money.** A Smartgun System, Internal shows its real price for that weapon instead of "Weapon Cost".
+- **Prices read as money in the buy lists and dialogs.** Your nuyen shows as ¥117,675, armor mods show their price in the list, and a weapon accessory shows its real price for that weapon instead of "Weapon Cost".
 
 ### Fixed
-- **Merge no longer touches loaded ammo.** Rounds in a clip were being folded back into the loose stack, which left the clip showing "Empty". Loaded stacks now show as Loaded, and bought ammo never joins them.
-- **Removing loaded ammo empties its clip.** The clip used to keep counting the rounds and show "Empty" with a full bar.
-- **A clip with no ammo behind its rounds says "Ammo missing".** Tap Unload on it to clear it.
-- **Vehicle mods priced from the vehicle's Handling, Speed or Armor count toward your nuyen.** They were being counted as free.
+- **Loaded ammo stays in its clip.** Merge folded loaded rounds back into a loose stack, and removing loaded ammo left the clip counting rounds, so a full clip read "Empty". Loaded stacks now show as Loaded, Merge and bought ammo leave them alone, and removing them empties the clip.
+- **To fix a clip that already says "Ammo missing", tap Unload on it, then Load it again.** The rounds were lost with the ammo, so Unload only clears the clip. Reload from your ammo and it works as normal.
+- **Vehicle mods whose price depends on the vehicle count toward your nuyen.** Drone upgrades and other mods priced from Handling, Speed or Armor were being counted as free.
 - **Characters saved by very old Chummer versions show the right attributes.** They were showing 1 or 2 too high.
 - **Nuyen shows as money.** A balance like 2702.7799999997 now reads ¥2,702.78, with thousands separators.
 
