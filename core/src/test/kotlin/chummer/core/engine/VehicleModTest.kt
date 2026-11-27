@@ -431,4 +431,32 @@ class VehicleModTest {
         assertTrue(CareerAdvancement(c, data, settings).discardPurchase(mods(c, guid).first { it.text("included") == "False" }.text("guid")!!.trim()))
         assertTrue(line().changes.isEmpty())
     }
+
+    @Test
+    fun wareThatAsksForAChoiceTakesItAndSavesIt() {
+        val (c, guid, log) = career("Saeder-Krupp Direktionssekretar")
+        val adv = CareerAdvancement(c, data, settings)
+        val arm = modGuid(c, guid, "Drone Arm")
+        val options = adv.droneWareOptions(arm)
+        val optimization = options.first { it.name == "Cyberlimb Optimization" }
+        val finger = options.first { it.name == "Cyberfinger (Custom)" }
+        assertEquals("skill", optimization.choice); assertEquals("text", finger.choice)
+        assertEquals("", options.first { it.name == "Cyberarm Gyromount" }.choice)
+        val skill = adv.droneWareSkills().first()
+        assertTrue("the character has active skills to choose from", adv.droneWareSkills().isNotEmpty())
+        // Without a choice, or with something that is not one of the character's skills, it is refused.
+        assertNull(adv.buyDroneWare(arm, optimization.id))
+        assertEquals("Choose one of your skills first", adv.droneWareBlockReason(arm, optimization.id))
+        assertNull(adv.buyDroneWare(arm, optimization.id, null, "Underwater Basket Weaving"))
+        assertNull(adv.buyDroneWare(arm, finger.id))
+        // With one, it is bought and the choice is saved in the item, as the sheet spells the skill.
+        val ware = adv.buyDroneWare(arm, optimization.id, null, skill.lowercase())
+        assertNotNull(ware)
+        val stored = mods(c, guid).first { it.text("guid")?.trim() == arm }.child("cyberwares")!!.children("cyberware").first { it.text("guid")?.trim() == ware }
+        assertEquals(skill, stored.text("extra"))
+        assertNotNull(adv.buyDroneWare(arm, finger.id, null, "Lockpick set"))
+        val v = SheetSections.read(c, emptyList(), EssenceEngine(ImprovementSet(Improvement.parseAll(c.root), true), data, true, 2, false), data).vehicles.first { it.guid == guid }
+        assertEquals(setOf(skill, "Lockpick set"), v.modLines.first { it.guid == arm }.ware.map { it.extra }.toSet())
+        assertTrue(log.undo(log.entries().last().guid))
+    }
 }

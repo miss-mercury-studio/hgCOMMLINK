@@ -212,6 +212,25 @@ class VehicleEditor(private val file: CharacterFile, private val data: DataPack)
     }
 
     /**
+     * What an item asks to be chosen when it is bought, read from its bonus blocks: "skill" for a skill selector (Cyberlimb Optimization), "text" for a
+     * free-text one (Cyberfinger (Custom)), "" for none. Desktop Chummer asks at purchase and saves the answer in the item's `extra`.
+     */
+    fun wareChoice(entry: Element): String {
+        var kind = ""
+        for (tag in listOf("bonus", "pairbonus", "wirelessbonus", "wirelesspairbonus")) {
+            val all = entry.child(tag)?.getElementsByTagName("*") ?: continue
+            for (i in 0 until all.length) {
+                val e = all.item(i) as Element
+                if (e.tagName == "selectskill") kind = "skill" else if (e.tagName == "selecttext" && kind.isEmpty()) kind = "text"
+            }
+        }
+        return kind
+    }
+
+    /** The character's active skills, which a skill choice is made from. */
+    fun choosableSkills(): List<String> = file.skills().filter { !it.isKnowledge }.map { it.name }.filter { it.isNotEmpty() }
+
+    /**
      * A drone limb's base figures: Strength is the drone's Body and Agility its Pilot. An upgrade then raises the figure up to double the base, so
      * Customized Agility on a Pilot 4 drone is rated from 5 to 8 (and the rating is the new Agility).
      */
@@ -259,14 +278,18 @@ class VehicleEditor(private val file: CharacterFile, private val data: DataPack)
             fun t(tag: String) = w.child(tag)?.textContent?.trim().orEmpty()
             val (min, max) = upgradeRange(vehicle, w) ?: ed.range(w, null)
             val r = if (max > 0) maxOf(min, 1) else 0
-            WareOption(id, t("name"), t("category"), false, CyberwareEditor.formula(t("cost"), r, min), null, t("avail"), min, max, "", null, emptyList(), capacity = t("capacity"))
+            WareOption(id, t("name"), t("category"), false, CyberwareEditor.formula(t("cost"), r, min), null, t("avail"), min, max, "", null, emptyList(), capacity = t("capacity"), choice = wareChoice(w))
         }.filter { it.name.isNotEmpty() }.sortedWith(compareBy({ it.category }, { it.name.lowercase() }))
     }
 
     /** Why this ware cannot go into this mod now; null when it can. */
-    fun wareProblem(modGuid: String, entryId: String): String? {
+    fun wareProblem(modGuid: String, entryId: String, extra: String = ""): String? {
         if (modNode(modGuid) == null) return "no such mod"
         if (wareOptions(modGuid).none { it.id.equals(entryId, true) }) return "that does not fit this part"
+        when (data[entryId]?.element?.let(::wareChoice).orEmpty()) {
+            "skill" -> if (choosableSkills().none { it.equals(extra.trim(), true) }) return "needs one of your skills chosen"
+            "text" -> if (extra.isBlank()) return "needs a choice"
+        }
         val need = capacityNeed(data[entryId]?.element?.child("capacity")?.textContent.orEmpty())
         val (total, used) = wareCapacity(modGuid) ?: return "no such mod"
         return if (used + need > total + 1e-9) "not enough capacity" else null
@@ -282,8 +305,8 @@ class VehicleEditor(private val file: CharacterFile, private val data: DataPack)
     }
 
     /** Fit ware into a mod at the Standard grade, in Chummer's layout; returns its GUID. Its bonuses are not applied: it is the drone's, not the character's. */
-    fun addWare(modGuid: String, entryId: String, rating: Int?): String {
-        wareProblem(modGuid, entryId)?.let { error("Cannot fit this: $it") }
+    fun addWare(modGuid: String, entryId: String, rating: Int?, extra: String = ""): String {
+        wareProblem(modGuid, entryId, extra)?.let { error("Cannot fit this: $it") }
         val mod = modNode(modGuid)!!
         val w = data[entryId]!!.element
         val ed = CyberwareEditor(file, data)
@@ -291,6 +314,8 @@ class VehicleEditor(private val file: CharacterFile, private val data: DataPack)
         val chosen = if (max > 0) (rating ?: maxOf(min, 1)).coerceIn(maxOf(min, 1), max) else 0
         val guid = UUID.randomUUID().toString()
         val g = ed.wareElement(entryId, w, guid, "Standard", chosen, max > 0, asDefault = false, parentGuid = null)
+        // What the player chose (a skill, or a few words), saved where Chummer keeps it; the skill is saved as the sheet spells it.
+        if (extra.isNotBlank()) g.child("extra")?.textContent = choosableSkills().firstOrNull { it.equals(extra.trim(), true) } ?: extra.trim()
         // An attribute upgrade's limits name the limb's own figures ("MinimumAGI"); on a drone they are worked out here, so save the numbers.
         if (vehicleOfMod(mod)?.let { upgradeRange(it, w) } != null) { g.child("minrating")?.textContent = min.toString(); g.child("maxrating")?.textContent = max.toString() }
         val list = mod.child("cyberwares") ?: el("cyberwares").also { mod.appendChild(it) }

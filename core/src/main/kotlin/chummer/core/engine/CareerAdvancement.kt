@@ -569,12 +569,17 @@ class CareerAdvancement(
     /** The cyberware that fits this drone limb (or other mod with capacity and subsystems); empty for a mod that takes none. */
     fun droneWareOptions(modGuid: String): List<WareOption> = (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).wareOptions(modGuid) }.orEmpty()
 
+    /** The active skills a skill choice may name (empty when the ware asks for no skill). */
+    fun droneWareSkills(): List<String> = (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).choosableSkills() }.orEmpty()
+
     fun droneWareCost(modGuid: String, entryId: String, rating: Int? = null): Double? = (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).wareCost(modGuid, entryId, rating) }
 
     /** Why ware cannot be bought for this mod right now, in words for a player; null when it can. */
-    fun droneWareBlockReason(modGuid: String, entryId: String, rating: Int? = null): String? {
+    fun droneWareBlockReason(modGuid: String, entryId: String, rating: Int? = null, extra: String = ""): String? {
         val pack = data as? chummer.core.DataPack ?: return "No game data"
-        VehicleEditor(file, pack).wareProblem(modGuid, entryId)?.let { return if (it == "not enough capacity") "Not enough capacity left in that part" else "That does not fit this part" }
+        VehicleEditor(file, pack).wareProblem(modGuid, entryId, extra)?.let {
+            return when { it == "not enough capacity" -> "Not enough capacity left in that part"; it.startsWith("needs") -> "Choose ${if ("skill" in it) "one of your skills" else "what it is for"} first"; else -> "That does not fit this part" }
+        }
         val cost = droneWareCost(modGuid, entryId, rating) ?: return "The price of that item cannot be worked out yet"
         if (cost > nuyenLeft() + 0.004) return "Not enough nuyen"
         if (availabilityBlocked(entryId, rating)) return "Its availability is over the limit of ${settings.int("availability", 12)} for a new character"
@@ -585,11 +590,11 @@ class CareerAdvancement(
      * Buy cyberware for a drone's limb: it goes into the mod at the Standard grade and costs nuyen only (a drone has no essence, and its bonuses are not
      * the character's). Returns the item's GUID, or null when it does not fit, cannot be paid for or is over the creation availability limit.
      */
-    fun buyDroneWare(modGuid: String, entryId: String, rating: Int? = null, now: LocalDateTime = LocalDateTime.now()): String? {
-        if (droneWareBlockReason(modGuid, entryId, rating) != null) return null
+    fun buyDroneWare(modGuid: String, entryId: String, rating: Int? = null, extra: String = "", now: LocalDateTime = LocalDateTime.now()): String? {
+        if (droneWareBlockReason(modGuid, entryId, rating, extra) != null) return null
         val pack = data as? chummer.core.DataPack ?: return null
         val cost = droneWareCost(modGuid, entryId, rating) ?: return null
-        val guid = VehicleEditor(file, pack).addWare(modGuid, entryId, rating)
+        val guid = VehicleEditor(file, pack).addWare(modGuid, entryId, rating, extra)
         charge(cost, "Purchased Drone Cyberware " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddVehicleWare", guid, 0.0, now)
         return guid
     }

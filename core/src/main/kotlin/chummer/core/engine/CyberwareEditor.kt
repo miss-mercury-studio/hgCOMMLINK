@@ -15,6 +15,8 @@ data class WareOption(
     val minRating: Int, val maxRating: Int, val forcedGrade: String, val problem: String?, val unsupported: List<String>, val addsToParent: Boolean = false,
     /** The capacity it uses of the item it plugs into, as the data writes it (`[8]`). */
     val capacity: String = "",
+    /** What the item asks the player to choose when bought: "skill" (one of the character's active skills), "text" (a few words), or "" for nothing. */
+    val choice: String = "",
 )
 
 /**

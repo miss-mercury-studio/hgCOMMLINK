@@ -44,7 +44,7 @@ data class SheetSections(
         val takesWare: Boolean = false, val capacityUsed: Double = 0.0, val capacityTotal: Double = 0.0, val ware: List<DroneWareLine> = emptyList(),
         /** For a limb: its Strength (the drone's Body, or the upgrade's rating) and Agility (the drone's Pilot, or the upgrade's rating). */
         val strength: Int = 0, val agility: Int = 0)
-    data class DroneWareLine(val guid: String, val name: String, val category: String, val rating: Int, val capacity: String)
+    data class DroneWareLine(val guid: String, val name: String, val category: String, val rating: Int, val capacity: String, val extra: String = "")
     data class VehicleLine(val name: String, val category: String, val stats: String, val guid: String = "", val mods: List<String> = emptyList(),
         /** Each mod and each piece of gear on it, for the vehicle's own sheet. */
         val modLines: List<VehicleModLine> = emptyList(), val gearLines: List<GearPartLine> = emptyList(),
@@ -128,7 +128,7 @@ data class SheetSections(
                             takesWare = takes,
                             capacityUsed = m.child("cyberwares")?.children("cyberware").orEmpty().sumOf { Regex("""^\[([0-9.]+)\]$""").find(it.t("capacity"))?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0 },
                             capacityTotal = m.t("capacity").toDoubleOrNull() ?: 0.0,
-                            ware = m.child("cyberwares")?.children("cyberware").orEmpty().map { w -> DroneWareLine(w.t("guid"), w.t("name"), w.t("category"), w.n("rating"), w.t("capacity")) },
+                            ware = m.child("cyberwares")?.children("cyberware").orEmpty().map { w -> DroneWareLine(w.t("guid"), w.t("name"), w.t("category"), w.n("rating"), w.t("capacity"), w.t("extra")) },
                             strength = if (takes) limbFigure(v, m, data, "{STR", "body") else 0, agility = if (takes) limbFigure(v, m, data, "{AGI", "pilot") else 0)
                     },
                     gearLines = v.child("gears")?.children("gear").orEmpty().map { g -> GearPartLine(g.t("guid"), g.t("name"), g.t("qty").removeSuffix(".0"), g.n("rating"), g.t("extra"), !g.t("equipped").equals("False", true)) },

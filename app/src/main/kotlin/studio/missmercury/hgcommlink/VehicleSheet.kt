@@ -51,7 +51,7 @@ internal fun VehicleSheet(
                             "STR ${m.strength}" to Quicksilver, "AGI ${m.agility}" to Quicksilver,
                         ))
                         m.ware.forEach { w ->
-                            CardTitle(if (w.rating > 0) "${w.name} ${w.rating}" else w.name, trailing = w.capacity.takeIf { it.isNotBlank() }, bold = false)
+                            CardTitle((if (w.rating > 0) "${w.name} ${w.rating}" else w.name) + (if (w.extra.isNotBlank()) " (${w.extra})" else ""), trailing = w.capacity.takeIf { it.isNotBlank() }, bold = false)
                             val wareSold = sell(w.guid, w.name)
                             val wareGone = remove(w.guid)
                             if (w.guid.isNotEmpty() && (wareSold != null || wareGone != null)) CardActions {

@@ -348,6 +348,10 @@ fun DroneWareDialog(modGuid: String, partName: String, capacityLeft: Double, vm:
         val hasRating = o.maxRating > 0
         val low = maxOf(o.minRating, 1)
         var rating by remember(o.id) { mutableStateOf(if (hasRating) low.toString() else "") }
+        // Ware that asks for a choice: which of your skills, or a few words. Saved with the item, as desktop Chummer does.
+        var choice by remember(o.id) { mutableStateOf("") }
+        val skills = remember(o.id) { if (o.choice == "skill") vm.droneWareSkills() else emptyList() }
+        val choiceOk = when (o.choice) { "skill" -> skills.any { it.equals(choice.trim(), true) }; "text" -> choice.isNotBlank(); else -> true }
         val r = if (hasRating) rating.toIntOrNull()?.coerceIn(minOf(low, o.maxRating), o.maxRating) else null
         val cost = vm.droneWareCost(modGuid, o.id, r)
         val have = nuyen.toDoubleOrNull() ?: 0.0
@@ -356,6 +360,8 @@ fun DroneWareDialog(modGuid: String, partName: String, capacityLeft: Double, vm:
         TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (hasRating) NumberStepper("Rating", rating, { rating = it }, min = low, max = o.maxRating)
+                if (o.choice == "skill") WhatFor("which of your skills", choice, skills) { choice = it }
+                if (o.choice == "text") WhatFor("what it is for", choice, emptyList()) { choice = it }
                 Text(
                     if (n > 0) "Uses ${chummer.core.engine.GearStacks.format(n)} of the part's capacity; ${chummer.core.engine.GearStacks.format(capacityLeft)} left." else "Uses no capacity.",
                     style = MaterialTheme.typography.labelSmall, color = if (fits) MutedSilver else DrainAmber,
@@ -366,7 +372,7 @@ fun DroneWareDialog(modGuid: String, partName: String, capacityLeft: Double, vm:
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TerminalButton("Cancel", close, Modifier.weight(1f))
-                    TerminalButton("Buy", { close(); chosen = null; vm.buyDroneWare(modGuid, o.id, r); onDismiss() }, Modifier.weight(1f), filled = true, enabled = cost != null && cost <= have && fits)
+                    TerminalButton("Buy", { close(); chosen = null; vm.buyDroneWare(modGuid, o.id, r, choice.trim()); onDismiss() }, Modifier.weight(1f), filled = true, enabled = cost != null && cost <= have && fits && choiceOk)
                 }
             }
         }
