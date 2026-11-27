@@ -8,7 +8,7 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ### Added
 - **Vehicles and drones have their own sheet.** Tap a vehicle on Gear to see its mods and gear, take off or sell what you added, or sell the whole vehicle.
-- **Drone arms and legs take cyberware.** Open the drone, tap + Ware on a limb, and pick from what is made for that limb. It uses the limb's capacity and costs nuyen only, and it belongs to the drone, not your character's essence.
+- **Drone arms and legs take cyberware.** Open the drone, tap + Ware on a limb, and pick from what is made for that limb. It uses the limb's capacity and costs nuyen only, and it belongs to the drone, not your character's essence. Each limb shows its Strength (the drone's Body) and Agility (its Pilot), which Customized Strength and Agility raise up to double.
 - **Buy mods and gear for a vehicle or drone.** Only mods that fit that vehicle are offered, priced from its own figures, with the mod slots they use.
 
 ### Changed

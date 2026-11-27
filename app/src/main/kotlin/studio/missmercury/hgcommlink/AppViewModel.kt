@@ -368,7 +368,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
     /** The cyberware that fits this drone arm or leg. */
     fun droneWareOptions(modGuid: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).droneWareOptions(modGuid) }.orEmpty()
-    fun droneWareCost(id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).droneWareCost(id, rating) }
+    fun droneWareCost(modGuid: String, id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).droneWareCost(modGuid, id, rating) }
     fun buyDroneWare(modGuid: String, id: String, rating: Int?) {
         var why: String? = null
         editCareer("Fitted to the drone", "Cannot fit that", { why }) { adv, _ -> why = adv.droneWareBlockReason(modGuid, id, rating); adv.buyDroneWare(modGuid, id, rating) != null }

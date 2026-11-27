@@ -41,7 +41,9 @@ data class SheetSections(
     /** A mod on a vehicle. [included] ones came with it (already paid, cannot be taken off); [slots] is what it uses. */
     data class VehicleModLine(val guid: String, val name: String, val rating: Int, val included: Boolean, val slots: Int,
         /** For a drone arm or leg: whether it takes cyberware, the capacity used and in all, and the ware in it. */
-        val takesWare: Boolean = false, val capacityUsed: Double = 0.0, val capacityTotal: Double = 0.0, val ware: List<DroneWareLine> = emptyList())
+        val takesWare: Boolean = false, val capacityUsed: Double = 0.0, val capacityTotal: Double = 0.0, val ware: List<DroneWareLine> = emptyList(),
+        /** For a limb: its Strength (the drone's Body, or the upgrade's rating) and Agility (the drone's Pilot, or the upgrade's rating). */
+        val strength: Int = 0, val agility: Int = 0)
     data class DroneWareLine(val guid: String, val name: String, val category: String, val rating: Int, val capacity: String)
     data class VehicleLine(val name: String, val category: String, val stats: String, val guid: String = "", val mods: List<String> = emptyList(),
         /** Each mod and each piece of gear on it, for the vehicle's own sheet. */
@@ -122,7 +124,8 @@ data class SheetSections(
                             takesWare = takes,
                             capacityUsed = m.child("cyberwares")?.children("cyberware").orEmpty().sumOf { Regex("""^\[([0-9.]+)\]$""").find(it.t("capacity"))?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0 },
                             capacityTotal = m.t("capacity").toDoubleOrNull() ?: 0.0,
-                            ware = m.child("cyberwares")?.children("cyberware").orEmpty().map { w -> DroneWareLine(w.t("guid"), w.t("name"), w.t("category"), w.n("rating"), w.t("capacity")) })
+                            ware = m.child("cyberwares")?.children("cyberware").orEmpty().map { w -> DroneWareLine(w.t("guid"), w.t("name"), w.t("category"), w.n("rating"), w.t("capacity")) },
+                            strength = if (takes) limbFigure(v, m, data, "{STR", "body") else 0, agility = if (takes) limbFigure(v, m, data, "{AGI", "pilot") else 0)
                     },
                     gearLines = v.child("gears")?.children("gear").orEmpty().map { g -> GearPartLine(g.t("guid"), g.t("name"), g.t("qty").removeSuffix(".0"), g.n("rating"), g.t("extra"), !g.t("equipped").equals("False", true)) },
                     slotsUsed = VehicleFormula.slots(v).first, slotsTotal = VehicleFormula.slots(v).second,
@@ -142,6 +145,12 @@ data class SheetSections(
             }
             return SheetSections(sets, weapons, wares, gear, vehicles, contacts, lifestyles, arts)
         }
+
+        /** A limb's Strength or Agility: the rating of the upgrade that sets it (its data entry's limits name [marker]), else the drone's [base] figure. */
+        private fun limbFigure(vehicle: Element, mod: Element, data: GameData?, marker: String, base: String): Int =
+            mod.child("cyberwares")?.children("cyberware").orEmpty().firstOrNull { w ->
+                data?.get(w.t("sourceid"))?.element?.let { (it.child("minrating")?.textContent.orEmpty() + it.child("rating")?.textContent.orEmpty()).contains(marker) } == true
+            }?.n("rating") ?: vehicle.n(base)
 
         private fun capacityLeft(c: CharacterFile, data: GameData?, a: Element): Double? {
             if (data == null || a.t("armorcapacity").isBlank() || a.t("armorcapacity") == "0") return null

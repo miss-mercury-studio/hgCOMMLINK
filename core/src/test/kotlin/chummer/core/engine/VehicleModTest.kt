@@ -244,8 +244,8 @@ class VehicleModTest {
         println("ARM ${armNames.size} LEG ${legNames.size}")
         assertTrue("Cyberarm Gyromount" in armNames && "Cyberarm Gyromount" !in legNames)
         assertTrue(legNames.any { it == "Digigrade Legs" || it.contains("Foot") || it.contains("Skates") })
-        assertTrue("the limb's attribute upgrades are left out", ed.wareOptions(arm).none { data[it.id]!!.element.child("rating")?.textContent.orEmpty().contains("{") })
-        assertTrue("only ware the data names for the part", ed.wareOptions(arm).all { data[it.id]!!.element.child("required")?.child("parentdetails") != null })
+        assertTrue("only the Strength and Agility upgrades have limits that name the limb", ed.wareOptions(arm).filter { data[it.id]!!.element.child("rating")?.textContent.orEmpty().contains("{") }.all { it.name.contains("Strength") || it.name.contains("Agility") })
+        assertTrue("only ware the data names for the part, and the two attribute upgrades", ed.wareOptions(arm).all { data[it.id]!!.element.child("required")?.child("parentdetails") != null || it.name.contains("Strength") || it.name.contains("Agility") })
         assertTrue("nothing made for no part in particular", "Datajack" !in armNames && "Obvious Full Arm" !in armNames)
         assertTrue("every option is of a category the part lists", ed.wareOptions(arm).all { it.category in setOf("Bodyware", "Headware", "Cosmetic Enhancement", "Cyberlimb", "Cyberlimb Enhancement", "Cyberlimb Accessory", "Cyber Implant Weapon") })
     }
@@ -315,5 +315,38 @@ class VehicleModTest {
         assertEquals(15.0, line.capacityTotal, 0.001); assertEquals(8.0, line.capacityUsed, 0.001)
         assertEquals(listOf("Cyberarm Gyromount"), line.ware.map { it.name })
         assertTrue(v.modLines.first { it.name == "Rigger Interface" }.takesWare.not())
+    }
+
+    @Test
+    fun aDroneLimbStartsAtTheDronesBodyAndPilotAndCanBeUpgradedToDoubleThat() {
+        val (c, guid, log) = career("Saeder-Krupp Direktionssekretar")   // Body 4, Pilot 4
+        val adv = CareerAdvancement(c, data, settings)
+        val arm = modGuid(c, guid, "Drone Arm")
+        val ed = VehicleEditor(c, data)
+        assertEquals(4, ed.limbFigure(arm, "STR")); assertEquals(4, ed.limbFigure(arm, "AGI"))
+        val agi = adv.droneWareOptions(arm).first { it.name == "Customized Agility" }
+        assertEquals(5, agi.minRating); assertEquals(8, agi.maxRating)
+        // Customized Agility is priced from the limb's own figure: 4 to 6 is two steps at ¥5,000.
+        assertEquals(10000.0, adv.droneWareCost(arm, agi.id, 6)!!, 0.001)
+        assertEquals("above the cap of double the base", 20000.0, adv.droneWareCost(arm, agi.id, 12)!!, 0.001)
+        val start = log.nuyen
+        val ware = adv.buyDroneWare(arm, agi.id, 6)
+        assertNotNull(ware)
+        assertEquals(start - 10000.0, log.nuyen, 0.01)
+        assertEquals(6, ed.limbFigure(arm, "AGI")); assertEquals(4, ed.limbFigure(arm, "STR"))
+        // It uses no capacity, and it is offered once: Strength still can be, Agility no longer.
+        assertEquals(0.0, ed.wareCapacity(arm)!!.second, 0.001)
+        val names = adv.droneWareOptions(arm).map { it.name }
+        assertTrue("Customized Agility" !in names && "Cyberlimb Customization, Agility (2050)" !in names)
+        assertTrue("Customized Strength" in names)
+        // The other arm is its own limb.
+        assertEquals(4, ed.limbFigure(modGuid(c, guid, "Drone Arm", 1), "AGI"))
+        // The sheet shows both figures.
+        val v = SheetSections.read(c, emptyList(), EssenceEngine(ImprovementSet(Improvement.parseAll(c.root), true), data, true, 2, false), data).vehicles.first { it.guid == guid }
+        val line = v.modLines.first { it.guid == arm }
+        assertEquals(4, line.strength); assertEquals(6, line.agility)
+        // Selling it takes the limb back to the base.
+        assertEquals(5000.0, adv.sellPurchase(ware!!, 50)!!, 0.01)
+        assertEquals(4, ed.limbFigure(arm, "AGI"))
     }
 }

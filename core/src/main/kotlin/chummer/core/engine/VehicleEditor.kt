@@ -203,33 +203,61 @@ class VehicleEditor(private val file: CharacterFile, private val data: DataPack)
 
     private fun wareUsed(mod: Element) = mod.child("cyberwares")?.children("cyberware").orEmpty().sumOf { capacityNeed(it.text("capacity").orEmpty()) }
 
+    private fun vehicleOfMod(mod: Element): Element? = mod.parentNode?.parentNode as? Element
+
+    /** Which limb attribute an entry sets ("STR" or "AGI"), for the Customized Strength and Agility upgrades whose limits are the limb's own figures; null for other ware. */
+    private fun upgradeStat(entry: Element): String? {
+        val text = entry.child("minrating")?.textContent.orEmpty() + entry.child("rating")?.textContent.orEmpty()
+        return when { "{STR" in text -> "STR"; "{AGI" in text -> "AGI"; else -> null }
+    }
+
+    /**
+     * A drone limb's base figures: Strength is the drone's Body and Agility its Pilot. An upgrade then raises the figure up to double the base, so
+     * Customized Agility on a Pilot 4 drone is rated from 5 to 8 (and the rating is the new Agility).
+     */
+    fun limbBase(vehicle: Element, stat: String): Int = VehicleFormula.figure(vehicle, if (stat == "STR") "body" else "pilot").toInt()
+
+    private fun upgradeRange(vehicle: Element, entry: Element): Pair<Int, Int>? =
+        upgradeStat(entry)?.let { limbBase(vehicle, it) }?.let { base -> (base + 1) to (base * 2) }
+
+    /** The stats ("STR", "AGI") that already have an upgrade in this mod. */
+    private fun upgradedStats(mod: Element): Set<String> =
+        mod.child("cyberwares")?.children("cyberware").orEmpty().mapNotNull { w -> w.text("sourceid")?.trim()?.let { data[it]?.element }?.let(::upgradeStat) }.toSet()
+
     /**
      * The cyberware that may go into this mod: entries of the categories the mod lists as subsystems that name this part in their `required` parent
-     * details (so a Cyberarm Gyromount is offered to an arm and not a leg) and are not `forbidden` for it. Left out: items that need a choice made first, items that plug into other
-     * ware, and the limb attribute upgrades, whose limits depend on the limb's own Agility and Strength, which a drone limb has not been given here.
-     * [WareOption.cost] is the Standard grade price at the lowest rating; the drone has no essence, so [WareOption.essence] is null.
+     * details (so a Cyberarm Gyromount is offered to an arm and not a leg) and are not `forbidden` for it. Also the Customized Strength and Agility
+     * upgrades, once for each, at the limb's own limits (see [limbBase]). Left out: items that need a choice made first and items that plug into other
+     * ware. [WareOption.cost] is the Standard grade price at the lowest rating; the drone has no essence, so [WareOption.essence] is null.
      */
     fun wareOptions(modGuid: String): List<WareOption> {
         val mod = modNode(modGuid) ?: return emptyList()
+        val vehicle = vehicleOfMod(mod) ?: return emptyList()
         val entry = modEntryOf(mod) ?: return emptyList()
         val allowed = subsystemsOf(entry)
         if (allowed.isEmpty()) return emptyList()
         val ed = CyberwareEditor(file, data)
+        val have = upgradedStats(mod)
         return data.byId.entries.filter { it.value.file == "cyberware.xml" && it.value.element.tagName == "cyberware" }.filter { (_, e) ->
             val w = e.element
-            if (w.child("category")?.textContent?.trim() !in allowed || CyberwareEditor.problem(w) != null) return@filter false
+            if (w.child("category")?.textContent?.trim() !in allowed) return@filter false
+            val stat = upgradeStat(w)
+            if (stat != null) {
+                // An attribute upgrade plugs into a limb (`requireparent`); here the part is the limb, once per attribute.
+                val (min, max) = upgradeRange(vehicle, w)!!
+                return@filter w.child("forced") == null && stat !in have && max >= min
+            }
+            if (CyberwareEditor.problem(w) != null) return@filter false
             val forbidden = w.child("forbidden")?.child("parentdetails")
             if (forbidden != null && WeaponFilter.passes(entry, forbidden)) return@filter false
             // Only ware the data names for this part. The category list alone would let a Datajack or an "Obvious Full Arm" into a drone's arm, since those
             // entries make no demand of their parent; the ones made for a drone limb say "Drone Arm" or "Drone Leg".
             val required = w.child("required")?.child("parentdetails") ?: return@filter false
-            if (!WeaponFilter.passes(entry, required)) return@filter false
-            // The attribute upgrades name the limb's own figures in their rating limits.
-            !((w.child("minrating")?.textContent.orEmpty() + w.child("rating")?.textContent.orEmpty()).contains("{"))
+            WeaponFilter.passes(entry, required)
         }.map { (id, e) ->
             val w = e.element
             fun t(tag: String) = w.child(tag)?.textContent?.trim().orEmpty()
-            val (min, max) = ed.range(w, null)
+            val (min, max) = upgradeRange(vehicle, w) ?: ed.range(w, null)
             val r = if (max > 0) maxOf(min, 1) else 0
             WareOption(id, t("name"), t("category"), false, CyberwareEditor.formula(t("cost"), r, min), null, t("avail"), min, max, "", null, emptyList(), capacity = t("capacity"))
         }.filter { it.name.isNotEmpty() }.sortedWith(compareBy({ it.category }, { it.name.lowercase() }))
@@ -244,11 +272,11 @@ class VehicleEditor(private val file: CharacterFile, private val data: DataPack)
         return if (used + need > total + 1e-9) "not enough capacity" else null
     }
 
-    /** The Standard grade price of this ware at [rating]; null when the entry is unknown or its formula cannot be read. */
-    fun wareCost(entryId: String, rating: Int?): Double? {
+    /** The Standard grade price of this ware in this mod at [rating]; null when the entry or mod is unknown or its formula cannot be read. */
+    fun wareCost(modGuid: String, entryId: String, rating: Int?): Double? {
+        val mod = modNode(modGuid) ?: return null
         val w = data[entryId]?.element?.takeIf { it.tagName == "cyberware" } ?: return null
-        val ed = CyberwareEditor(file, data)
-        val (min, max) = ed.range(w, null)
+        val (min, max) = vehicleOfMod(mod)?.let { upgradeRange(it, w) } ?: CyberwareEditor(file, data).range(w, null)
         val r = if (max > 0) (rating ?: maxOf(min, 1)).coerceIn(maxOf(min, 1), max) else 0
         return CyberwareEditor.formula(w.child("cost")?.textContent.orEmpty(), r, min)
     }
@@ -259,14 +287,24 @@ class VehicleEditor(private val file: CharacterFile, private val data: DataPack)
         val mod = modNode(modGuid)!!
         val w = data[entryId]!!.element
         val ed = CyberwareEditor(file, data)
-        val (min, max) = ed.range(w, null)
+        val (min, max) = vehicleOfMod(mod)?.let { upgradeRange(it, w) } ?: ed.range(w, null)
         val chosen = if (max > 0) (rating ?: maxOf(min, 1)).coerceIn(maxOf(min, 1), max) else 0
         val guid = UUID.randomUUID().toString()
         val g = ed.wareElement(entryId, w, guid, "Standard", chosen, max > 0, asDefault = false, parentGuid = null)
+        // An attribute upgrade's limits name the limb's own figures ("MinimumAGI"); on a drone they are worked out here, so save the numbers.
+        if (vehicleOfMod(mod)?.let { upgradeRange(it, w) } != null) { g.child("minrating")?.textContent = min.toString(); g.child("maxrating")?.textContent = max.toString() }
         val list = mod.child("cyberwares") ?: el("cyberwares").also { mod.appendChild(it) }
         g.appendChild(el("sortorder", list.children("cyberware").size.toString()))
         list.appendChild(g)
         return guid
+    }
+
+    /** A limb's Strength or Agility ("STR" or "AGI"): its base, or the rating of the upgrade fitted to it. */
+    fun limbFigure(modGuid: String, stat: String): Int? {
+        val mod = modNode(modGuid) ?: return null
+        val vehicle = vehicleOfMod(mod) ?: return null
+        val up = mod.child("cyberwares")?.children("cyberware").orEmpty().firstOrNull { w -> w.text("sourceid")?.trim()?.let { data[it]?.element }?.let(::upgradeStat) == stat }
+        return up?.text("rating")?.trim()?.toIntOrNull() ?: limbBase(vehicle, stat)
     }
 
     /** Take ware out of a drone's mod. */

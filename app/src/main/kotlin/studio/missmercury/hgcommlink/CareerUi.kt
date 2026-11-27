@@ -349,7 +349,7 @@ fun DroneWareDialog(modGuid: String, partName: String, capacityLeft: Double, vm:
         val low = maxOf(o.minRating, 1)
         var rating by remember(o.id) { mutableStateOf(if (hasRating) low.toString() else "") }
         val r = if (hasRating) rating.toIntOrNull()?.coerceIn(minOf(low, o.maxRating), o.maxRating) else null
-        val cost = vm.droneWareCost(o.id, r)
+        val cost = vm.droneWareCost(modGuid, o.id, r)
         val have = nuyen.toDoubleOrNull() ?: 0.0
         val n = need(o)
         val fits = n <= capacityLeft + 1e-9

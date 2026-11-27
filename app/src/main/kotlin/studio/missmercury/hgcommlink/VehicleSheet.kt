@@ -45,7 +45,10 @@ internal fun VehicleSheet(
                     // A mod the vehicle came with is part of it and cannot be taken off.
                     // A drone's arm or leg takes cyberware: what is in it, the capacity left, and adding more. It is the drone's, not the character's.
                     if (m.takesWare) {
-                        CardTags(listOf("Capacity ${GearStacks.format(m.capacityUsed)} / ${GearStacks.format(m.capacityTotal)}" to (if (m.capacityUsed > m.capacityTotal) DrainAmber else PhosphorGreen)))
+                        CardTags(listOf(
+                            "Capacity ${GearStacks.format(m.capacityUsed)} / ${GearStacks.format(m.capacityTotal)}" to (if (m.capacityUsed > m.capacityTotal) DrainAmber else PhosphorGreen),
+                            "STR ${m.strength}" to Quicksilver, "AGI ${m.agility}" to Quicksilver,
+                        ))
                         m.ware.forEach { w ->
                             CardTitle(if (w.rating > 0) "${w.name} ${w.rating}" else w.name, trailing = w.capacity.takeIf { it.isNotBlank() }, bold = false)
                             val wareSold = sell(w.guid, w.name)

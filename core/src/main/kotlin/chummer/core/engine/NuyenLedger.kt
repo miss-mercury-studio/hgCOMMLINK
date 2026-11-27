@@ -30,8 +30,8 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
             val budget = settings.evaluate("chargenkarmatonuyenexpression", mapOf("Karma" to karma.toDouble(), "PriorityNuyen" to priority), "{Karma} * 2000 + {PriorityNuyen}")
             val unreadable = ArrayList<String>()
             val pack = data as? DataPack
-            fun formula(text: String, rating: Int, what: String): Double {
-                val v = CyberwareEditor.formula(text, rating)
+            fun formula(text: String, rating: Int, what: String, minRating: Int = 0): Double {
+                val v = CyberwareEditor.formula(text, rating, minRating)
                 if (v == null) unreadable += what
                 return v ?: 0.0
             }
@@ -77,7 +77,8 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
                     ?.child("cost")?.textContent?.trim()?.toDoubleOrNull() ?: 1.0
             }
             fun ware(w: Element): Double {
-                var total = formula(w.text("cost").orEmpty(), num(w, "rating"), w.text("name").orEmpty()) * gradeMultiplier(w)
+                // The lowest rating, for prices that count from it ("Rating - MinRating + 1"): a stored number, as a drone limb's upgrade has.
+                var total = formula(w.text("cost").orEmpty(), num(w, "rating"), w.text("name").orEmpty(), minRating = num(w, "minrating")) * gradeMultiplier(w)
                 for (child in w.child("children")?.children("cyberware").orEmpty()) total += ware(child)
                 return total + gearsIn(w)
             }
