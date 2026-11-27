@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row as LayoutRow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -130,6 +132,26 @@ private fun WhatFor(label: String, value: String, choices: List<String>, onChang
         TerminalField(value, onChange, label)
         val shown = choices.filter { value.isBlank() || (it.contains(value, ignoreCase = true) && !it.equals(value, ignoreCase = true)) }.take(8)
         if (shown.isNotEmpty()) ChoiceChips("Suggestions", shown.map { it to it }, null, onChange)
+    }
+}
+
+/** Pick one of [choices] from a list that narrows as you type. [selected] is the choice made so far, shown marked. */
+@Composable
+private fun FilteredChoiceList(label: String, choices: List<String>, selected: String, onPick: (String) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    val shown = choices.filter { query.isBlank() || it.contains(query.trim(), ignoreCase = true) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        TerminalField(query, { query = it }, "$label (${shown.size})")
+        Column(Modifier.fillMaxWidth().heightIn(max = 240.dp).border(1.dp, TerminalGrid).verticalScroll(rememberScrollState())) {
+            shown.forEach { c ->
+                val on = c.equals(selected, ignoreCase = true)
+                Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { onPick(c) }.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+                    Text(if (on) "> $c" else c, color = if (on) PhosphorGreen else MaterialTheme.colorScheme.onSurface)
+                }
+                Hairline(color = TerminalGrid.copy(alpha = 0.6f))
+            }
+            if (shown.isEmpty()) Text("No match.", Modifier.padding(12.dp), color = MutedSilver)
+        }
     }
 }
 
@@ -360,7 +382,7 @@ fun DroneWareDialog(modGuid: String, partName: String, capacityLeft: Double, vm:
         TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (hasRating) NumberStepper("Rating", rating, { rating = it }, min = low, max = o.maxRating)
-                if (o.choice == "skill") WhatFor("which of your skills", choice, skills) { choice = it }
+                if (o.choice == "skill") FilteredChoiceList("search your skills", skills, choice) { choice = it }
                 if (o.choice == "text") WhatFor("what it is for", choice, emptyList()) { choice = it }
                 Text(
                     if (n > 0) "Uses ${chummer.core.engine.GearStacks.format(n)} of the part's capacity; ${chummer.core.engine.GearStacks.format(capacityLeft)} left." else "Uses no capacity.",
