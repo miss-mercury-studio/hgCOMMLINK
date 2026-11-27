@@ -54,6 +54,7 @@ class VehicleModTest {
         val names = options.map { it.name }
         assertTrue("no hidden mods", "Speakers" !in names && "Bathroom" !in names)
         assertTrue("no weapon mounts here (they are not a plain mod)", names.none { it.endsWith("Weapon Mount (Drone)") })
+        assertTrue("no weapon mount add-ons or ammo bins here (they belong to a mount)", names.none { it.endsWith("Weapon Mount Add-on (Drone)") || it == "Ammo Bin" })
         assertTrue("a mod for one named vehicle is not offered to another", "Tracked Propulsion" !in names && "Signature Dampening" !in names)
         assertTrue("a general mod is offered", "Off-Road Tires" in names || "Rigger Interface" in names || options.any { it.category == "All" })
     }

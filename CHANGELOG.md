@@ -6,6 +6,9 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ## [Unreleased]
 
+### Changed
+- **Weapon mount add-ons are no longer offered as vehicle mods.** Blow-Away Panel, Pop-Out, the Expanded Ammunition Bays and the Ammo Bin belong to a weapon mount, which the app cannot build yet, and some are priced from the mount.
+
 ## [0.3.0] - 2026-11-27
 
 ### Added
