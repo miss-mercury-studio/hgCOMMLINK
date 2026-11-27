@@ -45,7 +45,7 @@ Requirements: JDK 17, the Android SDK (compileSdk 36, minSdk 31), and a local ch
    ```
    ./gradlew -Pchummer.src=/path/to/chummer5a :core:test
    ```
-   Some tests also read example characters through the `chummer.reference` property and skip or fail without them.
+   Some tests also read example characters through the `chummer.reference` property and skip or fail without them. All test modes and CI workflows are described in [docs/TESTING.md](docs/TESTING.md).
 
 Install the debug APK on a device, then open or import a `.chum5` file, or create a new character from the character list.
 
