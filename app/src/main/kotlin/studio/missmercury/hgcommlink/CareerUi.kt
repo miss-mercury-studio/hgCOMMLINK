@@ -331,7 +331,7 @@ fun DroneWareDialog(modGuid: String, partName: String, capacityLeft: Double, vm:
                 listOfNotNull(
                     o.category, if (n > 0) "uses ${chummer.core.engine.GearStacks.format(n)}" else null,
                     o.cost?.let { (if (o.maxRating > 1) "from ¥" else "¥") + formatNuyen(it) } ?: "price not readable yet",
-                    o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + runCatching { chummer.core.engine.GearEditor.availText(it, maxOf(o.minRating, 1)) }.getOrDefault(it) },
+                    o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + runCatching { chummer.core.engine.GearEditor.availText(it.replace("MinRating", o.minRating.toString()), maxOf(o.minRating, 1)) }.getOrDefault(it) },
                     if (n > capacityLeft + 1e-9) "too big for what is left" else null,
                 ).joinToString("  ·  "),
                 o.category, warn = o.cost == null || n > capacityLeft + 1e-9,
