@@ -6,6 +6,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.Assume.assumeFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -37,6 +38,8 @@ class GameDataTest {
     /** The data this test run reads is one of the supported data sets, and the app computes the same fingerprint as tools/data_sets.py. */
     @Test
     fun theDataUnderTestIsOnTheSupportedList() {
+        // A nightly watched for drift is new data nobody has listed yet, so there is nothing to check; the pinned data and every release are still checked.
+        assumeFalse("a drift run tests a nightly, which is never on the supported list", System.getProperty("chummer.driftRun") == "true")
         val fp = GameDataFingerprint.ofDirectory(File(System.getProperty("chummer.src"), "Chummer/data"))
         assertTrue("The Chummer data under test ($fp) is not in chummer-supported.txt. Run the core tests on it with tools/data_sets.py, then list it.", supported.any { it.fingerprint == fp })
     }

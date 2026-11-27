@@ -20,6 +20,8 @@ tasks.test {
     providers.gradleProperty("chummer.submitted").orNull?.takeIf { it.isNotBlank() }?.let { inputs.dir(it).optional() }
     // Set to true to add the open data set's bonus shapes to bonus-shapes.txt (see DataSetDriftTest).
     systemProperty("chummer.updateShapes", providers.gradleProperty("chummer.updateShapes").getOrElse("false"))
+    // Set to true when the data under test is a Chummer nightly being watched for drift, which is never on chummer-supported.txt (see GameDataTest).
+    systemProperty("chummer.driftRun", providers.gradleProperty("chummer.driftRun").getOrElse("false"))
     testLogging { showStandardStreams = true }
 
     // -Pchummer.publicOnly=true runs only the tests that need nothing but the public chummer5a checkout (what CI can run).

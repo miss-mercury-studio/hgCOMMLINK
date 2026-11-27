@@ -73,7 +73,7 @@ jobs:
           zip=$(ls "$RUNNER_TEMP"/zip/*.zip | head -1)
           echo "ZIP=$zip" >> "$GITHUB_ENV"
           # A failing test is the result being reported, not a failure of this workflow.
-          python3 tools/data_sets.py test --zip "$zip" --checkout ../chummer5a -- -Pchummer.publicOnly=true || true
+          python3 tools/data_sets.py test --zip "$zip" --checkout ../chummer5a -- -Pchummer.publicOnly=true -Pchummer.driftRun=true || true
 
       - name: Write the report
         if: steps.find.outputs.skip == 'false'

@@ -27,8 +27,6 @@ import data_sets  # noqa: E402
 
 MAX_LISTED = 12          # names listed per file and kind of change
 MAX_BODY = 60000         # GitHub allows 65536 characters in an issue body
-# A nightly is never on the supported list (its data changes daily), so this test always fails on one and says nothing.
-EXPECTED_FAILURES = {("GameDataTest", "theDataUnderTestIsOnTheSupportedList")}
 
 
 def load_data(path):
@@ -140,8 +138,8 @@ def miss_lines(results_dir):
 def cmd_compare(a):
     _, base_failed = junit(a.base)
     _, other_failed = junit(a.other)
-    ignore = lambda rows: {(c, t) for c, t, _ in rows if (c, t) not in EXPECTED_FAILURES}
-    new_fail, fixed = sorted(ignore(other_failed) - ignore(base_failed)), sorted(ignore(base_failed) - ignore(other_failed))
+    keys = lambda rows: {(c, t) for c, t, _ in rows}
+    new_fail, fixed = sorted(keys(other_failed) - keys(base_failed)), sorted(keys(base_failed) - keys(other_failed))
     base_miss, other_miss = miss_lines(a.base), miss_lines(a.other)
     new_miss, gone_miss = sorted(other_miss - base_miss), sorted(base_miss - other_miss)
 
@@ -181,7 +179,6 @@ def parse_state(text):
 def cmd_report(a):
     fingerprint = data_sets.fingerprint_of(a.zip)
     ran, failed = junit(a.results)
-    failed = [f for f in failed if (f[0], f[1]) not in EXPECTED_FAILURES]
     drift = [f for f in failed if f[0] == "DataSetDriftTest"]
     others = [f for f in failed if f[0] != "DataSetDriftTest"]
     changes = diff_files(load_data(a.pin_data), load_data(a.zip))
