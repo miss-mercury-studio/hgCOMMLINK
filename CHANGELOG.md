@@ -26,6 +26,7 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 - **Nuyen shows as money.** A balance like 2702.7799999997 now reads ¥2,702.78, with thousands separators.
 - **An A.I.'s physical attributes show 0.** Strength, Agility, Reaction and Body were showing 1, which also threw off anything worked out from them.
 - **An A.I.'s sheet leaves off attributes it cannot have.** Strength, Agility, Reaction and Body no longer show as a row of zeros.
+- **Chummer's built-in Full House profile loads its custom data.** Its four stealth errata folders were being skipped, so characters using it could show wrong numbers.
 
 ## [0.2.0] - 2026-11-25
 

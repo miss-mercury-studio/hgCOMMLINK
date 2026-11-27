@@ -33,12 +33,15 @@ class CustomDataLocator(roots: List<File>) {
         }
     }
 
+    private val byName: Map<String, CustomDataDir> = byGuid.values.associateBy { it.name.lowercase() }
+
     /** The enabled folders in load order. Folders that cannot be found are returned in [missing]. */
     fun resolve(refs: List<CustomDataRef>): Resolved {
         val found = ArrayList<CustomDataDir>()
         val missing = ArrayList<CustomDataRef>()
         for (r in refs.filter { it.enabled }.sortedBy { it.order }) {
-            val d = byGuid[r.guid.lowercase()]
+            // Chummer's own built-in profiles (such as Full House) list a folder by its name, not by its id.
+            val d = byGuid[r.guid.lowercase()] ?: byName[r.guid.lowercase()]
             if (d != null) found += d else missing += r
         }
         return Resolved(found, missing)
