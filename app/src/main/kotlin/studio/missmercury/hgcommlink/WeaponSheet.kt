@@ -147,7 +147,12 @@ private fun ClipCard(w: WeaponTotals, c: ClipInfo, canLoad: Boolean, vm: AppView
         CardTags(buildList {
             if (c.active) add("Firing from this" to PhosphorGreen)
             add((if (c.owner.isBlank()) "Main" else c.owner) to MutedSilver)
-            add((if (c.rounds > 0) ammoLabel(c.ammo) else "Empty") to if (c.rounds > 0) Quicksilver else DrainAmber)
+            // Rounds with no ammunition behind them (the ammo item was removed in an older version): say so, and Unload clears it.
+            when {
+                c.rounds <= 0 -> add("Empty" to DrainAmber)
+                c.ammo.isBlank() -> add("Ammo missing" to DrainAmber)
+                else -> add(ammoLabel(c.ammo) to Quicksilver)
+            }
         })
         // How full it is: a bar in the clip's colour.
         val fill = if (c.capacity > 0) (c.rounds.toFloat() / c.capacity).coerceIn(0f, 1f) else 0f

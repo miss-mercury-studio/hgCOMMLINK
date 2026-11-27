@@ -30,8 +30,8 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
             val budget = settings.evaluate("chargenkarmatonuyenexpression", mapOf("Karma" to karma.toDouble(), "PriorityNuyen" to priority), "{Karma} * 2000 + {PriorityNuyen}")
             val unreadable = ArrayList<String>()
             val pack = data as? DataPack
-            fun formula(text: String, rating: Int, what: String): Double {
-                val v = CyberwareEditor.formula(text, rating)
+            fun formula(text: String, rating: Int, what: String, minRating: Int = 0): Double {
+                val v = CyberwareEditor.formula(text, rating, minRating)
                 if (v == null) unreadable += what
                 return v ?: 0.0
             }
@@ -77,27 +77,28 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
                     ?.child("cost")?.textContent?.trim()?.toDoubleOrNull() ?: 1.0
             }
             fun ware(w: Element): Double {
-                var total = formula(w.text("cost").orEmpty(), num(w, "rating"), w.text("name").orEmpty()) * gradeMultiplier(w)
+                // The lowest rating, for prices that count from it ("Rating - MinRating + 1"): a stored number, as a drone limb's upgrade has.
+                var total = formula(w.text("cost").orEmpty(), num(w, "rating"), w.text("name").orEmpty(), minRating = num(w, "minrating")) * gradeMultiplier(w)
                 for (child in w.child("children")?.children("cyberware").orEmpty()) total += ware(child)
                 return total + gearsIn(w)
             }
 
-            /** A price formula that may name the item's own figures: Rating, Body and "Vehicle Cost". */
-            fun vehicleFormula(text: String, rating: Int, body: Int, vehicleCost: Double, what: String): Double {
-                val t = text.trim()
-                val v = if (t.startsWith("FixedValues(")) CyberwareEditor.formula(t, rating)
-                else chummer.core.Expr.evalOrNull(t.replace("Vehicle Cost", "VehicleCost"), mapOf("Rating" to rating.toDouble(), "Body" to body.toDouble(), "VehicleCost" to vehicleCost))
+            /** A mod's price formula may name the vehicle's own figures (Body, Handling, Speed, ...), its Rating and "Vehicle Cost". */
+            fun vehicleFormula(text: String, rating: Int, vehicle: Element, vehicleCost: Double, what: String, slotsText: String = ""): Double {
+                val v = VehicleFormula.cost(text, rating, vehicle, vehicleCost, slotsText)
                 if (v == null) unreadable += what
                 return v ?: 0.0
             }
             fun vehicle(v: Element): Double {
                 val own = formula(v.text("cost").orEmpty(), 0, v.text("name").orEmpty())
-                val body = v.text("body")?.trim()?.substringBefore('/')?.toIntOrNull() ?: 0
                 var total = own
                 for (m in v.child("mods")?.children("mod").orEmpty()) {
-                    if (m.text("included")?.trim() == "True") continue
-                    total += vehicleFormula(m.text("cost").orEmpty(), num(m, "rating"), body, own, m.text("name").orEmpty())
-                    total += gearsIn(m)
+                    // A mod that came with the vehicle is paid for, but ware fitted into it (a drone limb's) is not.
+                    if (m.text("included")?.trim() != "True") {
+                        total += vehicleFormula(m.text("cost").orEmpty(), num(m, "rating"), v, own, m.text("name").orEmpty(), m.text("slots").orEmpty())
+                        total += gearsIn(m)
+                    }
+                    for (cw in m.child("cyberwares")?.children("cyberware").orEmpty()) total += ware(cw)
                 }
                 total += gearsIn(v)
                 for (mount in v.child("weaponmounts")?.children("weaponmount").orEmpty()) {

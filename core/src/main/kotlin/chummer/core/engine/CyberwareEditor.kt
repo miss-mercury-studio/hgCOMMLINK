@@ -13,6 +13,10 @@ import java.util.UUID
 data class WareOption(
     val id: String, val name: String, val category: String, val isBioware: Boolean, val cost: Double?, val essence: Double?, val avail: String,
     val minRating: Int, val maxRating: Int, val forcedGrade: String, val problem: String?, val unsupported: List<String>, val addsToParent: Boolean = false,
+    /** The capacity it uses of the item it plugs into, as the data writes it (`[8]`). */
+    val capacity: String = "",
+    /** What the item asks the player to choose when bought: "skill" (one of the character's active skills), "text" (a few words), or "" for nothing. */
+    val choice: String = "",
 )
 
 /**
@@ -168,35 +172,10 @@ class CyberwareEditor(private val file: CharacterFile, private val data: GameDat
         val forced = d("forcegrade")
         val usedGrade = if (parent != null) parent.text("grade")?.trim().orEmpty().ifEmpty { grade } else if (forced.isNotEmpty()) forced else grade
         val chosen = ratingFor(entry, rating, parent)
-        val g = el("cyberware")
-        fun add(tag: String, text: String? = null) = g.appendChild(el(tag, text))
-        fun flag(tag: String) = if (d(tag).equals("True", true)) "True" else "False"
-        add("guid", guid); add("sourceid", entryId.lowercase()); add("name", d("name")); add("category", d("category"))
-        add("limbslot", d("limbslot")); add("limbslotcount", d("limbslotcount").ifEmpty { "1" }); add("inheritattributes", "False")
-        add("ess", d("ess")); add("capacity", d("capacity")); add("avail", d("avail")); add("cost", if (asDefault) "0" else d("cost")); add("weight", d("weight")); add("source", d("source")); add("page", d("page"))
-        add("parentid", if (asDefault) parentGuid else ""); add("hasmodularmount", d("hasmodularmount")); add("plugsintomodularmount", d("plugsintomodularmount")); add("blocksmounts", d("blocksmounts")); add("forced")
-        add("rating", chosen.toString()); add("minagility", d("minagility").ifEmpty { "3" }); add("minstrength", d("minstrength").ifEmpty { "3" })
-        add("minrating", savedLimit(d("minrating"))); add("maxrating", if (range(entry, parent).second > 0) savedLimit(d("rating")) else ""); add("ratinglabel", "String_Rating"); add("subsystems", d("subsystems"))
-        add("wirelesson", "False"); add("grade", usedGrade); add("location"); add("extra"); add("suite", "False"); add("stolen", "False")
-        add("essdiscount", "0"); add("extraessadditivemultiplier", "0"); add("extraessmultiplicativemultiplier", "1"); add("forcegrade", forced)
-        add("matrixcmfilled", "0"); add("matrixcmbonus", "0"); add("prototypetranshuman", "False")
-        for (tag in listOf("bonus", "pairbonus", "wirelessbonus", "wirelesspairbonus")) {
-            val node = entry.child(tag)
-            g.appendChild(if (node != null && tag != "wirelessbonus" && tag != "wirelesspairbonus") doc.importNode(node, true) else el(tag))
-        }
-        add("improvementsource", if (bio) "Bioware" else "Cyberware")
-        for (tag in listOf("pairinclude", "wirelesspairinclude")) {
-            val node = entry.child(tag)
-            g.appendChild(if (node != null) doc.importNode(node, true) else el(tag))
-        }
-        add("notes"); add("notesColor", NOTES_COLOR); add("discountedcost", "False"); add("addtoparentess", flag("addtoparentess")); add("addtoparentcapacity", flag("addtoparentcapacity"))
-        add("isgeneware", if (entry.child("isgeneware") != null && !d("isgeneware").equals("False", true)) "True" else "False"); add("active", "False"); add("homenode", "False")
-        add("devicerating", d("devicerating")); add("programlimit", d("programs")); add("overclocked", "None"); add("canformpersona", d("canformpersona"))
-        for (tag in listOf("attack", "sleaze", "dataprocessing", "firewall", "attributearray", "modattack", "modsleaze", "moddataprocessing", "modfirewall", "modattributearray")) add(tag, d(tag))
-        add("canswapattributes", "False")
+        val g = wareElement(entryId, entry, guid, usedGrade, chosen, range(entry, parent).second > 0, asDefault, parentGuid)
         val list = if (parent != null) (parent.child("children") ?: el("children").also { parent.appendChild(it) })
         else (root.child("cyberwares") ?: el("cyberwares").also { root.appendChild(it) })
-        add("sortorder", list.children("cyberware").size.toString())
+        g.appendChild(el("sortorder", list.children("cyberware").size.toString()))
         list.appendChild(g)
 
         applyBonus(entry, guid, chosen)
@@ -214,6 +193,43 @@ class CyberwareEditor(private val file: CharacterFile, private val data: GameDat
             add(subId, usedGrade, sub.text("rating")?.trim()?.toIntOrNull(), parentGuid = guid, asDefault = true)
         }
         return guid
+    }
+
+    /**
+     * The saved element for one cyberware entry at a grade and rating, in the layout Chummer writes, not yet placed anywhere (the caller appends it and
+     * adds its `sortorder`). [hasRange] is whether the entry has a rating range here; [asDefault] marks an item that comes free with its parent.
+     */
+    internal fun wareElement(entryId: String, entry: Element, guid: String, usedGrade: String, chosen: Int, hasRange: Boolean, asDefault: Boolean, parentGuid: String?): Element {
+        fun d(tag: String) = entry.child(tag)?.textContent?.trim().orEmpty()
+        val bio = isBio(entry)
+        val forced = d("forcegrade")
+        val g = el("cyberware")
+        fun add(tag: String, text: String? = null) = g.appendChild(el(tag, text))
+        fun flag(tag: String) = if (d(tag).equals("True", true)) "True" else "False"
+        add("guid", guid); add("sourceid", entryId.lowercase()); add("name", d("name")); add("category", d("category"))
+        add("limbslot", d("limbslot")); add("limbslotcount", d("limbslotcount").ifEmpty { "1" }); add("inheritattributes", "False")
+        add("ess", d("ess")); add("capacity", d("capacity")); add("avail", d("avail")); add("cost", if (asDefault) "0" else d("cost")); add("weight", d("weight")); add("source", d("source")); add("page", d("page"))
+        add("parentid", if (asDefault) parentGuid else ""); add("hasmodularmount", d("hasmodularmount")); add("plugsintomodularmount", d("plugsintomodularmount")); add("blocksmounts", d("blocksmounts")); add("forced")
+        add("rating", chosen.toString()); add("minagility", d("minagility").ifEmpty { "3" }); add("minstrength", d("minstrength").ifEmpty { "3" })
+        add("minrating", savedLimit(d("minrating"))); add("maxrating", if (hasRange) savedLimit(d("rating")) else ""); add("ratinglabel", "String_Rating"); add("subsystems", d("subsystems"))
+        add("wirelesson", "False"); add("grade", usedGrade); add("location"); add("extra"); add("suite", "False"); add("stolen", "False")
+        add("essdiscount", "0"); add("extraessadditivemultiplier", "0"); add("extraessmultiplicativemultiplier", "1"); add("forcegrade", forced)
+        add("matrixcmfilled", "0"); add("matrixcmbonus", "0"); add("prototypetranshuman", "False")
+        for (tag in listOf("bonus", "pairbonus", "wirelessbonus", "wirelesspairbonus")) {
+            val node = entry.child(tag)
+            g.appendChild(if (node != null && tag != "wirelessbonus" && tag != "wirelesspairbonus") doc.importNode(node, true) else el(tag))
+        }
+        add("improvementsource", if (bio) "Bioware" else "Cyberware")
+        for (tag in listOf("pairinclude", "wirelesspairinclude")) {
+            val node = entry.child(tag)
+            g.appendChild(if (node != null) doc.importNode(node, true) else el(tag))
+        }
+        add("notes"); add("notesColor", NOTES_COLOR); add("discountedcost", "False"); add("addtoparentess", flag("addtoparentess")); add("addtoparentcapacity", flag("addtoparentcapacity"))
+        add("isgeneware", if (entry.child("isgeneware") != null && !d("isgeneware").equals("False", true)) "True" else "False"); add("active", "False"); add("homenode", "False")
+        add("devicerating", d("devicerating")); add("programlimit", d("programs")); add("overclocked", "None"); add("canformpersona", d("canformpersona"))
+        for (tag in listOf("attack", "sleaze", "dataprocessing", "firewall", "attributearray", "modattack", "modsleaze", "moddataprocessing", "modfirewall", "modattributearray")) add(tag, d(tag))
+        add("canswapattributes", "False")
+        return g
     }
 
     /** Write the improvements an item's bonus grants at [rating]. */

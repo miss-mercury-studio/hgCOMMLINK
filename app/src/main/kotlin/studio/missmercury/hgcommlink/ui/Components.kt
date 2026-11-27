@@ -286,6 +286,36 @@ fun StepButton(label: String, size: Int = 40, color: Color = PhosphorGreen, onCl
     }
 }
 
+/**
+ * A labelled number with a minus and a plus around it, as in "RATING  1 to 6  [−] 3 [+]". Tapping the buttons steps by one within [min] and
+ * [max]; the number can also be typed (a rating of 40 or 500 rounds are quicker that way). [onChange] gets the new text, which may be empty
+ * while typing, so the caller decides what an empty value means. A value outside the range shows in amber. [note] replaces the "min to max" line.
+ */
+@Composable
+fun NumberStepper(label: String, value: String, onChange: (String) -> Unit, min: Int, max: Int, modifier: Modifier = Modifier, note: String? = null, integer: Boolean = true) {
+    val current = value.toDoubleOrNull()
+    fun set(v: Double) {
+        val c = v.coerceIn(min.toDouble(), maxOf(min, max).toDouble())
+        onChange(if (c == Math.rint(c)) c.toLong().toString() else c.toString())
+    }
+    val outside = current != null && (current < min || current > max)
+    Row(modifier.fillMaxWidth().background(SlateHigh).border(1.dp, TerminalGrid), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f).padding(start = 12.dp, top = 6.dp, bottom = 6.dp)) {
+            Text(label.uppercase(), style = MaterialTheme.typography.labelLarge, color = Quicksilver)
+            Text(note ?: "$min to $max", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+        }
+        StepButton("−", 48) { set((current ?: min.toDouble()) - 1) }
+        BasicTextField(
+            value, { text -> onChange(text.filter { it.isDigit() || (!integer && it == '.') }.take(7)) }, singleLine = true,
+            textStyle = MaterialTheme.typography.titleLarge.copy(fontFamily = JetBrainsMono, color = if (outside) DrainAmber else PhosphorGreen, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
+            cursorBrush = SolidColor(PhosphorGreen),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.width(72.dp),
+        )
+        StepButton("+", 48) { set((current ?: (min - 1).toDouble()) + 1) }
+    }
+}
+
 /** A small coloured tag, for marking magic, matrix, bio and so on. */
 @Composable
 fun Tag(text: String, accent: Color = AstralMagenta, modifier: Modifier = Modifier) {

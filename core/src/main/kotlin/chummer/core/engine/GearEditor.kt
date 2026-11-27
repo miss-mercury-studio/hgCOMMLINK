@@ -200,7 +200,7 @@ class GearEditor(private val file: CharacterFile, private val data: GameData, pr
         val siblings = (into ?: root.child("gears"))?.children("gear").orEmpty()
         val added = siblings.first { it.text("guid")?.trim().equals(guid, true) }
         if (!GearStacks.isAmmo(added)) return guid
-        val into = GearStacks.twins(siblings, added).firstOrNull() ?: return guid
+        val into = GearStacks.twins(siblings, added, GearStacks.loadedIds(root)).firstOrNull() ?: return guid
         GearStacks.setQuantity(into, GearStacks.quantity(into) + GearStacks.quantity(added))
         removeGear(guid)
         return into.text("guid")!!.trim()
@@ -209,7 +209,7 @@ class GearEditor(private val file: CharacterFile, private val data: GameData, pr
     /** Fold every identical loose stack into this one, adding their quantities. False when there is none to merge. */
     fun mergeStacks(guid: String): Boolean {
         val target = stack(guid) ?: return false
-        val others = GearStacks.twins(topGear(), target)
+        val others = GearStacks.twins(topGear(), target, GearStacks.loadedIds(root))
         if (others.isEmpty()) return false
         GearStacks.setQuantity(target, GearStacks.quantity(target) + others.sumOf { GearStacks.quantity(it) })
         for (o in others) removeGear(o.text("guid")!!.trim())
@@ -246,6 +246,17 @@ class GearEditor(private val file: CharacterFile, private val data: GameData, pr
             return null
         }
         val item = find(root) ?: return false
+        // Rounds loaded from this item go with it. A clip that still counted them would show rounds of nothing (a loaded clip that reads "Empty").
+        val gone = HashSet<String>()
+        fun collect(e: Element) { e.text("guid")?.trim()?.let { gone += it.lowercase() }; for (c in e.children()) if (c.tagName != "bonus") collect(c) }
+        collect(item)
+        val clipNodes = doc.getElementsByTagName("clip")
+        for (i in 0 until clipNodes.length) {
+            val clip = clipNodes.item(i) as Element
+            if (clip.text("id")?.trim()?.lowercase() in gone) {
+                clip.child("count")?.textContent = "0"; clip.child("location")?.textContent = ""; clip.child("id")?.textContent = "00000000-0000-0000-0000-000000000000"
+            }
+        }
         val imps = root.child("improvements")
         if (imps != null) {
             val ids = HashSet<String>()

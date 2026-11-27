@@ -38,7 +38,20 @@ data class SheetSections(
         val parts: List<GearPartLine> = emptyList(), val pluggable: Boolean = false,
         /** What the item was chosen for (ammunition: the kind of weapon), shown after the name as Chummer does. */
         val extra: String = "")
-    data class VehicleLine(val name: String, val category: String, val stats: String, val guid: String = "", val mods: List<String> = emptyList())
+    /** A mod on a vehicle. [included] ones came with it (already paid, cannot be taken off); [slots] is what it uses. */
+    data class VehicleModLine(val guid: String, val name: String, val rating: Int, val included: Boolean, val slots: Int,
+        /** For a drone arm or leg: whether it takes cyberware, the capacity used and in all, and the ware in it. */
+        val takesWare: Boolean = false, val capacityUsed: Double = 0.0, val capacityTotal: Double = 0.0, val ware: List<DroneWareLine> = emptyList(),
+        /** For a limb: its Strength (the drone's Body, or the upgrade's rating) and Agility (the drone's Pilot, or the upgrade's rating). */
+        val strength: Int = 0, val agility: Int = 0)
+    data class DroneWareLine(val guid: String, val name: String, val category: String, val rating: Int, val capacity: String, val extra: String = "")
+    data class VehicleLine(val name: String, val category: String, val stats: String, val guid: String = "", val mods: List<String> = emptyList(),
+        /** Each mod and each piece of gear on it, for the vehicle's own sheet. */
+        val modLines: List<VehicleModLine> = emptyList(), val gearLines: List<GearPartLine> = emptyList(),
+        /** Mod slots used by mods added to it, and the slots it has. */
+        val slotsUsed: Int = 0, val slotsTotal: Int = 0,
+        /** What fitted mods changed in the figures, "Handling 4 → 5". */
+        val changes: List<String> = emptyList())
     data class ContactLine(val name: String, val type: String, val connection: Int, val loyalty: Int, val notes: String)
     data class LifestyleLine(val name: String, val type: String, val monthly: String, val notes: String, val guid: String = "", val months: String = "")
 
@@ -86,11 +99,12 @@ data class SheetSections(
             val wares = c.augmentations().map { ware(it, false) }
 
             val allGear = c.root.child("gears")?.children("gear").orEmpty()
+            val inClips = GearStacks.loadedIds(c.root)
             val gear = allGear.map { g ->
                 GearLine(
                     g.t("name"), g.t("category"), g.t("qty").removeSuffix(".0"), g.n("rating"),
                     includes(g.child("children")?.children("gear").orEmpty()),
-                    g.t("guid"), g.t("location") == "loaded", GearStacks.twins(allGear, g).isNotEmpty(),
+                    g.t("guid"), g.t("location") == "loaded" || g.t("guid").lowercase() in inClips, GearStacks.twins(allGear, g, inClips).isNotEmpty(),
                     parts = g.child("children")?.children("gear").orEmpty().map { p -> GearPartLine(p.t("guid"), p.t("name"), p.t("qty").removeSuffix(".0"), p.n("rating"), p.t("extra"), !p.t("equipped").equals("False", true)) },
                     pluggable = (g.t("sourceid").takeIf { it.isNotEmpty() }?.let { data?.get(it)?.element } ?: g).let { GearPlugins.accepts(it) },
                     extra = g.t("extra"),
@@ -101,11 +115,25 @@ data class SheetSections(
                 VehicleLine(
                     v.t("name"), v.t("category"),
                     run {
-                        fun fig(on: String, off: String) = if (off.isNotEmpty() && off != v.t(on)) "${v.t(on)}/$off" else v.t(on)
-                        "Handling ${fig("handling", v.t("offroadhandling"))}  Speed ${fig("speed", v.t("offroadspeed"))}  Accel ${fig("accel", v.t("offroadaccel"))}  Body ${v.t("body")}  Armor ${v.t("armor")}  Pilot ${v.t("pilot")}  Sensor ${v.t("sensor")}" +
-                            (v.t("seats").takeIf { it.isNotEmpty() && it != "0" }?.let { "  Seats $it" } ?: "")
+                        // The figures with the fitted mods applied (see VehicleFigures); "4/3" is on-road and off-road.
+                        val t = VehicleFigures.total(v, data)
+                        fun fig(on: String, off: String) = if (t[off] != t[on]) "${t[on]}/${t[off]}" else "${t[on]}"
+                        "Handling ${fig("handling", "offroadhandling")}  Speed ${fig("speed", "offroadspeed")}  Accel ${fig("accel", "offroadaccel")}  Body ${t["body"]}  Armor ${t["armor"]}  Pilot ${t["pilot"]}  Sensor ${t["sensor"]}" +
+                            (t["seats"]?.takeIf { it != 0 }?.let { "  Seats $it" } ?: "")
                     },
                     v.t("guid"), v.child("mods")?.children("mod").orEmpty().map { it.t("name") },
+                    modLines = v.child("mods")?.children("mod").orEmpty().map { m ->
+                        val takes = data?.get(m.t("sourceid"))?.element?.child("subsystems")?.children("subsystem").orEmpty().isNotEmpty()
+                        VehicleModLine(m.t("guid"), m.t("name"), m.n("rating"), m.t("included").equals("True", true), VehicleFormula.slots(m.t("slots"), m.n("rating"), v) ?: 0,
+                            takesWare = takes,
+                            capacityUsed = m.child("cyberwares")?.children("cyberware").orEmpty().sumOf { Regex("""^\[([0-9.]+)\]$""").find(it.t("capacity"))?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0 },
+                            capacityTotal = m.t("capacity").toDoubleOrNull() ?: 0.0,
+                            ware = m.child("cyberwares")?.children("cyberware").orEmpty().map { w -> DroneWareLine(w.t("guid"), w.t("name"), w.t("category"), w.n("rating"), w.t("capacity"), w.t("extra")) },
+                            strength = if (takes) limbFigure(v, m, data, "{STR", "body") else 0, agility = if (takes) limbFigure(v, m, data, "{AGI", "pilot") else 0)
+                    },
+                    gearLines = v.child("gears")?.children("gear").orEmpty().map { g -> GearPartLine(g.t("guid"), g.t("name"), g.t("qty").removeSuffix(".0"), g.n("rating"), g.t("extra"), !g.t("equipped").equals("False", true)) },
+                    slotsUsed = VehicleFormula.slots(v).first, slotsTotal = VehicleFormula.slots(v).second,
+                    changes = VehicleFigures.changes(VehicleFigures.base(v), VehicleFigures.total(v, data)),
                 )
             }
 
@@ -122,6 +150,12 @@ data class SheetSections(
             }
             return SheetSections(sets, weapons, wares, gear, vehicles, contacts, lifestyles, arts)
         }
+
+        /** A limb's Strength or Agility: the rating of the upgrade that sets it (its data entry's limits name [marker]), else the drone's [base] figure. */
+        private fun limbFigure(vehicle: Element, mod: Element, data: GameData?, marker: String, base: String): Int =
+            mod.child("cyberwares")?.children("cyberware").orEmpty().firstOrNull { w ->
+                data?.get(w.t("sourceid"))?.element?.let { (it.child("minrating")?.textContent.orEmpty() + it.child("rating")?.textContent.orEmpty()).contains(marker) } == true
+            }?.n("rating") ?: vehicle.n(base)
 
         private fun capacityLeft(c: CharacterFile, data: GameData?, a: Element): Double? {
             if (data == null || a.t("armorcapacity").isBlank() || a.t("armorcapacity") == "0") return null

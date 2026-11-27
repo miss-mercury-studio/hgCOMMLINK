@@ -133,9 +133,12 @@ private fun WhatFor(label: String, value: String, choices: List<String>, onChang
     }
 }
 
-/** Pick gear, a weapon, armor or a vehicle ([kind]: "gear", "weapon", "armor", "vehicle") from the game data, choose rating and quantity where they apply, and pay. */
+/**
+ * Pick gear, a weapon, armor or a vehicle ([kind]: "gear", "weapon", "armor", "vehicle") from the game data, choose rating and quantity where they apply, and pay.
+ * With a [vehicleGuid], gear is bought for that vehicle and goes in it.
+ */
 @Composable
-fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
+fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, vehicleGuid: String? = null, onDismiss: () -> Unit) {
     class Opt(val id: String, val name: String, val category: String, val cost: Double?, val avail: String, val min: Int, val max: Int, val note: String?, val blocked: Boolean, val ammoFor: List<String> = emptyList(), val askFor: Boolean = false, val choices: List<String> = emptyList())
     val options = remember(kind) {
         when (kind) {
@@ -158,7 +161,7 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
         }
     }
     var chosen by remember { mutableStateOf<Opt?>(null) }
-    PickerSheet("Buy $kind", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "You have ¥$nuyen.", keepOpenFor = { true }, onDismiss = onDismiss)
+    PickerSheet(if (vehicleGuid != null) "Gear for the vehicle" else "Buy $kind", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "You have ¥${money(nuyen)}.", keepOpenFor = { true }, onDismiss = onDismiss)
     chosen?.let { o ->
         val hasRating = o.max > 0
         var rating by remember(o.id) { mutableStateOf(if (hasRating) maxOf(o.min, 1).toString() else "") }
@@ -178,15 +181,15 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
         val have = nuyen.toDoubleOrNull() ?: 0.0
         TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating (${maxOf(o.min, 1)}-${o.max})", keyboardType = KeyboardType.Number)
+                if (hasRating) NumberStepper("Rating", rating, { rating = it }, min = maxOf(o.min, 1), max = o.max)
                 if (o.askFor) WhatFor("which license, or what it is for", whatFor, o.choices) { whatFor = it }
                 if (o.ammoFor.isNotEmpty()) ChoiceChips("Weapon type", o.ammoFor.map { it to it }, weaponType.ifBlank { null }, { weaponType = it })
-                if (kind == "gear") TerminalField(qty, { qty = it.filter { c -> c.isDigit() || c == '.' } }, "quantity", keyboardType = KeyboardType.Number)
+                if (kind == "gear") NumberStepper("Quantity", qty, { qty = it }, min = 1, max = 9999, note = "how many", integer = false)
                 Text(
                     when {
                         o.blocked -> "This item comes with parts that are not supported yet."
                         cost == null -> "The price of this item cannot be worked out yet."
-                        else -> "Costs ¥${formatNuyen(cost)}; you have ¥$nuyen."
+                        else -> "Costs ¥${formatNuyen(cost)}; you have ¥${money(nuyen)}."
                     },
                     style = MaterialTheme.typography.labelSmall, color = if (cost == null || cost > have) DrainAmber else MutedSilver,
                 )
@@ -194,7 +197,7 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
                     TerminalButton("Cancel", close, Modifier.weight(1f))
                     TerminalButton("Buy", {
                         close(); chosen = null
-                        when (kind) { "weapon" -> vm.buyWeapon(o.id); "vehicle" -> vm.buyVehicle(o.id); "armor" -> vm.buyArmor(o.id, r); else -> vm.buyGear(o.id, r, q!!, weaponType.ifBlank { whatFor.trim() }) }
+                        when (kind) { "weapon" -> vm.buyWeapon(o.id); "vehicle" -> vm.buyVehicle(o.id); "armor" -> vm.buyArmor(o.id, r); else -> if (vehicleGuid != null) vm.buyVehicleGear(vehicleGuid, o.id, r, q!!, weaponType.ifBlank { whatFor.trim() }) else vm.buyGear(o.id, r, q!!, weaponType.ifBlank { whatFor.trim() }) }
                         onDismiss()
                     }, Modifier.weight(1f), filled = true, enabled = cost != null && q != null && q > 0 && cost <= have && (o.ammoFor.isEmpty() || weaponType.isNotBlank()) && (!o.askFor || whatFor.isNotBlank()))
                 }
@@ -203,7 +206,22 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
     }
 }
 
+/** A nuyen amount kept as text on the sheet, with thousands separators ("¥117,675"); text that is not a number is left as it is. */
+internal fun money(raw: String) = raw.toDoubleOrNull()?.let { formatNuyen(it) } ?: raw
+
 internal fun formatNuyen(v: Double) = if (v == Math.rint(v)) "%,d".format(v.toLong()) else "%,.2f".format(v)
+
+/**
+ * What an accessory costs on this weapon, as money. Some prices depend on the weapon ("Weapon Cost", a share of it), so the price is worked out for
+ * [parentGuid]; one that cannot be worked out keeps the data's own wording.
+ */
+private fun accessoryPrice(parentGuid: String, o: chummer.core.engine.ItemOption, vm: AppViewModel): String {
+    val price = vm.accessoryCost(parentGuid, o.id, if (o.maxRating > 0) 1 else null)
+    return when {
+        price != null -> (if (o.maxRating > 1) "from ¥" else "¥") + formatNuyen(price)
+        else -> "cost " + (o.detail.toDoubleOrNull()?.let { "¥" + formatNuyen(it) } ?: o.detail)
+    }
+}
 
 /** Pick a weapon accessory ([kind] "accessory", for the weapon with [parentGuid]) or an armor mod ("mod"), choose mount and rating, and pay. */
 @Composable
@@ -213,13 +231,16 @@ fun AttachPartDialog(kind: String, parentGuid: String, vm: AppViewModel, nuyen: 
         options.map { o ->
             PickItem(
                 o.id, o.name,
-                listOfNotNull(o.category.takeIf { it.isNotBlank() }, o.detail.takeIf { it.isNotBlank() }?.let { if (kind == "accessory") "cost $it" else it }, o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + chummer.core.engine.GearEditor.availText(it, 1) }).joinToString("  ·  "),
+                listOfNotNull(o.category.takeIf { it.isNotBlank() }, o.detail.takeIf { it.isNotBlank() }?.let { if (kind == "accessory") accessoryPrice(parentGuid, o, vm) else it },
+                    // An armor mod's list line has its figures; its price goes after them. A rated one is priced at its lowest rating.
+                    if (kind == "accessory") null else (o.cost?.let { (if (o.maxRating > 1) "from ¥" else "¥") + formatNuyen(it) } ?: "price not readable yet"),
+                    o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + chummer.core.engine.GearEditor.availText(it, 1) }).joinToString("  ·  "),
                 o.category,
             )
         }
     }
     var chosen by remember { mutableStateOf<chummer.core.engine.ItemOption?>(null) }
-    PickerSheet(if (kind == "accessory") "Add accessory" else "Add armor mod", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "You have ¥$nuyen.", keepOpenFor = { true }, onDismiss = onDismiss)
+    PickerSheet(if (kind == "accessory") "Add accessory" else "Add armor mod", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "You have ¥${money(nuyen)}.", keepOpenFor = { true }, onDismiss = onDismiss)
     chosen?.let { o ->
         val hasRating = o.maxRating > 1 || (kind == "accessory" && o.maxRating > 0)
         var rating by remember(o.id) { mutableStateOf(if (hasRating) "1" else "") }
@@ -229,10 +250,10 @@ fun AttachPartDialog(kind: String, parentGuid: String, vm: AppViewModel, nuyen: 
         val have = nuyen.toDoubleOrNull() ?: 0.0
         TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating (1-${o.maxRating})", keyboardType = KeyboardType.Number)
+                if (hasRating) NumberStepper("Rating", rating, { rating = it }, min = 1, max = o.maxRating)
                 if (kind == "accessory" && o.mounts.size > 1) ChoiceChips("Mount", o.mounts.map { it to it }, mount, { mount = it })
                 Text(
-                    if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥$nuyen.",
+                    if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥${money(nuyen)}.",
                     style = MaterialTheme.typography.labelSmall, color = if (cost == null || cost > have) DrainAmber else MutedSilver,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -242,6 +263,116 @@ fun AttachPartDialog(kind: String, parentGuid: String, vm: AppViewModel, nuyen: 
                         if (kind == "accessory") vm.buyAccessory(parentGuid, o.id, mount, r) else vm.buyArmorMod(parentGuid, o.id, r)
                         onDismiss()
                     }, Modifier.weight(1f), filled = true, enabled = cost != null && cost <= have)
+                }
+            }
+        }
+    }
+}
+
+/** Pick a mod for the vehicle or drone [vehicleGuid] (only those that fit it), choose its rating where it has one, see the price and slots, and pay. */
+@Composable
+fun VehicleModDialog(vehicleGuid: String, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
+    val options = remember(vehicleGuid) { vm.vehicleModOptions(vehicleGuid) }
+    val items = remember(options) {
+        options.map { o ->
+            PickItem(
+                o.id, o.name,
+                listOfNotNull(
+                    o.category.takeIf { it.isNotBlank() }, o.detail.takeIf { it.isNotBlank() },
+                    o.cost?.let { (if (o.maxRating > 0) "from " else "") + "¥" + formatNuyen(it) } ?: "price not readable yet",
+                    o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + runCatching { chummer.core.engine.GearEditor.availText(it, maxOf(o.minRating, 1)) }.getOrDefault(it) },
+                ).joinToString("  ·  "),
+                // Chummer's mod category "All" means any vehicle, which the picker's own "All" filter would be confused with.
+                if (o.category == "All") "General" else o.category, warn = o.cost == null,
+            )
+        }
+    }
+    var chosen by remember { mutableStateOf<chummer.core.engine.ItemOption?>(null) }
+    PickerSheet("Add vehicle mod", items, onPick = { id -> chosen = options.first { it.id == id } }, note = if (options.isEmpty()) "No mods fit this vehicle." else "You have ¥${money(nuyen)}.", keepOpenFor = { true }, onDismiss = onDismiss)
+    chosen?.let { o ->
+        val hasRating = o.maxRating > 0
+        val low = maxOf(o.minRating, 1)
+        var rating by remember(o.id) { mutableStateOf(if (hasRating) low.toString() else "") }
+        val r = if (hasRating) rating.toIntOrNull()?.coerceIn(minOf(low, o.maxRating), o.maxRating) else null
+        val cost = vm.vehicleModCost(vehicleGuid, o.id, r)
+        val have = nuyen.toDoubleOrNull() ?: 0.0
+        TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (hasRating) NumberStepper("Rating", rating, { rating = it }, min = low, max = o.maxRating)
+                o.detail.removePrefix("slots ").toIntOrNull()?.let { n ->
+                    Text("Uses $n mod slot${if (n == 1) "" else "s"}${if (hasRating) " at its lowest rating" else ""}.", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+                }
+                Text(
+                    if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥${money(nuyen)}.",
+                    style = MaterialTheme.typography.labelSmall, color = if (cost == null || cost > have) DrainAmber else MutedSilver,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Buy", { close(); chosen = null; vm.buyVehicleMod(vehicleGuid, o.id, r); onDismiss() }, Modifier.weight(1f), filled = true, enabled = cost != null && cost <= have)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Pick cyberware for a drone's arm or leg ([modGuid]): only what the data makes for that part, with the capacity each piece uses and what is left. Bought
+ * at the Standard grade for nuyen alone; the drone has no essence, and the ware belongs to the drone, not to the character.
+ */
+@Composable
+fun DroneWareDialog(modGuid: String, partName: String, capacityLeft: Double, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
+    val options = remember(modGuid) { vm.droneWareOptions(modGuid) }
+    fun need(o: chummer.core.engine.WareOption) = Regex("""^\[([0-9.]+)\]$""").find(o.capacity.trim())?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+    val items = remember(options, capacityLeft) {
+        options.map { o ->
+            val n = need(o)
+            PickItem(
+                o.id, o.name,
+                listOfNotNull(
+                    o.category, if (n > 0) "uses ${chummer.core.engine.GearStacks.format(n)}" else null,
+                    o.cost?.let { (if (o.maxRating > 1) "from ¥" else "¥") + formatNuyen(it) } ?: "price not readable yet",
+                    o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + runCatching { chummer.core.engine.GearEditor.availText(it.replace("MinRating", o.minRating.toString()), maxOf(o.minRating, 1)) }.getOrDefault(it) },
+                    if (n > capacityLeft + 1e-9) "too big for what is left" else null,
+                ).joinToString("  ·  "),
+                o.category, warn = o.cost == null || n > capacityLeft + 1e-9,
+            )
+        }
+    }
+    var chosen by remember { mutableStateOf<chummer.core.engine.WareOption?>(null) }
+    PickerSheet(
+        "Fit to $partName", items, onPick = { id -> chosen = options.first { it.id == id } },
+        note = if (options.isEmpty()) "Nothing is made for this part." else "Capacity left ${chummer.core.engine.GearStacks.format(capacityLeft)}. You have ¥${money(nuyen)}.",
+        keepOpenFor = { true }, onDismiss = onDismiss,
+    )
+    chosen?.let { o ->
+        val hasRating = o.maxRating > 0
+        val low = maxOf(o.minRating, 1)
+        var rating by remember(o.id) { mutableStateOf(if (hasRating) low.toString() else "") }
+        // Ware that asks for a choice: which of your skills, or a few words. Saved with the item, as desktop Chummer does.
+        var choice by remember(o.id) { mutableStateOf("") }
+        val skills = remember(o.id) { if (o.choice == "skill") vm.droneWareSkills() else emptyList() }
+        val choiceOk = when (o.choice) { "skill" -> skills.any { it.equals(choice.trim(), true) }; "text" -> choice.isNotBlank(); else -> true }
+        val r = if (hasRating) rating.toIntOrNull()?.coerceIn(minOf(low, o.maxRating), o.maxRating) else null
+        val cost = vm.droneWareCost(modGuid, o.id, r)
+        val have = nuyen.toDoubleOrNull() ?: 0.0
+        val n = need(o)
+        val fits = n <= capacityLeft + 1e-9
+        TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (hasRating) NumberStepper("Rating", rating, { rating = it }, min = low, max = o.maxRating)
+                if (o.choice == "skill") WhatFor("which of your skills", choice, skills) { choice = it }
+                if (o.choice == "text") WhatFor("what it is for", choice, emptyList()) { choice = it }
+                Text(
+                    if (n > 0) "Uses ${chummer.core.engine.GearStacks.format(n)} of the part's capacity; ${chummer.core.engine.GearStacks.format(capacityLeft)} left." else "Uses no capacity.",
+                    style = MaterialTheme.typography.labelSmall, color = if (fits) MutedSilver else DrainAmber,
+                )
+                Text(
+                    if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥${money(nuyen)}.",
+                    style = MaterialTheme.typography.labelSmall, color = if (cost == null || cost > have) DrainAmber else MutedSilver,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Buy", { close(); chosen = null; vm.buyDroneWare(modGuid, o.id, r, choice.trim()); onDismiss() }, Modifier.weight(1f), filled = true, enabled = cost != null && cost <= have && fits && choiceOk)
                 }
             }
         }
@@ -267,7 +398,7 @@ fun BuyWareDialog(bioware: Boolean, vm: AppViewModel, nuyen: String, essence: Do
         }
     }
     var chosen by remember { mutableStateOf<chummer.core.engine.WareOption?>(null) }
-    PickerSheet(if (bioware) "Install bioware" else "Install cyberware", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "You have ¥$nuyen and ${"%.2f".format(java.util.Locale.ROOT, essence)} essence.", keepOpenFor = { true }, onDismiss = onDismiss)
+    PickerSheet(if (bioware) "Install bioware" else "Install cyberware", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "You have ¥${money(nuyen)} and ${"%.2f".format(java.util.Locale.ROOT, essence)} essence.", keepOpenFor = { true }, onDismiss = onDismiss)
     chosen?.let { o ->
         val forced = o.forcedGrade.isNotEmpty() || parent != null
         var grade by remember(o.id) { mutableStateOf(if (parent != null) parent.grade.ifEmpty { "Standard" } else if (forced) o.forcedGrade else if ("Standard" in grades) "Standard" else grades.firstOrNull().orEmpty()) }
@@ -281,13 +412,13 @@ fun BuyWareDialog(bioware: Boolean, vm: AppViewModel, nuyen: String, essence: Do
         TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (!forced && grades.size > 1) ChoiceChips("Grade", grades.map { it to it }, grade, { grade = it })
-                if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating (${maxOf(o.minRating, 1)}-${o.maxRating})", keyboardType = KeyboardType.Number)
+                if (hasRating) NumberStepper("Rating", rating, { rating = it }, min = maxOf(o.minRating, 1), max = o.maxRating)
                 Text(
                     when {
                         o.problem != null -> "This item is not supported yet: ${o.problem}."
                         cost == null || ess == null -> "The price or essence of this item cannot be worked out yet."
-                        parent != null && !o.addsToParent -> "Costs ¥${formatNuyen(cost)}, no essence (a plug-in); you have ¥$nuyen."
-                        else -> "Costs ¥${formatNuyen(cost)} and ${"%.2f".format(java.util.Locale.ROOT, ess)} essence; you have ¥$nuyen and ${"%.2f".format(java.util.Locale.ROOT, essence)} essence."
+                        parent != null && !o.addsToParent -> "Costs ¥${formatNuyen(cost)}, no essence (a plug-in); you have ¥${money(nuyen)}."
+                        else -> "Costs ¥${formatNuyen(cost)} and ${"%.2f".format(java.util.Locale.ROOT, ess)} essence; you have ¥${money(nuyen)} and ${"%.2f".format(java.util.Locale.ROOT, essence)} essence."
                     },
                     style = MaterialTheme.typography.labelSmall, color = if (ok) MutedSilver else DrainAmber,
                 )
@@ -414,7 +545,7 @@ fun ArmorGearDialog(armorGuid: String, room: Double, vm: AppViewModel, nuyen: St
         }
     }
     var chosen by remember { mutableStateOf<chummer.core.engine.GearOption?>(null) }
-    PickerSheet("Install armor gear", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "Capacity left %.0f. You have ¥$nuyen.".format(room), keepOpenFor = { true }, onDismiss = onDismiss)
+    PickerSheet("Install armor gear", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "Capacity left %.0f. You have ¥${money(nuyen)}.".format(room), keepOpenFor = { true }, onDismiss = onDismiss)
     chosen?.let { o ->
         val hasRating = o.maxRating > 0
         var rating by remember(o.id) { mutableStateOf(if (hasRating) maxOf(o.minRating, 1).toString() else "") }
@@ -423,9 +554,9 @@ fun ArmorGearDialog(armorGuid: String, room: Double, vm: AppViewModel, nuyen: St
         val have = nuyen.toDoubleOrNull() ?: 0.0
         TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating (${maxOf(o.minRating, 1)}-${o.maxRating})", keyboardType = KeyboardType.Number)
+                if (hasRating) NumberStepper("Rating", rating, { rating = it }, min = maxOf(o.minRating, 1), max = o.maxRating)
                 Text(
-                    if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥$nuyen.",
+                    if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥${money(nuyen)}.",
                     style = MaterialTheme.typography.labelSmall, color = if (cost == null || cost > have) DrainAmber else MutedSilver,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -447,7 +578,7 @@ fun GearPluginDialog(parentGuid: String, parentName: String, vm: AppViewModel, n
         }
     }
     var chosen by remember { mutableStateOf<chummer.core.engine.GearOption?>(null) }
-    PickerSheet("Plug into $parentName", items, onPick = { id -> chosen = options.first { it.id == id } }, note = if (options.isEmpty()) "Nothing fits in this item." else "You have ¥$nuyen.", keepOpenFor = { true }, onDismiss = onDismiss)
+    PickerSheet("Plug into $parentName", items, onPick = { id -> chosen = options.first { it.id == id } }, note = if (options.isEmpty()) "Nothing fits in this item." else "You have ¥${money(nuyen)}.", keepOpenFor = { true }, onDismiss = onDismiss)
     chosen?.let { o ->
         val hasRating = o.maxRating > 0
         var rating by remember(o.id) { mutableStateOf(if (hasRating) maxOf(o.minRating, 1).toString() else "") }
@@ -458,9 +589,9 @@ fun GearPluginDialog(parentGuid: String, parentName: String, vm: AppViewModel, n
         TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (o.needsRestricted) WhatFor("which license, or what it is for", whatFor, o.restrictedChoices) { whatFor = it }
-                if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating (${maxOf(o.minRating, 1)}-${o.maxRating})", keyboardType = KeyboardType.Number)
+                if (hasRating) NumberStepper("Rating", rating, { rating = it }, min = maxOf(o.minRating, 1), max = o.maxRating)
                 Text(
-                    if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥$nuyen.",
+                    if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥${money(nuyen)}.",
                     style = MaterialTheme.typography.labelSmall, color = if (cost == null || cost > have) DrainAmber else MutedSilver,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

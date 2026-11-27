@@ -678,6 +678,11 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     var installing by remember { mutableStateOf<Pair<String, Double?>?>(null) }
     var selling by remember { mutableStateOf<Pair<String, String>?>(null) }
     var managing by remember { mutableStateOf<String?>(null) }
+    // The vehicle whose sheet is open, and the vehicle a mod or gear is being picked for.
+    var managingVehicle by remember { mutableStateOf<String?>(null) }
+    var modding by remember { mutableStateOf<String?>(null) }
+    var gearingVehicle by remember { mutableStateOf<String?>(null) }
+    var warePart by remember { mutableStateOf<String?>(null) }
     val career = s.career != null
     selling?.let { (guid, name) -> SellSheet(name, { pct -> vm.sellPurchase(guid, pct) }, { vm.discardPurchase(guid) }) { selling = null } }
     // What a card offers for taking an item away: creation takes it back for free, career sells it.
@@ -690,6 +695,16 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         else WeaponSheet(
             w, vm, s.nuyen, career = career, creating = creating, onAccessory = { attaching = "accessory" to guid },
             onSell = if (w.removable) sell(guid, w.name) else null, onRemove = if (w.removable) remove(guid) else null, onDismiss = { managing = null },
+        )
+    }
+    // A vehicle's own sheet: its mods and gear, adding either, selling. It follows the vehicle as it changes.
+    managingVehicle?.let { guid ->
+        val v = g.vehicles.firstOrNull { it.guid == guid }
+        if (v == null) managingVehicle = null
+        else VehicleSheet(
+            v, vm, onAddMod = { modding = guid }, onAddGear = { gearingVehicle = guid }, onAddWare = { warePart = it },
+            onSell = sell(guid, v.name), onRemove = remove(guid),
+            sell = { id, n -> sell(id, n) }, remove = { id -> remove(id) }, onDismiss = { managingVehicle = null },
         )
     }
     val armorCount = g.armorSets.sumOf { it.items.size }
@@ -789,6 +804,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
                     CardTags(buildList {
                         // What is in the gun comes first, since it decides the damage and AP shown: "Loaded: APDS ×42".
                         if (w.loadedAmmo.isNotBlank()) add("Loaded: ${ammoLabel(w.loadedAmmo)}${if (w.loadedRounds > 0) " ×${w.loadedRounds}" else ""}" to PhosphorGreen)
+                        else if (w.loadedRounds > 0) add("Ammo missing ×${w.loadedRounds}" to DrainAmber)
                         else if (w.canLoad) add("Empty" to DrainAmber)
                         if (w.clips.size > 1) add("Clip ${w.clips.indexOfFirst { it.active } + 1} of ${w.clips.size}" to MutedSilver)
                         listOfNotNull(
@@ -805,11 +821,16 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
         }
         if (g.vehicles.isNotEmpty()) item { GroupHeader("Vehicles", g.vehicles.size, DrainAmber) }
         items(g.vehicles) { v ->
+            // Tapping the card (when you can change things) opens the vehicle's sheet with its mods and gear.
+            val manage = canBuy && v.guid.isNotEmpty()
             ItemCard(DrainAmber) {
-                CardTitle(v.name, trailing = v.category)
-                // The figures are one line of "Handling 4  Speed 5 ..."; each becomes its own tag so they wrap cleanly.
-                CardTags(v.stats.split("  ").map { it.trim() }.filter { it.isNotEmpty() }.map { it to MutedSilver })
-                if (v.mods.isNotEmpty()) CardNote("Mods: " + v.mods.joinToString(", "))
+                Column(Modifier.fillMaxWidth().then(if (manage) Modifier.clickable { managingVehicle = v.guid } else Modifier), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CardTitle(v.name, trailing = v.category, hint = if (manage) "MANAGE ›" else null)
+                    // The figures are one line of "Handling 4  Speed 5 ..."; each becomes its own tag so they wrap cleanly.
+                    CardTags(v.stats.split("  ").map { it.trim() }.filter { it.isNotEmpty() }.map { it to MutedSilver })
+                    if (v.mods.isNotEmpty()) CardNote("Mods: " + v.mods.joinToString(", "))
+                    if (v.gearLines.isNotEmpty()) CardNote("Gear: " + v.gearLines.joinToString(", ") { it.name })
+                }
                 if (remove(v.guid) != null || sell(v.guid, v.name) != null) CardActions {
                     sell(v.guid, v.name)?.let { CardAction("Sell", it, accent = DrainAmber) }
                     remove(v.guid)?.let { CardAction("Remove", it, accent = CriticalRed) }
@@ -852,6 +873,12 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
     }
     }
     buying?.let { BuyGearDialog(it, vm, s.nuyen) { buying = null } }
+    modding?.let { guid -> VehicleModDialog(guid, vm, s.nuyen) { modding = null } }
+    gearingVehicle?.let { guid -> BuyGearDialog("gear", vm, s.nuyen, vehicleGuid = guid) { gearingVehicle = null } }
+    warePart?.let { guid ->
+        val part = g.vehicles.flatMap { it.modLines }.firstOrNull { it.guid == guid }
+        if (part == null) warePart = null else DroneWareDialog(guid, part.name, part.capacityTotal - part.capacityUsed, vm, s.nuyen) { warePart = null }
+    }
     attaching?.let { (kind, guid) -> AttachPartDialog(kind, guid, vm, s.nuyen) { attaching = null } }
     installing?.let { (armor, room) -> ArmorGearDialog(armor, room ?: 0.0, vm, s.nuyen) { installing = null } }
 }
@@ -992,7 +1019,7 @@ private fun WareEditSheet(w: chummer.core.engine.SheetSections.WareLine, info: c
                     accent = if (preview.problem != null) DrainAmber else PhosphorGreen,
                 )
                 Text(
-                    preview.problem?.replaceFirstChar { it.uppercase() } ?: "You have ¥$nuyen. Only the difference is spent; plug-ins in the item are re-priced with it.",
+                    preview.problem?.replaceFirstChar { it.uppercase() } ?: "You have ¥${money(nuyen)}. Only the difference is spent; plug-ins in the item are re-priced with it.",
                     style = MaterialTheme.typography.labelSmall, color = if (preview.problem != null) DrainAmber else MutedSilver,
                 )
             }
