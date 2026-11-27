@@ -1013,7 +1013,7 @@ private fun WareEditSheet(w: chummer.core.engine.SheetSections.WareLine, info: c
                     accent = if (preview.problem != null) DrainAmber else PhosphorGreen,
                 )
                 Text(
-                    preview.problem?.replaceFirstChar { it.uppercase() } ?: "You have ¥$nuyen. Only the difference is spent; plug-ins in the item are re-priced with it.",
+                    preview.problem?.replaceFirstChar { it.uppercase() } ?: "You have ¥${money(nuyen)}. Only the difference is spent; plug-ins in the item are re-priced with it.",
                     style = MaterialTheme.typography.labelSmall, color = if (preview.problem != null) DrainAmber else MutedSilver,
                 )
             }

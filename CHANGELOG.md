@@ -10,6 +10,10 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 - **Vehicles and drones have their own sheet.** Tap a vehicle on Gear to see its mods and gear, take off or sell what you added, or sell the whole vehicle.
 - **Buy mods and gear for a vehicle or drone.** Only mods that fit that vehicle are offered, priced from its own figures, with the mod slots they use.
 
+### Changed
+- **Rating and quantity have − and + buttons.** In every buy dialog the number is labelled with its range, and you can still type it.
+- **Buy dialogs show your nuyen with separators.** ¥117,675, not ¥117675.
+
 ### Fixed
 - **Vehicle mods priced from the vehicle's Handling, Speed or Armor count toward your nuyen.** They were being counted as free.
 - **Characters saved by very old Chummer versions show the right attributes.** They were showing 1 or 2 too high.
