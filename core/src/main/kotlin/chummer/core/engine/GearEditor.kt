@@ -246,6 +246,17 @@ class GearEditor(private val file: CharacterFile, private val data: GameData, pr
             return null
         }
         val item = find(root) ?: return false
+        // Rounds loaded from this item go with it. A clip that still counted them would show rounds of nothing (a loaded clip that reads "Empty").
+        val gone = HashSet<String>()
+        fun collect(e: Element) { e.text("guid")?.trim()?.let { gone += it.lowercase() }; for (c in e.children()) if (c.tagName != "bonus") collect(c) }
+        collect(item)
+        val clipNodes = doc.getElementsByTagName("clip")
+        for (i in 0 until clipNodes.length) {
+            val clip = clipNodes.item(i) as Element
+            if (clip.text("id")?.trim()?.lowercase() in gone) {
+                clip.child("count")?.textContent = "0"; clip.child("location")?.textContent = ""; clip.child("id")?.textContent = "00000000-0000-0000-0000-000000000000"
+            }
+        }
         val imps = root.child("improvements")
         if (imps != null) {
             val ids = HashSet<String>()

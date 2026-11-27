@@ -17,6 +17,8 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 - **Weapon accessory prices are shown as money.** A Smartgun System, Internal shows its real price for that weapon instead of "Weapon Cost".
 
 ### Fixed
+- **Removing loaded ammo empties its clip.** The clip used to keep counting the rounds and show "Empty" with a full bar.
+- **A clip with no ammo behind its rounds says "Ammo missing".** Tap Unload on it to clear it.
 - **Vehicle mods priced from the vehicle's Handling, Speed or Armor count toward your nuyen.** They were being counted as free.
 - **Characters saved by very old Chummer versions show the right attributes.** They were showing 1 or 2 too high.
 - **Nuyen shows as money.** A balance like 2702.7799999997 now reads ¥2,702.78, with thousands separators.

@@ -803,6 +803,7 @@ private fun Gear(g: chummer.core.engine.SheetSections, s: Sheet, vm: AppViewMode
                     CardTags(buildList {
                         // What is in the gun comes first, since it decides the damage and AP shown: "Loaded: APDS ×42".
                         if (w.loadedAmmo.isNotBlank()) add("Loaded: ${ammoLabel(w.loadedAmmo)}${if (w.loadedRounds > 0) " ×${w.loadedRounds}" else ""}" to PhosphorGreen)
+                        else if (w.loadedRounds > 0) add("Ammo missing ×${w.loadedRounds}" to DrainAmber)
                         else if (w.canLoad) add("Empty" to DrainAmber)
                         if (w.clips.size > 1) add("Clip ${w.clips.indexOfFirst { it.active } + 1} of ${w.clips.size}" to MutedSilver)
                         listOfNotNull(
