@@ -1,0 +1,60 @@
+name: Debug build
+
+# Builds the debug app (the one that installs beside the release app) and keeps the APK for a week, so a change can be tried on a phone
+# without a build setup on the PC. Runs on pushes to claude/* branches and by hand (Actions > Debug build > Run workflow, once this
+# file is on master). No secrets are used. The APK is signed with the runner's own debug key, so it cannot be installed over a debug app
+# that was built on the PC (Android refuses a different signature). Never uninstall that app to make room: it holds your characters.
+# Install it only on a phone that has no debug app yet, or copy characters out first.
+on:
+  push:
+    branches: ["claude/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: debug-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The build ships Chummer's game data, so it needs a checkout of chummer5a at the commit in chummer-pin.txt.
+      - name: Check out Chummer at the pinned commit
+        run: |
+          git clone --filter=blob:none https://github.com/chummer5a/chummer5a.git ../chummer5a
+          git -C ../chummer5a checkout "$(cat chummer-pin.txt)"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the debug app
+        run: ./gradlew -Pchummer.src=$GITHUB_WORKSPACE/../chummer5a :app:assembleDebug
+
+      - name: Core tests that need only public files
+        run: ./gradlew -Pchummer.src=$GITHUB_WORKSPACE/../chummer5a -Pchummer.publicOnly=true :core:test
+
+      - name: Keep the debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: hgcommlink-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+      - name: Keep the test report if it failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-report
+          path: |
+            core/build/reports/tests
+            app/build/reports
+          retention-days: 7
