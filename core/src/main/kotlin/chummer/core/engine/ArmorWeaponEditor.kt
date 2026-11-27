@@ -9,7 +9,7 @@ import org.w3c.dom.Element
 import java.util.UUID
 
 /** An armor or weapon entry for a picker. [cost] is null when the price formula is beyond the evaluator; [problem] says why it cannot be added yet. */
-data class ItemOption(val id: String, val name: String, val category: String, val cost: Double?, val avail: String, val problem: String?, val detail: String, val maxRating: Int = 0, val mounts: List<String> = emptyList())
+data class ItemOption(val id: String, val name: String, val category: String, val cost: Double?, val avail: String, val problem: String?, val detail: String, val maxRating: Int = 0, val mounts: List<String> = emptyList(), val minRating: Int = 0)
 
 /**
  * Adds armor and weapons to a character in the layout Chummer writes (checked against Viper's items in ArmorWeaponEditorTest).

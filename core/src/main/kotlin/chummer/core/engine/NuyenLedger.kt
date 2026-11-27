@@ -82,21 +82,18 @@ data class NuyenLedger(val karmaBought: Int, val maxKarma: Int, val budget: Doub
                 return total + gearsIn(w)
             }
 
-            /** A price formula that may name the item's own figures: Rating, Body and "Vehicle Cost". */
-            fun vehicleFormula(text: String, rating: Int, body: Int, vehicleCost: Double, what: String): Double {
-                val t = text.trim()
-                val v = if (t.startsWith("FixedValues(")) CyberwareEditor.formula(t, rating)
-                else chummer.core.Expr.evalOrNull(t.replace("Vehicle Cost", "VehicleCost"), mapOf("Rating" to rating.toDouble(), "Body" to body.toDouble(), "VehicleCost" to vehicleCost))
+            /** A mod's price formula may name the vehicle's own figures (Body, Handling, Speed, ...), its Rating and "Vehicle Cost". */
+            fun vehicleFormula(text: String, rating: Int, vehicle: Element, vehicleCost: Double, what: String, slotsText: String = ""): Double {
+                val v = VehicleFormula.cost(text, rating, vehicle, vehicleCost, slotsText)
                 if (v == null) unreadable += what
                 return v ?: 0.0
             }
             fun vehicle(v: Element): Double {
                 val own = formula(v.text("cost").orEmpty(), 0, v.text("name").orEmpty())
-                val body = v.text("body")?.trim()?.substringBefore('/')?.toIntOrNull() ?: 0
                 var total = own
                 for (m in v.child("mods")?.children("mod").orEmpty()) {
                     if (m.text("included")?.trim() == "True") continue
-                    total += vehicleFormula(m.text("cost").orEmpty(), num(m, "rating"), body, own, m.text("name").orEmpty())
+                    total += vehicleFormula(m.text("cost").orEmpty(), num(m, "rating"), v, own, m.text("name").orEmpty(), m.text("slots").orEmpty())
                     total += gearsIn(m)
                 }
                 total += gearsIn(v)

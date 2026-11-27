@@ -455,6 +455,8 @@ class CareerAdvancement(
 
     private fun removeVehicle(guid: String): Boolean = (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).remove(guid) } == true
 
+    private fun removeVehicleMod(guid: String): Boolean = (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).removeMod(guid) } == true
+
     private fun removeLifestyle(guid: String): Boolean = (data as? chummer.core.DataPack)?.let { LifestyleEditor(file, it).remove(guid) } == true
 
     // ---- lifestyles
@@ -474,7 +476,7 @@ class CareerAdvancement(
 
     private fun removeAny(guid: String, includeArts: Boolean = true): Boolean {
         val aw = ArmorWeaponEditor(file, data)
-        return removeVehicle(guid) || removeLifestyle(guid) || GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
+        return removeVehicle(guid) || removeVehicleMod(guid) || removeLifestyle(guid) || GearEditor(file, data, settings).removeGear(guid) || aw.removeWeapon(guid) || aw.removeArmor(guid) ||
             aw.removeAccessory(guid) || aw.removeArmorMod(guid) || CyberwareEditor(file, data).remove(guid) || (includeArts && removeMartialArtItem(guid))
     }
 
@@ -532,6 +534,44 @@ class CareerAdvancement(
         if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, null)) return null
         val guid = editor.add(entryId)
         charge(cost, "Purchased Vehicle " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddVehicle", guid, 0.0, now)
+        return guid
+    }
+
+    /** The mods that may be fitted to this vehicle or drone (what its details and the settings' drone-mods rule allow). */
+    fun vehicleModOptions(vehicleGuid: String): List<ItemOption> =
+        (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).modOptions(vehicleGuid, settings.bool("dronemods")) }.orEmpty()
+
+    fun vehicleModCost(vehicleGuid: String, entryId: String, rating: Int? = null): Double? =
+        (data as? chummer.core.DataPack)?.let { VehicleEditor(file, it).modCost(vehicleGuid, entryId, rating) }
+
+    /** Why a mod cannot be bought for a vehicle right now, in words for a player; null when it can. */
+    fun vehicleModBlockReason(vehicleGuid: String, entryId: String, rating: Int? = null): String? {
+        val pack = data as? chummer.core.DataPack ?: return "No game data"
+        VehicleEditor(file, pack).modProblem(vehicleGuid, entryId, settings.bool("dronemods"))?.let { return "That mod does not fit this vehicle" }
+        val cost = vehicleModCost(vehicleGuid, entryId, rating) ?: return "The price of that mod cannot be worked out yet"
+        if (cost > nuyenLeft() + 0.004) return "Not enough nuyen"
+        if (availabilityBlocked(entryId, rating)) return "Its availability is over the limit of ${settings.int("availability", 12)} for a new character"
+        return null
+    }
+
+    /** Buy a mod for a vehicle or drone; returns the mod's GUID, or null when it does not fit, cannot be paid for or is over the creation availability limit. */
+    fun buyVehicleMod(vehicleGuid: String, entryId: String, rating: Int? = null, now: LocalDateTime = LocalDateTime.now()): String? {
+        if (vehicleModBlockReason(vehicleGuid, entryId, rating) != null) return null
+        val pack = data as? chummer.core.DataPack ?: return null
+        val cost = vehicleModCost(vehicleGuid, entryId, rating) ?: return null
+        val guid = VehicleEditor(file, pack).addMod(vehicleGuid, entryId, rating, settings.bool("dronemods"))
+        charge(cost, "Purchased Vehicle Mod " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddVehicleMod", guid, 0.0, now)
+        return guid
+    }
+
+    /** Buy gear for a vehicle or drone (it goes in the vehicle's own gear, not the character's); returns its GUID, or null when it cannot be paid for. */
+    fun buyVehicleGear(vehicleGuid: String, entryId: String, rating: Int? = null, qty: Double = 1.0, extra: String = "", now: LocalDateTime = LocalDateTime.now()): String? {
+        val vehicle = root.child("vehicles")?.children("vehicle")?.firstOrNull { it.text("guid")?.trim().equals(vehicleGuid, true) } ?: return null
+        val cost = gearCost(entryId, rating, qty) ?: return null
+        if (cost > nuyenLeft() + 0.004 || availabilityBlocked(entryId, rating)) return null
+        val container = vehicle.child("gears") ?: file.doc.createElement("gears").also { vehicle.appendChild(it) }
+        val guid = GearEditor(file, data, settings).addOrStack(entryId, rating, qty, extra, into = container, parentId = vehicleGuid)
+        charge(cost, "Purchased Gear " + data[entryId]?.element?.child("name")?.textContent?.trim().orEmpty(), "AddGear", guid, qty, now)
         return guid
     }
 

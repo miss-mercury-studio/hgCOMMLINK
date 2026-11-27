@@ -359,6 +359,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun vehicleOptions() = gameData.vehicleOptions()
     fun vehicleCost(id: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).vehicleCost(id) }
     fun buyVehicle(id: String) = editCareer("Vehicle bought", "Cannot buy that vehicle (nuyen, or over the availability limit)") { adv, _ -> adv.buyVehicle(id) != null }
+    /** The mods that fit this vehicle or drone. */
+    fun vehicleModOptions(vehicleGuid: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).vehicleModOptions(vehicleGuid) }.orEmpty()
+    fun vehicleModCost(vehicleGuid: String, id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).vehicleModCost(vehicleGuid, id, rating) }
+    fun buyVehicleMod(vehicleGuid: String, id: String, rating: Int?) {
+        var why: String? = null
+        editCareer("Mod fitted", "Cannot fit that mod", { why }) { adv, _ -> why = adv.vehicleModBlockReason(vehicleGuid, id, rating); adv.buyVehicleMod(vehicleGuid, id, rating) != null }
+    }
+    fun buyVehicleGear(vehicleGuid: String, id: String, rating: Int?, qty: Double, extra: String = "") {
+        var why: String? = null
+        editCareer("Gear added", "Not enough nuyen", { why }) { adv, _ -> why = adv.gearBlockReason(id, rating, qty); adv.buyVehicleGear(vehicleGuid, id, rating, qty, extra) != null }
+    }
     fun armorCost(id: String, rating: Int?) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).armorCost(id, rating) }
     fun weaponCost(id: String) = open?.takeIf { it.sheet != null }?.let { gameData.career(it.character).weaponCost(id) }
     fun buyArmor(id: String, rating: Int?) = editCareer("Armor bought", "Cannot buy that armor (nuyen, or it comes with parts that are not supported yet)") { adv, _ -> adv.buyArmor(id, rating) != null }

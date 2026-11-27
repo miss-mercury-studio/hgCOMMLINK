@@ -6,7 +6,12 @@ Format: `## [version] - date`, then `### Added`, `### Changed` or `### Fixed`, t
 
 ## [Unreleased]
 
+### Added
+- **Vehicles and drones have their own sheet.** Tap a vehicle on Gear to see its mods and gear, take off or sell what you added, or sell the whole vehicle.
+- **Buy mods and gear for a vehicle or drone.** Only mods that fit that vehicle are offered, priced from its own figures, with the mod slots they use.
+
 ### Fixed
+- **Vehicle mods priced from the vehicle's Handling, Speed or Armor count toward your nuyen.** They were being counted as free.
 - **Characters saved by very old Chummer versions show the right attributes.** They were showing 1 or 2 too high.
 - **Nuyen shows as money.** A balance like 2702.7799999997 now reads ¥2,702.78, with thousands separators.
 

@@ -133,9 +133,12 @@ private fun WhatFor(label: String, value: String, choices: List<String>, onChang
     }
 }
 
-/** Pick gear, a weapon, armor or a vehicle ([kind]: "gear", "weapon", "armor", "vehicle") from the game data, choose rating and quantity where they apply, and pay. */
+/**
+ * Pick gear, a weapon, armor or a vehicle ([kind]: "gear", "weapon", "armor", "vehicle") from the game data, choose rating and quantity where they apply, and pay.
+ * With a [vehicleGuid], gear is bought for that vehicle and goes in it.
+ */
 @Composable
-fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
+fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, vehicleGuid: String? = null, onDismiss: () -> Unit) {
     class Opt(val id: String, val name: String, val category: String, val cost: Double?, val avail: String, val min: Int, val max: Int, val note: String?, val blocked: Boolean, val ammoFor: List<String> = emptyList(), val askFor: Boolean = false, val choices: List<String> = emptyList())
     val options = remember(kind) {
         when (kind) {
@@ -158,7 +161,7 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
         }
     }
     var chosen by remember { mutableStateOf<Opt?>(null) }
-    PickerSheet("Buy $kind", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "You have ¥$nuyen.", keepOpenFor = { true }, onDismiss = onDismiss)
+    PickerSheet(if (vehicleGuid != null) "Gear for the vehicle" else "Buy $kind", items, onPick = { id -> chosen = options.first { it.id == id } }, note = "You have ¥$nuyen.", keepOpenFor = { true }, onDismiss = onDismiss)
     chosen?.let { o ->
         val hasRating = o.max > 0
         var rating by remember(o.id) { mutableStateOf(if (hasRating) maxOf(o.min, 1).toString() else "") }
@@ -194,7 +197,7 @@ fun BuyGearDialog(kind: String, vm: AppViewModel, nuyen: String, onDismiss: () -
                     TerminalButton("Cancel", close, Modifier.weight(1f))
                     TerminalButton("Buy", {
                         close(); chosen = null
-                        when (kind) { "weapon" -> vm.buyWeapon(o.id); "vehicle" -> vm.buyVehicle(o.id); "armor" -> vm.buyArmor(o.id, r); else -> vm.buyGear(o.id, r, q!!, weaponType.ifBlank { whatFor.trim() }) }
+                        when (kind) { "weapon" -> vm.buyWeapon(o.id); "vehicle" -> vm.buyVehicle(o.id); "armor" -> vm.buyArmor(o.id, r); else -> if (vehicleGuid != null) vm.buyVehicleGear(vehicleGuid, o.id, r, q!!, weaponType.ifBlank { whatFor.trim() }) else vm.buyGear(o.id, r, q!!, weaponType.ifBlank { whatFor.trim() }) }
                         onDismiss()
                     }, Modifier.weight(1f), filled = true, enabled = cost != null && q != null && q > 0 && cost <= have && (o.ammoFor.isEmpty() || weaponType.isNotBlank()) && (!o.askFor || whatFor.isNotBlank()))
                 }
@@ -242,6 +245,49 @@ fun AttachPartDialog(kind: String, parentGuid: String, vm: AppViewModel, nuyen: 
                         if (kind == "accessory") vm.buyAccessory(parentGuid, o.id, mount, r) else vm.buyArmorMod(parentGuid, o.id, r)
                         onDismiss()
                     }, Modifier.weight(1f), filled = true, enabled = cost != null && cost <= have)
+                }
+            }
+        }
+    }
+}
+
+/** Pick a mod for the vehicle or drone [vehicleGuid] (only those that fit it), choose its rating where it has one, see the price and slots, and pay. */
+@Composable
+fun VehicleModDialog(vehicleGuid: String, vm: AppViewModel, nuyen: String, onDismiss: () -> Unit) {
+    val options = remember(vehicleGuid) { vm.vehicleModOptions(vehicleGuid) }
+    val items = remember(options) {
+        options.map { o ->
+            PickItem(
+                o.id, o.name,
+                listOfNotNull(
+                    o.category.takeIf { it.isNotBlank() }, o.detail.takeIf { it.isNotBlank() },
+                    o.cost?.let { (if (o.maxRating > 0) "from " else "") + "¥" + formatNuyen(it) } ?: "price not readable yet",
+                    o.avail.takeIf { it.isNotBlank() && it != "0" }?.let { "avail " + runCatching { chummer.core.engine.GearEditor.availText(it, maxOf(o.minRating, 1)) }.getOrDefault(it) },
+                ).joinToString("  ·  "),
+                o.category, warn = o.cost == null,
+            )
+        }
+    }
+    var chosen by remember { mutableStateOf<chummer.core.engine.ItemOption?>(null) }
+    PickerSheet("Add vehicle mod", items, onPick = { id -> chosen = options.first { it.id == id } }, note = if (options.isEmpty()) "No mods fit this vehicle." else "You have ¥$nuyen.", keepOpenFor = { true }, onDismiss = onDismiss)
+    chosen?.let { o ->
+        val hasRating = o.maxRating > 0
+        val low = maxOf(o.minRating, 1)
+        var rating by remember(o.id) { mutableStateOf(if (hasRating) low.toString() else "") }
+        val r = if (hasRating) rating.toIntOrNull()?.coerceIn(minOf(low, o.maxRating), o.maxRating) else null
+        val cost = vm.vehicleModCost(vehicleGuid, o.id, r)
+        val have = nuyen.toDoubleOrNull() ?: 0.0
+        TerminalSheet(o.name, onDismiss = { chosen = null }) { close ->
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (hasRating) TerminalField(rating, { rating = it.filter(Char::isDigit) }, "rating ($low-${o.maxRating})", keyboardType = KeyboardType.Number)
+                if (o.detail.isNotBlank()) Text("Uses ${o.detail.removePrefix("slots ")} mod slots at its lowest rating.", style = MaterialTheme.typography.labelSmall, color = MutedSilver)
+                Text(
+                    if (cost == null) "The price of this item cannot be worked out yet." else "Costs ¥${formatNuyen(cost)}; you have ¥$nuyen.",
+                    style = MaterialTheme.typography.labelSmall, color = if (cost == null || cost > have) DrainAmber else MutedSilver,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TerminalButton("Cancel", close, Modifier.weight(1f))
+                    TerminalButton("Buy", { close(); chosen = null; vm.buyVehicleMod(vehicleGuid, o.id, r); onDismiss() }, Modifier.weight(1f), filled = true, enabled = cost != null && cost <= have)
                 }
             }
         }
